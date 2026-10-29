@@ -59,6 +59,7 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 	if rd.sess.AdmitTrust != "" { // the row records the requested class; placement uses the class the run was admitted at
 		j.Trust = rd.sess.AdmitTrust
 	}
+	j.User, j.Team = rd.sess.User, rd.sess.Team
 	j.Pipeline.Band = attemptBand(s.Band, rd.row.Trigger)
 	j.Accelerators = nil
 	j.Pipeline.Record = rd.sess.Record

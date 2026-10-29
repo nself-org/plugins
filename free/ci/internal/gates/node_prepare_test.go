@@ -103,9 +103,15 @@ type result struct {
 func (h *nodeHost) run(id, workdir string) result {
 	h.t.Helper()
 	p := h.plan(id, workdir)
+	// macOS temp roots can include /var -> /private/var. The executor rejects
+	// symlinked workdirs, so use the real fixture home just as a configured CI home.
+	home, err := filepath.EvalSymlinks(h.t.TempDir())
+	if err != nil {
+		h.t.Fatal(err)
+	}
 	var out strings.Builder
 	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}).Run(context.Background(), ciexec.JobSpec{AttemptID: "node-" + strings.ReplaceAll(id, ".", "-"), CoordinatorID: "coord",
-		Secrets: h.secrets, Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process", Env: h.env, Secrets: h.refs}, Command: p.Command(), SourceDir: h.root, Home: realTempDir(h.t),
+		Secrets: h.secrets, Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process", Env: h.env, Secrets: h.refs}, Command: p.Command(), SourceDir: h.root, Home: home,
 		Output: func(b []byte) { out.Write(b) }})
 	r := result{exit: res.ExitCode, out: strings.TrimSpace(out.String())}
 	if res.Err != nil {

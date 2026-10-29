@@ -224,7 +224,7 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if err != nil {
 		return err
 	}
-	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
+	lease := protocol.Lease{NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	if len(refs) > 0 {
 		lease.Trust = d.Trust

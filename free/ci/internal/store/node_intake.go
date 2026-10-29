@@ -6,7 +6,8 @@ package store
 // Inputs:  IntakeRequest (the trigger with its semantic key), or a claim owner for the dispatch loop.
 // Outputs: IntakeOutcome (enqueued, duplicate, coalesced or replay), claimed rows, queue statistics.
 // Constraints: a delivery id runs once; a semantic key coalesces into a live row (a webhook trigger also into
-//          a row completed within the 72 h redelivery horizon) unless Force, which writes an audit row; the
+//          a row completed within the 72 h redelivery horizon, of the same event; a Reconcile trigger into a
+//          completed row of the same source whose result can be re-sent, whatever the event) unless Force, which writes an audit row; the
 //          idempotency key is stored as a digest; claims carry a heartbeat so a dead owner's rows requeue.
 
 import (
@@ -64,7 +65,7 @@ type IntakeRow struct {
 type IntakeRequest struct {
 	Source, Event, DeliveryID, Project, Revision, TriggerClass, PolicyDigest, SemanticKey, Pipeline string
 	Facts                                                                                           []byte
-	Webhook, Force                                                                                  bool
+	Webhook, Force, Reconcile                                                                       bool
 	Actor                                                                                           string
 	Horizon                                                                                         time.Duration
 	IdemDigest, ReqDigest                                                                           string
@@ -90,6 +91,19 @@ func newIntakeID() string {
 	_, _ = rand.Read(b)
 	return "in-" + hex.EncodeToString(b)
 }
+
+// resendable is true for a done intake row i whose newest evidence is a bound, whole-gate GitHub result
+// (pass, fail or error) of its own revision and whose commit has a recorded status decision (the outbox
+// payload, which carries the release veto the evidence lacks): the only rows a status can be sent again
+// for (D-1320). A partial, unbound or cancelled run, or one without evidence or decision, never posted a
+// status on purpose, so a head-scan trigger must build the head instead of folding into it. Keep in step
+// with rereportDone.
+const resendable = `(i.source='github' AND i.pipeline='' AND i.pipeline_id<>'' AND EXISTS (
+	SELECT 1 FROM evidence e WHERE e.id=(SELECT e2.id FROM evidence e2 WHERE e2.pipeline_id=i.pipeline_id ORDER BY e2.created_at DESC LIMIT 1)
+	AND json_extract(CAST(e.body AS TEXT),'$.binding.state')='bound'
+	AND json_extract(CAST(e.body AS TEXT),'$.revision')=i.revision
+	AND json_extract(CAST(e.body AS TEXT),'$.result') IN ('pass','fail','error'))
+	AND EXISTS (SELECT 1 FROM outbox o WHERE o.revision=i.revision AND o.context='nself-ci@'||i.project AND o.payload_json IS NOT NULL))`
 
 // IntakeEnqueue stores a trigger in one transaction with its delivery and key rows (and the audit row of
 // a forced enqueue). The caller may answer 2xx once it returns without error.
@@ -125,8 +139,8 @@ func (s *Store) IntakeEnqueue(ctx context.Context, r IntakeRequest) (IntakeOutco
 			horizon = IntakeRetention
 		}
 		var into string
-		e := tx.QueryRowContext(ctx, `SELECT id FROM intake WHERE semantic_key=? AND (state IN ('queued','dispatched') OR (?=1 AND state='done' AND finished_at>? AND source=? AND event=?)) ORDER BY seq DESC LIMIT 1`,
-			r.SemanticKey, r.Webhook, now-int64(horizon), r.Source, r.Event).Scan(&into)
+		e := tx.QueryRowContext(ctx, `SELECT i.id FROM intake i WHERE i.semantic_key=? AND (i.state IN ('queued','dispatched') OR (i.state='done' AND i.finished_at>? AND i.source=? AND ((?=1 AND i.event=?) OR (?=1 AND `+resendable+`)))) ORDER BY i.seq DESC LIMIT 1`,
+			r.SemanticKey, now-int64(horizon), r.Source, r.Webhook, r.Event, r.Reconcile).Scan(&into)
 		if e != nil && !errors.Is(e, sql.ErrNoRows) {
 			return e
 		}

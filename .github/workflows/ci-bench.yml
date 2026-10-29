@@ -1,13 +1,17 @@
 name: ci-bench
 
+# Local overhead of the nself ci V15 engine against the v1.4 gate (P7-CI-46).
+# Runs cibench on a hosted runner, then the cli's own `perfbench check` against the
+# per-platform budget (absolute p95) and `cibench -ratio-check` (V15 median against
+# the v1.4 median). Two controls prove the gates can fire: a result ten times over
+# every budget must fail both checks, and a result inside the relative budget must
+# pass. Budgets and baselines: hq plan/p7/evidence/CI-46-perf.md.
+
 on:
   pull_request:
     paths:
-      - "free/ci/internal/sched/**"
-      - "free/ci/internal/dispatch/**"
-      - "free/ci/internal/world/**"
-      - "free/ci/bench/**"
-      - ".github/workflows/ci-bench.yml"
+      - 'free/ci/**'
+      - '.github/workflows/ci-bench.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,7 +21,102 @@ concurrency:
   group: ci-bench-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CGO_ENABLED: '0'
+  # nself-org/cli revision whose tools/perfbench reads the result and budget files.
+  CLI_SHA: '529e8917244bffe4ab1aa9d42b081dd3efe5ee73'
+
 jobs:
+  bench:
+    name: bench (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            budget: perf-budget.json
+            services: true
+          - name: macos-arm64
+            os: macos-14
+            budget: perf-budget-darwin-arm64.json
+            services: false
+    env:
+      BUDGET: ${{ github.workspace }}/free/ci/bench/${{ matrix.budget }}
+      SLOW: ${{ github.workspace }}/free/ci/bench/testdata/slow-result.json
+      OK: ${{ github.workspace }}/free/ci/bench/testdata/ratio-ok-result.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/cli
+          ref: ${{ env.CLI_SHA }}
+          path: cli
+          persist-credentials: false
+
+      # The cli module needs a newer Go than the plugin pins, and setup-go sets
+      # GOTOOLCHAIN=local, so one toolchain (the newer) builds both.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+
+      - name: Harness tests
+        working-directory: free/ci
+        run: go test -mod=vendor -count=1 ./bench/...
+
+      - name: Measure
+        working-directory: free/ci
+        run: go run -mod=vendor ./bench/cmd/cibench -runs 20 -warmup 2 -out "$RUNNER_TEMP/ci-bench.json"
+
+      - name: Absolute p95 budget (cli perfbench check)
+        working-directory: cli
+        run: go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/ci-bench.json"
+
+      - name: Relative budget (V15 against v1.4)
+        working-directory: free/ci
+        run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
+
+      - name: Control - the gates fail an injected slowdown and pass a good result
+        if: ${{ !cancelled() }}
+        run: |
+          set -u
+          rc=0
+          (cd cli && go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$SLOW") || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::perfbench check exited $rc on a result ten times over budget; want 1 (a violation)"; exit 1
+          fi
+          cd free/ci
+          rc=0
+          go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$SLOW" || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::the ratio check exited $rc on a result ten times over budget; want 1 (a violation)"; exit 1
+          fi
+          go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$OK"
+
+      - name: Service start (warm and cold)
+        if: ${{ !cancelled() && matrix.services }}
+        run: |
+          set -eu
+          (cd cli && go build -mod=vendor -o "$RUNNER_TEMP/nself" ./cmd/nself)
+          cd free/ci
+          go run -mod=vendor ./bench/cmd/cibench -runs 5 -warmup 0 -skip-medium -services -cold -cold-runs 3 \
+            -nself "$RUNNER_TEMP/nself" -out "$RUNNER_TEMP/ci-bench-services.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ci-bench-${{ matrix.name }}
+          path: |
+            ${{ runner.temp }}/ci-bench.json
+            ${{ runner.temp }}/ci-bench-services.json
+          if-no-files-found: ignore
+
   schedbench:
     if: github.repository == 'nself-org/plugins'
     runs-on: ubuntu-latest

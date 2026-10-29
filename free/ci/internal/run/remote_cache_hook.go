@@ -79,7 +79,7 @@ func (remoteCacheFinalize) AfterRun(ctx context.Context, r RunInfo) error {
 				if _, statErr := os.Stat(path); statErr == nil {
 					fresh, err = store.Open(path, store.Options{})
 					if err == nil {
-						defer fresh.Close()
+						defer func() { _ = fresh.Close() }()
 						state, _, err = fresh.AttemptStateEpoch(ctx, e.attempt)
 					}
 				}

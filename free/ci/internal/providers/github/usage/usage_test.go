@@ -22,7 +22,7 @@ const (
 )
 
 func importer(src providers.UsageSource, account string, on bool, rec *recorder) *usage.Importer {
-	return &usage.Importer{Settings: usage.Settings{Import: on, Account: account}, Source: src, Record: rec.record, Now: func() time.Time { return today }}
+	return &usage.Importer{Settings: usage.Settings{Import: on, Account: account}, Source: src, Replace: rec.replace, Now: func() time.Time { return today }}
 }
 
 // TestDisabled proves acceptance 1: with billing_import false the command prints `disabled` and exits

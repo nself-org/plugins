@@ -46,26 +46,26 @@ func runSlots(_ context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	set := fs.Int("set", 0, "set the host slot cap to N")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || *set < 0 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent slots [--set N]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent slots [--set N]")
 		return 2
 	}
 	state, err := stateDir()
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if *set > 0 {
 		if err := slots.SetCap(state, *set); err != nil {
-			fmt.Fprintln(sio.Stderr, "error:", err)
+			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1
 		}
 	}
 	capacity, used, err := slots.Status(state)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
-	fmt.Fprintf(sio.Stdout, "cap %d used %d\n", capacity, used)
+	_, _ = fmt.Fprintf(sio.Stdout, "cap %d used %d\n", capacity, used)
 	return 0
 }
 
@@ -80,26 +80,26 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	fingerprint := fs.String("root-fingerprint", "", "fingerprint of that coordinator's root")
 	secretValues := fs.Bool("accept-secret-values", false, "accept value-bearing secrets frames (PERSONAL coordinator)")
 	if err := fs.Parse(args); err != nil || !*stdio || fs.NArg() != 0 || !idRE.MatchString(*coordinator) {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent serve --stdio [--slots N] [--coordinator ID] [--root-fingerprint FP] [--accept-secret-values]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent serve --stdio [--slots N] [--coordinator ID] [--root-fingerprint FP] [--accept-secret-values]")
 		return 2
 	}
 	if err := RunPreStart(ctx, "serve"); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	state, err := stateDir()
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	key, err := nodekey.LoadOrCreate(state)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: node key:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: node key:", err)
 		return 1
 	}
 	age, err := agekey.LoadOrCreate(ctx, state)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: age identity:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: age identity:", err)
 		return 1
 	}
 	capacity := ciexec.Probe()
@@ -108,14 +108,14 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	// only lower this process's share.
 	table, err := slots.Open(state, max(1, capacity.CPUs/2))
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	table.Lower(*nslots)
 	policy := protocol.CarrierPolicy{Carrier: "A", Personal: *secretValues, OperatorOwned: *secretValues}
 	car, err := session.NewStreamCarrier(sio.Stdin, sio.Stdout, policy, true)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	car = withCheckout(car, state)
@@ -127,11 +127,11 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		Status:      hostStatus,
 	})
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if err := s.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	return 0
@@ -147,7 +147,7 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		// run on an empty tree would report a pass for code it never saw.
 		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
 	}
-	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
+	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, NetworkScope: l.NetworkScope, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
 	in := jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip}
 	if len(j.Credential) > 0 {
 		if err := wrapCredential(&spec, &in, j); err != nil {

@@ -193,6 +193,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	rs.judge(ctx, info, full, &res, &o)
 	rs.diagnose(&o, &res)
+	classifyCatalogue(pj.Check, &res, &o)
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
 		if rs.hooks.Cache != nil {
@@ -201,13 +202,13 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 			_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, oc) })
 		}
 	}()
-	switch {
-	case res.Attempt.State == "cancelled":
+	switch res.Attempt.State {
+	case "cancelled":
 		if _, err := rs.settle(id, "running", "cancelled", "cancelled"); err != nil {
 			return failed(o, err)
 		}
 		return rs.stopped(o, pj.ID)
-	case res.Attempt.State == "passed":
+	case "passed":
 		return rs.pass(id, o, info)
 	}
 	o.FailureClass = res.Attempt.FailureClass

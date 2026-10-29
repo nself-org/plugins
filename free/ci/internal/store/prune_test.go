@@ -90,3 +90,30 @@ func TestDeletePipelinesInBatches(t *testing.T) {
 		t.Fatalf("attempt rows left: %d", got)
 	}
 }
+
+// The trust rows of a pruned pipeline go with it, voided or not; another run's rows stay (D-1342).
+func TestDeletePipelinesRemovesTrustRows(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	for _, run := range []string{"r1", "r2"} {
+		approvalSeed(t, s, run)
+		if _, err := s.ApproveRun(ctx, ApproveInput{Run: run, Approver: "bob", ExpectSHA: "sha-1", Check: exactCheck}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.FinishPipeline(ctx, "r1", "passed"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.DeletePipelines(ctx, []string{"r1"}); err != nil || n != 1 {
+		t.Fatalf("removed %d, err %v; want 1", n, err)
+	}
+	for _, table := range []string{"trust_run_facts", "trust_approvals"} {
+		if got := count(t, s, table); got != 1 {
+			t.Errorf("%s rows = %d, want only the unpruned run's", table, got)
+		}
+		var left string
+		if err := s.readers.QueryRow("SELECT run FROM " + table).Scan(&left); err != nil || left != "r2" {
+			t.Errorf("%s keeps %q (%v), want r2", table, left, err)
+		}
+	}
+}

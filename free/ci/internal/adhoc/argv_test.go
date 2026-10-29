@@ -72,3 +72,79 @@ func TestDashPrefixedSecretValuesAreRedacted(t *testing.T) {
 		})
 	}
 }
+
+func TestWellKnownSecretFormsAreRedacted(t *testing.T) {
+	cases := []struct {
+		name   string
+		argv   []string
+		secret string
+	}{
+		{"mysql -pVALUE", []string{"mysql", "-pS3cretPass", "db"}, "S3cretPass"},
+		{"mariadb path -pVALUE", []string{"/usr/bin/mariadb", "-pS3cretPass", "db"}, "S3cretPass"},
+		{"mysql behind docker exec", []string{"docker", "exec", "db", "mysql", "-pS3cretPass"}, "S3cretPass"},
+		{"curl -u user:pass", []string{"curl", "-u", "admin:s3cret", "https://x"}, "admin:s3cret"},
+		{"header X-Api-Key", []string{"curl", "-H", "X-Api-Key: tok123456789", "https://x"}, "tok123456789"},
+		{"header Authorization", []string{"curl", "-H", "Authorization: Bearer abcdefghij", "https://x"}, "Bearer abcdefghij"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := redact.New()
+			Register(r, tc.argv)
+			got := Recorded(r, tc.argv)
+			if strings.Contains(got, tc.secret) {
+				t.Errorf("recorded argv holds %q: %s", tc.secret, got)
+			}
+			f := r.NewFilter()
+			out := string(append(f.Redact([]byte("line "+tc.secret+" end\n")), f.Flush()...))
+			if strings.Contains(out, tc.secret) {
+				t.Errorf("job output still holds %q: %s", tc.secret, out)
+			}
+		})
+	}
+}
+
+func TestNonSecretDashFlagsNotRedacted(t *testing.T) {
+	// -port, -pidfile, -print, -path and plain positional args must stay visible,
+	// in the recorded line and in job output.
+	argv := []string{"myapp", "-port=8080", "-pidfile=/tmp/pid", "-print", "-path=/srv/app", "plainarg"}
+	r := redact.New()
+	Register(r, argv)
+	got := Recorded(r, argv)
+	if want := strings.Join(argv, " "); got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
+	}
+	f := r.NewFilter()
+	out := string(append(f.Redact([]byte("pidfile=/tmp/pid print path=/srv/app port=8080 plainarg\n")), f.Flush()...))
+	if strings.Contains(out, redact.Placeholder) {
+		t.Errorf("job output was masked: %q", out)
+	}
+}
+
+// A -pVALUE too short for the registry still has to be hidden in Recorded.
+func TestShortMySQLPasswordMaskedInRecorded(t *testing.T) {
+	argv := []string{"mysql", "-pab", "db"}
+	r := redact.New()
+	if tooShort := Register(r, argv); tooShort != 1 {
+		t.Fatalf("short secret count = %d, want 1", tooShort)
+	}
+	if got, want := Recorded(r, argv), "mysql -p[redacted] db"; got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
+	}
+}
+
+// Flags that merely start with -p belong to other tools (go test, make...) and
+// must stay visible: redacting them would corrupt the job's output.
+func TestDashPFlagsOfOtherToolsAreNotRedacted(t *testing.T) {
+	argv := []string{"go", "test", "-parallel", "4", "-pkgdir=/tmp/pkg", "-print-errors", "-p4", "./..."}
+	r := redact.New()
+	Register(r, argv)
+	got := Recorded(r, argv)
+	if want := strings.Join(argv, " "); got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
+	}
+	f := r.NewFilter()
+	out := string(append(f.Redact([]byte("ok parallel pkgdir print-errors\n")), f.Flush()...))
+	if strings.Contains(out, redact.Placeholder) {
+		t.Errorf("job output was masked: %q", out)
+	}
+}

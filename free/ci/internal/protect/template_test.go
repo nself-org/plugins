@@ -17,6 +17,7 @@ type workflowDoc struct {
 	Env  map[string]string `yaml:"env"`
 	Jobs map[string]struct {
 		Name     string `yaml:"name"`
+		RunsOn   string `yaml:"runs-on"`
 		Strategy any    `yaml:"strategy"`
 		Steps    []struct {
 			Uses string `yaml:"uses"`
@@ -115,5 +116,47 @@ func TestMutationPatchesApplyShape(t *testing.T) {
 		if !strings.Contains(string(b), "+++ b/free/ci/internal/model/result.go") {
 			t.Fatalf("%s does not mutate the result rule", p)
 		}
+	}
+}
+
+// A checkout-built engine cannot infer operator provenance from a fetched PR.
+// Its override is scoped to disposable hosted runners, without secrets or writes,
+// and only a head in this very repository gets it: a fork head stays untrusted.
+func TestHostedSourceWorkflowTrust(t *testing.T) {
+	for _, tc := range []struct {
+		file, job, command, runner string
+		calls                      int
+	}{
+{"../../.github/workflows/nself-ci-source.yml", "nself-ci-source", `"$NSELF_CI_BIN"`, "ubuntu-latest", 1},
+		{"../../.github/workflows/ci-scenarios.yml", "scenarios", ".drill-bin/nself-ci", "${{ matrix.os }}", 2},
+} {
+		t.Run(tc.job, func(t *testing.T) {
+			d, raw := readWorkflow(t, tc.file)
+			job, ok := d.Jobs[tc.job]
+			if !ok || job.RunsOn != tc.runner {
+				t.Fatalf("unexpected runner: %+v", job)
+			}
+			if len(d.Perm) != 1 || d.Perm["contents"] != "read" || strings.Contains(strings.ReplaceAll(raw, " ", ""), "${{secrets.") || strings.Contains(raw, "self-hosted") {
+				t.Fatal("operator override requires disposable hosted execution, no secrets and a read-only token")
+			}
+			if !strings.Contains(raw, "NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}") {
+				t.Fatal("the audited override must be set only for a head in this repository")
+			}
+			calls := 0
+			for _, step := range job.Steps {
+				for _, line := range strings.Split(step.Run, "\n") {
+					if !strings.HasPrefix(strings.TrimSpace(line), tc.command+" ") {
+						continue
+					}
+					calls++
+				}
+				if strings.Contains(step.Run, tc.command+" ") && !strings.Contains(step.Run, `--trust "$NSELF_CI_TRUST"`) {
+					t.Fatalf("missing audited operator override: %s", step.Run)
+				}
+			}
+			if calls != tc.calls {
+				t.Fatalf("gate commands %d, want %d", calls, tc.calls)
+			}
+		})
 	}
 }

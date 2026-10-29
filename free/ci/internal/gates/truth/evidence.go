@@ -38,11 +38,11 @@ func Fold(repo string, checks []model.Check, errText string) model.Check {
 	var notes []string
 	for _, k := range checks {
 		c.Findings += k.Findings
-		switch {
-		case k.Result == "error":
+		switch k.Result {
+		case "error":
 			c.Result, c.FailureClass = "error", k.FailureClass
 			notes = append(notes, k.Excerpt)
-		case k.Result == "fail":
+		case "fail":
 			if c.Result != "error" {
 				c.Result, c.FailureClass = "fail", "code"
 			}

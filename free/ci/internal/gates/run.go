@@ -100,9 +100,9 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		c.Excerpt = res.err.Error()
 		return c
 	}
-	if d.ID == "python-test" && res.exit != 0 && pytestMissing(res.output) {
-		c.Tool = "pytest"
-		return unavailable(c, "Add pytest to the project's dependencies")
+	if tool, fix := MissingResult(d.ID, res.exit, res.output); tool != "" {
+		c.Tool = tool
+		return unavailable(c, fix)
 	}
 	if advisoryOffline(d.ID, res.output, res.exit) {
 		if !p.Required {

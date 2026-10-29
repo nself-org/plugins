@@ -12,8 +12,8 @@ package run
 // end without one (lost) or the context. A cancel moves the attempt to cancelled
 // first (the lease row is gone, so a late result is fenced), then stops the
 // carrier and waits for it, so the node's job process group is killed before
-// the run exits. An infra failure reported by a node is not retried (it is
-// finalizing, which has no path back to the queue); a lost session is.
+// the run exits. An infra failure or an unasked cancel reported by a node ends the attempt lost
+// (remote_infra.go), like a lost session, so the CI-40 retry applies to both.
 
 import (
 	"context"
@@ -75,7 +75,7 @@ func (rs *runState) runRemote(ctx context.Context, pj plan.PlannedJob, job model
 		ra = rd.sink.attempt(id)
 	}
 	if ra == nil {
-		rs.driveToCancelled(id)
+		_ = rs.driveToCancelled(id)
 		return failed(o, fail(CodeOptions, "attempt %s was placed on a remote runner; this run has no way to await it", id))
 	}
 	info := rs.info(pj, job, id, n)
@@ -258,19 +258,7 @@ func (rs *runState) remoteResult(ctx context.Context, pj plan.PlannedJob, id str
 		}
 		return rs.stopped(o, pj.ID)
 	}
-	class := model.FailureClass("code")
-	exit := 1
-	if ev.Result == "error" {
-		class = "infra"
-	}
-	for _, c := range ev.Checks {
-		if c.FailureClass != "" {
-			class = c.FailureClass
-		}
-		if c.Exit != nil {
-			exit = *c.Exit
-		}
-	}
+	class, exit := evidenceFailure(ev)
 	o.ExitCode, o.FailureClass = exit, class
 	d := diagnose.Classify(diagnose.Input{ExecClass: class, ExitCode: exit, Tail: o.Tail})
 	o.Diagnosis, o.Remediation = d.Signature, d.Remediation

@@ -38,10 +38,11 @@ func init() {
 
 // execSpec is the job a hosted workflow or a test hands to `exec`.
 type execSpec struct {
-	AttemptID     string    `json:"attempt_id"`
-	CoordinatorID string    `json:"coordinator_id"`
-	JobID         string    `json:"job_id"`
-	Job           model.Job `json:"job"`
+	NetworkScope  model.NetworkScope `json:"network_scope,omitempty"`
+	AttemptID     string             `json:"attempt_id"`
+	CoordinatorID string             `json:"coordinator_id"`
+	JobID         string             `json:"job_id"`
+	Job           model.Job          `json:"job"`
 	// Revision is the full commit the job runs against (40 or 64 hex).
 	Revision  string `json:"revision"`
 	SourceDir string `json:"source_dir,omitempty"`
@@ -77,32 +78,32 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 	specPath := fs.String("spec", "", "job spec JSON file")
 	evPath := fs.String("evidence", "", "where to write the evidence document")
 	if err := fs.Parse(args); err != nil || *specPath == "" || *evPath == "" || fs.NArg() != 0 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent exec --spec <file> --evidence <path>")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent exec --spec <file> --evidence <path>")
 		return 2
 	}
 	if err := RunPreStart(ctx, "exec"); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	raw, err := os.ReadFile(*specPath)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 2
 	}
 	var spec execSpec
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&spec); err != nil {
-		fmt.Fprintln(sio.Stderr, "error: spec:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: spec:", err)
 		return 2
 	}
 	res, err := runSpec(ctx, spec, jobInputs{Output: func(b []byte) { _, _ = sio.Stdout.Write(b) }})
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if err := writeEvidence(*evPath, res.Evidence); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if res.Outcome.State != "passed" {
@@ -197,7 +198,10 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
 	}
-	job := spec.Job
+	job, err := agentJobImage(ctx, spec, cirun.Hooks{}.Resolved().Image)
+	if err != nil {
+		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: time.Now(), Err: err}, err.Error(), nil
+	}
 	job.Env = map[string]string{}
 	for k, v := range spec.Job.Env {
 		job.Env[k] = v
@@ -211,13 +215,15 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	if iso == nil {
 		return ciexec.AttemptResult{}, "", errors.New("no isolator is registered; the agent will not run a job without one")
 	}
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: iso}
+	// The transport expects a cancelled result within five seconds. Leave time
+	// for evidence and cleanup after escalating SIGTERM to SIGKILL.
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: iso, Grace: time.Second}
 	if len(in.Secrets) > 0 {
 		ex.Secrets = mapSecrets(in.Secrets)
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		Secrets: ex.Secrets, SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
+		Secrets: ex.Secrets, SourceDir: spec.SourceDir, Network: spec.NetworkScope, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
 		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in), BeforeJob: cacheBeforeJob(spec, job.Env), AfterJob: agentAfterJob(spec, in),
 		Output: func(b []byte) {
 			raw.Write(b)

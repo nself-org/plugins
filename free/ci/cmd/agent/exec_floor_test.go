@@ -18,9 +18,14 @@ import (
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 func TestRaisedJobWithoutImageIsRefusedNotRunOnTheHost(t *testing.T) {
+	calls := 0
+	old := cirun.Registered.Image
+	cirun.RegisterImage(missingImageHook{&calls, errors.New("no configured image")})
+	t.Cleanup(func() { cirun.RegisterImage(old) })
 	skipUnixOnly(t)
 	useState(t)
 	dir := t.TempDir()

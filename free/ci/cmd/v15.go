@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +23,7 @@ import (
 	"syscall"
 
 	"github.com/nself-org/plugins/free/ci/internal/adhoc"
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -189,22 +188,27 @@ func parseBare(args []string) (RunOptions, error) {
 	return o, nil
 }
 
+// configDigest is a seam so a test can fail the digest.
+var configDigest = func(cfg model.PipelineConfig) (string, error) { return attest.ConfigDigest(cfg) }
+
 // preparePlan runs E621, config load, detection and the planner.
 func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(plan.PlannedJob) bool, error) {
 	if err := config.CheckLeftover(o.Root); err != nil {
 		return nil, "", nil, err
 	}
-	cfg, digest := model.PipelineConfig{Version: 1}, "builtin-defaults"
+	cfg := model.PipelineConfig{Version: 1}
 	path := firstOf(bare.cfg, filepath.Join(o.Root, config.FileName))
 	loaded, err := config.Load(path)
 	switch {
 	case err == nil:
 		cfg = loaded.Config
-		if raw, e := os.ReadFile(path); e == nil {
-			sum := sha256.Sum256(raw)
-			digest = hex.EncodeToString(sum[:])
-		}
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
+		return nil, "", nil, err
+	}
+	// The digest binds the config as the tree holds it, built-in defaults
+	// included (D-1270): taken before drill expansion so it equals evidence.InputsOf.
+	digest, err := configDigest(cfg)
+	if err != nil {
 		return nil, "", nil, err
 	}
 	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)

@@ -157,6 +157,12 @@ func checksums(f *facts, provenanceSHA string) []byte {
 
 // build signs and assembles the release of runID.
 func build(ctx context.Context, d Deps, runID string, f *facts) (*bundle, error) {
+	// The runner and coordinator ids published below are an HMAC under the CI home's key (D-1198); this
+	// path also runs outside a run (`nself ci artifacts sign`), so it registers the key itself and
+	// refuses to publish the unkeyed, dictionary-recoverable form.
+	if err := attest.UsePseudonymKeyAt(d.Home); err != nil {
+		return nil, refuse(signing.ReasonSignerFailed, "the publication pseudonym key is not usable")
+	}
 	info, err := d.Signer.PublicKey(ctx)
 	if err != nil {
 		return nil, wrapSigner(err)

@@ -106,7 +106,7 @@ func runExplain(args []string) int {
 		}
 		return 0
 	}
-	fmt.Fprintln(os.Stdout, strings.Join(planview.ExplainLines(doc, source), "\n"))
+	_, _ = fmt.Fprintln(os.Stdout, strings.Join(planview.ExplainLines(doc, source), "\n"))
 	return 0
 }
 

@@ -156,7 +156,7 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		if value, err = checkValue(spec, c.Value); err != nil {
 			return Result{}, err
 		}
-		pw.Op, pw.Value = store.PolicySet, value
+	pw.Op, pw.Value = store.PolicySet, value
 		res.Value = shown(spec, value)
 	}
 	var branch *trust.Scope
@@ -167,7 +167,7 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 	// cannot both pass on a state the other is changing (D-1283).
 	errMachine := errors.New("machine-invoked write refused")
 	check := func(tx *store.Tx) error {
-		if w.Machine && strings.HasPrefix(c.Key, "trust.") && (c.Op == OpUnset || w.loosens(keys, spec, storedOf(ctx, tx, t, c.Key), value)) {
+		if w.Machine && (strings.HasPrefix(c.Key, "trust.") || spec.Spend) && (c.Op == OpUnset || w.loosens(keys, spec, storedOf(ctx, tx, t, c.Key), value)) {
 			return errMachine
 		}
 		if c.Op == OpSet { // an unset cannot make the remaining rows loosen a parent

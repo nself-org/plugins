@@ -243,7 +243,7 @@ func (w *Writer) loosens(keys *Keyset, spec KeySpec, old, next json.RawMessage) 
 // refuseMachine writes the refusal's audit row and returns the E687 error. A
 // failed audit write does not turn the refusal into an allow.
 func (w *Writer) refuseMachine(ctx context.Context, actor roles.Actor, op, target string) error {
-	refusal := &roles.Error{Reason: ReasonMachineInvoked, Msg: "a machine-invoked caller (NSELF_INVOKED_BY) cannot loosen trust policy: " + op + " " + target}
+	refusal := &roles.Error{Reason: ReasonMachineInvoked, Msg: "a machine-invoked caller (NSELF_INVOKED_BY) cannot loosen policy: " + op + " " + target}
 	if w.Log == nil {
 		return refusal
 	}

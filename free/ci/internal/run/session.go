@@ -48,7 +48,9 @@ type Session struct {
 	// requested class but is placed as the operator-owned job it is.
 	AdmitTrust model.TrustClass
 	// Clock is the time the placement world is built at (nil = time.Now); tests inject it so a plan and a run can be compared.
-	Clock       func() time.Time
+	Clock func() time.Time
+	// User and Team are Options.User and Options.Team: the dispatch hook sets them on every scheduler job.
+	User, Team  string
 	Interactive bool // a person waits at a terminal: only then does the implicit foreground queue cap apply
 	// ProviderRepo is Options.ProviderRepo: the one repository whose hosted runners the world keeps ("" = none).
 	ProviderRepo string

@@ -202,6 +202,7 @@ func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p 
 	}
 	limit, reason := streamBudget(c.Policy, c.Usage, streamed)
 	sr := newScanReader(file, c.Scanner, f.rel, limit)
+	defer sr.Close()
 	sr.reason = reason
 	digest, size, err := c.Blobs.Put(ctx, realm, sr)
 	if err != nil {

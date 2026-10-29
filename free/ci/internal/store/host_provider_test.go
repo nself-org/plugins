@@ -54,6 +54,40 @@ func TestHostProviderFacts(t *testing.T) {
 	}
 }
 
+func TestProviderMarkPruneDeletesOldMarksOfOneName(t *testing.T) {
+	s, ctx := testStore(t), context.Background()
+	t0 := time.Unix(1_700_000_000, 0).UTC()
+	for _, m := range []struct {
+		name, key string
+		at        time.Time
+	}{
+		{"a", "run|o/r|1", t0}, {"a", "run|o/r|2", t0.Add(48 * time.Hour)}, {"a", "enq|o/r|x", t0},
+		{"b", "run|o/r|1", t0},
+	} {
+		if err := s.ProviderMarkPut(ctx, m.name, m.key, m.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cut := t0.Add(24 * time.Hour)
+	if n, err := s.ProviderMarkPrune(ctx, "a", "run|", cut); err != nil || n != 1 {
+		t.Fatalf("prefix prune removed %d, %v; want only the old run mark", n, err)
+	}
+	if n, err := s.ProviderMarkPrune(ctx, "a", "", cut); err != nil || n != 1 {
+		t.Fatalf("name prune removed %d, %v; want the old enq mark", n, err)
+	}
+	for key, want := range map[string]bool{"run|o/r|1": false, "run|o/r|2": true, "enq|o/r|x": false} {
+		if _, ok, _ := s.ProviderMarkGet(ctx, "a", key); ok != want {
+			t.Fatalf("mark a/%s present = %v, want %v", key, ok, want)
+		}
+	}
+	if _, ok, _ := s.ProviderMarkGet(ctx, "b", "run|o/r|1"); !ok {
+		t.Fatal("another name's mark must stay")
+	}
+	if _, err := s.ProviderMarkPrune(ctx, "", "", cut); err == nil {
+		t.Fatal("a prune without a name must be refused")
+	}
+}
+
 func TestHostProviderMarksAndIntents(t *testing.T) {
 	s, ctx := testStore(t), context.Background()
 	t0 := time.Unix(1_700_000_000, 0).UTC()

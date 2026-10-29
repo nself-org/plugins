@@ -176,6 +176,7 @@ type pipelineFacts struct {
 	Trigger   string          `json:"trigger"`
 	CloneURL  string          `json:"clone_url"`
 	Synthetic json.RawMessage `json:"synthetic"`
+	Submitter string          `json:"submitter"` // the audit label of the user who submitted the run, when one did
 }
 
 // dispatchPipeline runs one queued trigger: clone the revision into a fresh directory, plan it and run the
@@ -206,6 +207,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		}
 		o := RunOptions{Root: dir, Home: home, Pipeline: row.Pipeline, Trigger: serveTrigger(facts.Trigger),
 			Container: !f.unsandboxed, ProviderRepo: providerRepoFor(row.Source, row.Project), Timeout: time.Duration(f.timeout) * time.Second, Stream: f.verbose}
+		o.User, o.Team = submitterIdentity(facts.Submitter, row.Project)
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("plan failed: %w", err)

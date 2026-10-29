@@ -207,6 +207,7 @@ func TestB_Artifacts_SecretHiddenFromScanner(t *testing.T) {
 		"url-all":   percentAll(fakeSecret),
 		"utf16le":   toUTF16LE(fakeSecret),
 		"gzip":      gz.String(),
+		"zip":       string(zipBytes(filler + "token=" + fakeSecret + filler)),
 		"split":     fakeSecret[:12] + "\n" + fakeSecret[12:],
 		"interleaf": strings.Join(strings.Split(fakeSecret, ""), "\x00"),
 	}
@@ -218,13 +219,6 @@ func TestB_Artifacts_SecretHiddenFromScanner(t *testing.T) {
 		e.write("out/f.bin", content)
 		_, err := e.collect("out/f.bin")
 		if err == nil {
-			switch name {
-			case "gzip", "utf16le", "interleaf":
-				t.Logf("%s: collected", name)
-				if !openFinding(t, "B06") {
-					continue
-				}
-			}
 			t.Errorf("%s-encoded secret was collected into an artifact", name)
 		}
 	}

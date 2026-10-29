@@ -7,7 +7,8 @@ package run
 // audits each promoted release and re-posts the affected statuses as errors.
 // Inputs:  the run's store (taken from the first attempt that starts, or set with UseAttestStore); for
 //          RevokeNode a store, an audit log and a node id.
-// Outputs: the registered verifier; attest.Affected from RevokeNode.
+// Outputs: the registered verifier; attest.Affected from RevokeNode; the operator pseudonym key the
+//          publication profile uses (attest.LoadPseudonymKey under the run's CI home, D-1198).
 // Constraints: with no store known the verifier refuses everything (fail closed); the store is only read
 //          and written through store.AttestLedger.
 
@@ -38,13 +39,35 @@ func init() {
 	RegisterAttemptStart(attestStoreHook{})
 }
 
-// attestStoreHook points the verifier at the store of the attempt that is starting.
+// attestStoreHook points the verifier at the store of the attempt that is starting, and the publication
+// profile at the operator's pseudonym key under the run's CI home (D-1198).
 type attestStoreHook struct{}
+
+var pseudonymHome atomic.Pointer[string] // the home whose key is registered
 
 func (attestStoreHook) AttemptStart(_ context.Context, a AttemptInfo) error {
 	if a.Store != nil {
 		UseAttestStore(a.Store)
 	}
+	return usePseudonymKey(a.Home)
+}
+
+// usePseudonymKey registers the key of the CI home once per home. A home whose key cannot be created or
+// read fails the attempt: publishing with the unkeyed pseudonym would let a host name dictionary
+// recover the builder id.
+func usePseudonymKey(home string) error {
+	dir := ciHome(home)
+	if cur := pseudonymHome.Load(); cur != nil && *cur == dir {
+		return nil
+	}
+	key, err := attest.LoadPseudonymKey(dir)
+	if err == nil {
+		err = attest.UsePseudonymKey(key)
+	}
+	if err != nil {
+		return fail(CodeRun, "the publication pseudonym key is not usable: %v", err)
+	}
+	pseudonymHome.Store(&dir)
 	return nil
 }
 

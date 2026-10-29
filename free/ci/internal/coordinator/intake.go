@@ -81,7 +81,7 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 	out, err := c.cfg.Store.IntakeEnqueue(ctx, store.IntakeRequest{
 		Source: d.Source, Event: event, DeliveryID: d.DeliveryID, Project: d.Project, Revision: d.Revision, TriggerClass: d.TriggerClass,
 		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(strings.ToLower(d.Project), d.Revision, d.TriggerClass, c.cfg.PolicyDigest, keyPipeline),
-		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Force: c.cfg.Force || o.force, Actor: o.actor,
+		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Reconcile: d.Reconcile, Force: c.cfg.Force || o.force, Actor: o.actor,
 		IdemDigest: o.idem, ReqDigest: o.reqDigest,
 	})
 	if err != nil {
@@ -94,7 +94,31 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 	if out.Kind == store.IntakeEnqueued {
 		c.nudge()
 	}
+	if d.Reconcile && (out.Kind == store.IntakeCoalesced || out.Kind == store.IntakeDuplicate) { // a duplicate: this sweep delivery id was folded or built before
+
+		c.rereport(ctx, out.ID)
+	}
 	return out, nil
+}
+
+// rereport sends the stored result of a finished intake row again, for a sweep that found its commit without
+// a terminal status (D-1320). A row that is still queued or running reports for itself; a failure is logged,
+// never returned: the sweep offers the head again.
+func (c *Coordinator) rereport(ctx context.Context, id string) {
+	if c.cfg.Rereport == nil {
+		return
+	}
+	row, err := c.cfg.Store.IntakeGet(ctx, id)
+	if err != nil {
+		c.cfg.Logf("intake row %s not read for a re-report: %v", id, err)
+		return
+	}
+	if row.State != store.IntakeDone {
+		return
+	}
+	if err = c.cfg.Rereport(ctx, row); err != nil {
+		c.cfg.Logf("re-report of intake row %s failed: %v", id, err)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

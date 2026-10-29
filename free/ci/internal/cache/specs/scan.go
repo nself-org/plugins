@@ -72,7 +72,7 @@ func (w *scanWriter) release(chunk []byte) error {
 		return ErrSecretMatch
 	}
 	window := append(append(make([]byte, 0, len(w.tail)+len(chunk)), w.tail...), chunk...)
-	if len(w.sc.Scan(window)) != 0 {
+	if !authz.CleanCandidates(w.sc, window) {
 		return ErrSecretMatch
 	}
 	w.tail = append(w.tail[:0], window[max(0, len(window)-scanOverlap):]...)

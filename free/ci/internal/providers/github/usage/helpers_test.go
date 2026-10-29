@@ -128,11 +128,11 @@ type recorder struct {
 	lines []economics.Usage
 }
 
-func (r *recorder) record(ctx context.Context, u economics.Usage) error {
+func (r *recorder) replace(ctx context.Context, provider, from, to string, lines []economics.Usage) error {
 	r.mu.Lock()
-	r.lines = append(r.lines, u)
+	r.lines = append(r.lines, lines...)
 	r.mu.Unlock()
-	return economics.RecordUsage(ctx, u)
+	return economics.ReplaceUsage(ctx, provider, from, to, lines)
 }
 
 func (r *recorder) keys() map[string]economics.Usage {

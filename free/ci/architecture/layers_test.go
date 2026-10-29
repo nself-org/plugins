@@ -90,6 +90,9 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	}
 	local := strings.TrimPrefix(imported, module)
 	isLocal := imported != local
+	if imported == "os/exec" && pkg == "bench" && file == "spawn.go" && kind == "supporting" {
+		return nil // the timing harness starts the processes it times, outside the engine's funnel (P7-CI-46)
+	}
 	if imported == "os/exec" && pkg != "internal/exec" && pkg != "internal/legacy" {
 		// These frozen pre-fabric sites are tracked by the single-exec-site test.
 		for _, old := range []struct{ pkg, file string }{{"internal/forgejo", "forgejo.go"}, {"internal/nodes/provision", "exec.go"}, {"internal/serve", "serve_job.go"}, {"internal/serve", "serve_job_report.go"}} {

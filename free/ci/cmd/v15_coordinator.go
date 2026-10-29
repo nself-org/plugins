@@ -93,7 +93,7 @@ func coordinatorOptions(o *RunOptions) error {
 	in.JSON, in.Out, in.Err = o.JSON, out, errw
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	fmt.Fprintf(errw, "nself ci: running on %s (%s)\n", firstOf(t.URL, t.Socket), t.Kind)
+	_, _ = fmt.Fprintf(errw, "nself ci: running on %s (%s)\n", firstOf(t.URL, t.Socket), t.Kind)
 	res, err := cl.Run(ctx, in)
 	if err != nil {
 		coordExit(coordFail(out, errw, o.JSON, err))
@@ -154,7 +154,7 @@ func submitInput(o *RunOptions, errw io.Writer) (coordclient.RunInput, error) {
 		return coordclient.RunInput{}, clientapi.Failf(clientapi.ReasonBadRequest, "remote origin of %s is not a github.com repository, so the coordinator cannot fetch it", o.Root)
 	}
 	if dirty, _ := coordGit(o.Root, "status", "--porcelain", "--untracked-files=no"); strings.TrimSpace(dirty) != "" {
-		fmt.Fprintln(errw, "warning: uncommitted changes are not part of the run; the coordinator runs the committed HEAD "+rev[:7])
+		_, _ = fmt.Fprintln(errw, "warning: uncommitted changes are not part of the run; the coordinator runs the committed HEAD "+rev[:7])
 	}
 	return coordclient.RunInput{Project: m[1] + "/" + m[2], Revision: rev, Pipeline: o.Pipeline}, nil
 }
@@ -164,7 +164,7 @@ func submitInput(o *RunOptions, errw io.Writer) (coordclient.RunInput, error) {
 func coordFail(out, errw io.Writer, asJSON bool, err error) int {
 	exit, class := output.ExitUser, "usage"
 	if errors.Is(err, context.Canceled) {
-		fmt.Fprintln(errw, "interrupted; the run keeps going on the coordinator")
+		_, _ = fmt.Fprintln(errw, "interrupted; the run keeps going on the coordinator")
 		return 130
 	}
 	if r := clientapi.ReasonOf(err); r == clientapi.ReasonTransport || r == clientapi.ReasonServeDown || r == "" {
@@ -176,6 +176,6 @@ func coordFail(out, errw io.Writer, asJSON bool, err error) int {
 			return exit
 		}
 	}
-	fmt.Fprintln(errw, err)
+	_, _ = fmt.Fprintln(errw, err)
 	return exit
 }

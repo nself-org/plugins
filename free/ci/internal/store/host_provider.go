@@ -136,6 +136,26 @@ func (s *Store) ProviderMarkGet(ctx context.Context, name, key string) (time.Tim
 	return time.Unix(0, at).UTC(), true, nil
 }
 
+// ProviderMarkPrune deletes the marks of name whose time is before olderThan and whose key starts with
+// keyPrefix ("" matches every key) and returns how many it removed. Without it the table grows for the
+// life of the state database; the coordinator calls it from its maintenance loop.
+func (s *Store) ProviderMarkPrune(ctx context.Context, name, keyPrefix string, olderThan time.Time) (int64, error) {
+	if name == "" {
+		return 0, coded("E607", "provider mark prune needs a name")
+	}
+	var n int64
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM provider_mark WHERE name=? AND at<? AND substr(key,1,length(?))=?`,
+			name, olderThan.UnixNano(), keyPrefix, keyPrefix)
+		if err != nil {
+			return err
+		}
+		n, err = res.RowsAffected()
+		return err
+	})
+	return n, err
+}
+
 // DispatchIntentPut records the handle of an attempt's dispatch and returns the intent that stands.
 // A higher Epoch (the retry of a lost attempt) replaces the stored intent; an equal or lower one
 // changes nothing, so two carriers of one lease cannot repoint the attempt, and the loser sees the

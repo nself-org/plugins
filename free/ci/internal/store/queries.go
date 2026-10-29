@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type AttemptView struct {
@@ -106,6 +107,15 @@ func (s *Store) FlakyCandidates(ctx context.Context) ([]FlakyCandidate, error) {
 		out = append(out, f)
 	}
 	return out, rows.Err()
+}
+
+// RunEvidence returns the newest evidence body recorded for a pipeline; ok is false when it has none.
+func (s *Store) RunEvidence(ctx context.Context, pipelineID string) (body []byte, ok bool, err error) {
+	err = s.readers.QueryRowContext(ctx, `SELECT body FROM evidence WHERE pipeline_id=? ORDER BY created_at DESC LIMIT 1`, pipelineID).Scan(&body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	return body, err == nil, err
 }
 
 func (s *Store) EvidenceByRevision(ctx context.Context, revision, inputDigest string) ([]EvidenceView, error) {

@@ -5,7 +5,8 @@ package roles
 // Inputs:  an acting Actor (checked for roles.manage / token.manage) and the request.
 // Outputs: stored rows; the clear token text exactly once, from IssueToken.
 // Constraints: a token is 32 random bytes in base64url, stored only as its sha256; each mutation writes
-//          exactly one audit row in its own transaction, built by the pure check (no extra decision row);
+//          exactly one audit row in its own transaction, built by the pure check (no extra decision row); a
+//          refusal writes one "<action>.refused" row with the reason key (signin.go, D-1276);
 //          `--self` identities are issued only to Service.Self and record subject "self", all others
 //          record the named principal; roles are the three named ones; a project list is explicit or "*".
 
@@ -91,7 +92,7 @@ func (s *Service) mutation(by Actor, action, target, detail string) (store.Audit
 func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
 	subject, err := s.check(ctx, by, r)
 	if err != nil {
-		return err
+		return s.refused(ctx, by, "roles.grant", r.Principal, err)
 	}
 	in, err := s.mutation(by, "roles.grant", r.Principal, fmt.Sprintf("role=%s projects=%s subject=%s", r.Role, strings.Join(r.Projects, ","), subject))
 	if err != nil {
@@ -104,7 +105,7 @@ func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
 // neither.
 func (s *Service) Revoke(ctx context.Context, by Actor, principal string) (bool, error) {
 	if err := s.admin(ctx, by); err != nil {
-		return false, err
+		return false, s.refused(ctx, by, "roles.revoke", principal, err)
 	}
 	in, err := s.mutation(by, "roles.revoke", principal, "grant and live tokens revoked")
 	if err != nil {
@@ -137,14 +138,14 @@ func (s *Service) List(ctx context.Context, by Actor) ([]store.Grant, error) {
 func (s *Service) IssueToken(ctx context.Context, by Actor, r Request) (string, store.Token, error) {
 	subject, err := s.check(ctx, by, r)
 	if err != nil {
-		return "", store.Token{}, err
+		return "", store.Token{}, s.refused(ctx, by, "token.issue", r.Principal, err)
 	}
 	ttl := r.TTL
 	if ttl == 0 {
 		ttl = DefaultTokenTTL
 	}
 	if ttl < MinTokenTTL || ttl > MaxTokenTTL {
-		return "", store.Token{}, fail(ReasonBadRequest, "token lifetime must be between %s and %s", MinTokenTTL, MaxTokenTTL)
+		return "", store.Token{}, s.refused(ctx, by, "token.issue", r.Principal, fail(ReasonBadRequest, "token lifetime must be between %s and %s", MinTokenTTL, MaxTokenTTL))
 	}
 	raw := make([]byte, 32)
 	if _, err = rand.Read(raw); err != nil {
@@ -168,7 +169,7 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, r Request) (string, 
 // RevokeToken ends a live token by id; false means no such live token.
 func (s *Service) RevokeToken(ctx context.Context, by Actor, id string) (bool, error) {
 	if err := s.admin(ctx, by); err != nil {
-		return false, err
+		return false, s.refused(ctx, by, "token.revoke", id, err)
 	}
 	in, err := s.mutation(by, "token.revoke", id, "token revoked")
 	if err != nil {

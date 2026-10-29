@@ -255,10 +255,17 @@ func (s *remoteSink) Result(ctx context.Context, r protocol.Result) error {
 	if err := s.markRunning(ctx, ra); err != nil {
 		return err
 	}
+	ev := ra.checkEvidence(r.Evidence)
+	cause := s.signatureCause(r)
+	if cause == nil {
+		cause = ra.unsettledCause(ev)
+	}
+	if cause != nil {
+		return s.failLease(ctx, ra, r, cause)
+	}
 	if err := s.eng.Result(ctx, r.LeaseID, int64(r.Epoch)); err != nil {
 		return err
 	}
-	ev := ra.checkEvidence(r.Evidence)
 	select {
 	case ra.result <- ev:
 	default:

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -95,17 +94,10 @@ func operatorFile(path string) ([]byte, error) {
 	if path == "" {
 		return nil, nil
 	}
-	st, err := os.Stat(path)
+	f, err := openChecked(path, path, true) // judged on the opened descriptor: a swap after a stat cannot block the read
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
-	if err == nil && !st.Mode().IsRegular() {
-		err = fmt.Errorf("%s is not a regular file", path)
-	}
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
