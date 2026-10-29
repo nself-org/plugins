@@ -1,0 +1,21 @@
+{
+  "_note": "Naming and exposure vectors copied from the cli P7-SURF-30/24 acceptance (SURF D2, D3, D5, D15). Change both sides together.",
+  "names": [
+    {"path": "deploy promote-env", "tool": "nself_deploy_promote_env", "route": "/v1/commands/deploy/promote-env"},
+    {"path": "config get", "tool": "nself_config_get", "route": "/v1/commands/config/get"},
+    {"path": "ci runs wait", "tool": "nself_ci_runs_wait", "route": "/v1/commands/ci/runs/wait"}
+  ],
+  "exposure": [
+    {"name": "document read", "cmd": {"json": "envelope", "output": "document", "side_effect": "read"}, "exposure": "MCP and HTTP", "reason": "", "confirmation": "none"},
+    {"name": "json none is CLI only", "cmd": {"json": "none", "output": "document", "side_effect": "read"}, "exposure": "CLI only", "reason": "json none", "confirmation": "none"},
+    {"name": "interactive is CLI only", "cmd": {"json": "envelope", "output": "interactive", "side_effect": "read"}, "exposure": "CLI only", "reason": "interactive", "confirmation": "none"},
+    {"name": "read stream is HTTP NDJSON only", "cmd": {"json": "envelope", "output": "stream", "side_effect": "read"}, "exposure": "HTTP NDJSON only", "reason": "stream", "confirmation": "none"},
+    {"name": "write stream is CLI only", "cmd": {"json": "envelope", "output": "stream", "side_effect": "write"}, "exposure": "CLI only", "reason": "stream, not read", "confirmation": "none"},
+    {"name": "surface cli-only", "cmd": {"json": "envelope", "output": "document", "side_effect": "read", "surface": "cli-only"}, "exposure": "CLI only", "reason": "surface cli-only", "confirmation": "none"},
+    {"name": "destructive without confirm", "cmd": {"json": "envelope", "output": "document", "side_effect": "destructive"}, "exposure": "CLI only", "reason": "destructive without confirm", "confirmation": "none"},
+    {"name": "remote without confirm", "cmd": {"json": "envelope", "output": "document", "side_effect": "remote", "confirm": null}, "exposure": "CLI only", "reason": "remote without confirm", "confirmation": "none"},
+    {"name": "remote with empty confirm flags", "cmd": {"json": "envelope", "output": "document", "side_effect": "remote", "confirm": {"flags": []}}, "exposure": "MCP and HTTP", "reason": "", "confirmation": "nonce"},
+    {"name": "destructive with yes flag", "cmd": {"json": "envelope", "output": "document", "side_effect": "destructive", "confirm": {"flags": ["yes"]}}, "exposure": "MCP and HTTP", "reason": "", "confirmation": "nonce"},
+    {"name": "plan confirm", "cmd": {"json": "envelope", "output": "document", "side_effect": "destructive", "confirm": {"flags": [], "plan": {"flag": "plan", "id_flag": "plan-id"}}}, "exposure": "MCP and HTTP", "reason": "", "confirmation": "plan"}
+  ]
+}

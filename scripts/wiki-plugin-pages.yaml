@@ -12,7 +12,9 @@ index_pages: []
 
 # Surface ceilings (D11). The hermetic registry excludes installed plugins, so the
 # ceiling on first-level subcommands is checked here from the plugin manifest.
-# Aliases are listed with a removal version and are not counted.
+# Aliases are listed with a removal version and are not counted. Internal entries
+# are hidden helpers the engine starts itself (Hidden in cmd/, absent from --help);
+# they are not user verbs and are not counted either.
 surface_ceilings:
   ci:
     manifest: free/ci/plugin.json
@@ -20,3 +22,5 @@ surface_ceilings:
     aliases:
       names: [run, eval, build, forgejo]
       remove_in: v1.6.0
+    internal:
+      names: [netproxy]

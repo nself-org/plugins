@@ -1,0 +1,59 @@
+name: ci-bench
+
+on:
+  pull_request:
+    paths:
+      - "free/ci/internal/sched/**"
+      - "free/ci/internal/dispatch/**"
+      - "free/ci/internal/world/**"
+      - "free/ci/bench/**"
+      - ".github/workflows/ci-bench.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schedbench:
+    if: github.repository == 'nself-org/plugins'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: "0"
+      GOFLAGS: -mod=vendor
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache: false
+      - name: Measure scheduler and admission on linux-amd64
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64
+          mkdir -p "$RUNNER_TEMP/schedbench"
+          {
+            echo "revision=$GITHUB_SHA"
+            uname -a
+            lscpu
+            go version
+            echo "command=CGO_ENABLED=0 go -C free/ci test -mod=vendor -run ^$ -bench Benchmark(Place|Admit)$ -benchmem -count=10 ./internal/sched/ ./internal/dispatch/"
+          } > "$RUNNER_TEMP/schedbench/machine.txt"
+          go -C free/ci test -mod=vendor -run '^$' -bench 'Benchmark(Place|Admit)$' -count=2 ./internal/sched/ ./internal/dispatch/ > "$RUNNER_TEMP/schedbench/warmups.txt"
+          go -C free/ci test -mod=vendor -run '^$' -bench 'Benchmark(Place|Admit)$' -benchmem -count=10 ./internal/sched/ ./internal/dispatch/ | tee "$RUNNER_TEMP/schedbench/samples.txt"
+      - name: Upload raw measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: schedbench-linux-amd64
+          path: ${{ runner.temp }}/schedbench/
+          if-no-files-found: error

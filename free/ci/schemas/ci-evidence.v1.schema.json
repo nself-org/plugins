@@ -696,6 +696,113 @@
         "verified_at"
       ],
       "additionalProperties": false
+    },
+    "attempts": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "runner": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "ssh",
+                  "agent",
+                  "hosted"
+                ]
+              },
+              "tier": {
+                "type": "string"
+              },
+              "pool": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "tier",
+              "pool",
+              "rank"
+            ],
+            "additionalProperties": false
+          },
+          "timings": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "queue_ms": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "transfer_ms": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "run_ms": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "job_id",
+          "attempt",
+          "runner"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "errors": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "$id": "https://nself.org/schemas/ci-evidence.v1.schema.json",

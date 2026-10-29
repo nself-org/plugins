@@ -7,6 +7,7 @@ package lifecycle
 // Constraints: no key material and no token: only fingerprints (public), ids, states and trust fields.
 
 import (
+	"context"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -28,6 +29,18 @@ type SeparationView struct {
 	SigningEligible *bool `json:"signing_eligible"`
 }
 
+// LabelView is one operator-assigned label (P7-NODE-30); labels are never self-declared.
+type LabelView struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Source string `json:"source"`
+}
+
+// IdentityView is the assigned part of a node's identity.
+type IdentityView struct {
+	Labels []LabelView `json:"labels"`
+}
+
 // NodeView is one node.
 type NodeView struct {
 	ID                  string         `json:"id"`
@@ -41,6 +54,7 @@ type NodeView struct {
 	AuthorizedProjects  []string       `json:"authorized_projects"`
 	Eligible            bool           `json:"eligible"`
 	RevokedAt           *time.Time     `json:"revoked_at"`
+	Identity            IdentityView   `json:"identity"`
 	Trust               TrustView      `json:"trust"`
 	Separation          SeparationView `json:"separation"`
 	AgentVersion        string         `json:"agent_version"`
@@ -95,7 +109,7 @@ func ViewOf(n registry.Node) NodeView {
 	return NodeView{
 		ID: n.Record.ID, Name: n.Record.Name, State: n.Record.State, Reason: n.Record.Reason, Transport: c.Identity.Transport,
 		Platform: plat, Ownership: c.Identity.Ownership.Value, Discovered: c.Lifecycle.Discovered, AuthorizedProjects: projects,
-		Eligible: c.Lifecycle.Eligible, RevokedAt: c.Lifecycle.RevokedAt,
+		Eligible: c.Lifecycle.Eligible, RevokedAt: c.Lifecycle.RevokedAt, Identity: IdentityView{Labels: []LabelView{}},
 		Trust: TrustView{
 			Accepts: acceptsView(c.Trust.Accepts.Value), SecretClasses: strs(c.Trust.SecretClasses.Value),
 			PrivacyZone: ptrStr[model.PrivacyZone](c.Trust.PrivacyZone.Value), Isolation: ptrStr[model.Isolation](c.Trust.Isolation.Value),
@@ -103,4 +117,16 @@ func ViewOf(n registry.Node) NodeView {
 		Separation:   SeparationView{UIDSeparation: c.Separation.UIDSeparation.Value, UserNS: c.Separation.UserNS.Value, SigningEligible: c.Separation.SigningEligible.Value},
 		AgentVersion: c.Protocol.AgentVersion, HostKeyFingerprints: fps, VerifiedBy: c.Verified.By, VerifiedAt: c.Verified.At,
 	}
+}
+
+// withLabels fills identity.labels from the assigned labels in the store (source assigned).
+func (d *Deps) withLabels(ctx context.Context, v NodeView) (NodeView, error) {
+	set, err := d.Store.NodeLabels(ctx, v.ID)
+	if err != nil {
+		return v, err
+	}
+	for _, l := range set {
+		v.Identity.Labels = append(v.Identity.Labels, LabelView{Key: l.Key, Value: l.Value, Source: "assigned"})
+	}
+	return v, nil
 }

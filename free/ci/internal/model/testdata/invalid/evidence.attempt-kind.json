@@ -1,0 +1,133 @@
+{
+  "artifacts": [],
+  "attempts": [
+    {
+      "attempt": 1,
+      "job_id": "build",
+      "runner": {
+        "kind": "carrier-pigeon",
+        "pool": "personal",
+        "rank": 0,
+        "tier": "owner"
+      },
+      "timings": {
+        "queue_ms": 0,
+        "run_ms": 1200
+      }
+    },
+    {
+      "attempt": 1,
+      "job_id": "test",
+      "runner": {
+        "kind": "ssh",
+        "pool": "lab",
+        "rank": 1,
+        "tier": "owner"
+      },
+      "timings": {
+        "queue_ms": 40,
+        "run_ms": 9000,
+        "transfer_ms": 350
+      }
+    },
+    {
+      "attempt": 2,
+      "job_id": "test",
+      "runner": {
+        "kind": "hosted",
+        "pool": "github",
+        "rank": 2,
+        "tier": "hosted"
+      },
+      "timings": {
+        "queue_ms": 2500,
+        "run_ms": 8000,
+        "transfer_ms": 0
+      }
+    }
+  ],
+  "binding": {
+    "reason": null,
+    "state": "bound"
+  },
+  "checks": [
+    {
+      "excerpt": "",
+      "findings": 0,
+      "id": "lint",
+      "job_id": "build",
+      "kind": "quality",
+      "log_ref": null,
+      "required": true,
+      "result": "pass",
+      "substantive": true,
+      "tool": "go",
+      "tool_version": null
+    }
+  ],
+  "counts": {
+    "error": 0,
+    "fail": 0,
+    "pass": 1,
+    "skip": 0,
+    "total": 1
+  },
+  "errors": [
+    {
+      "attempt": 1,
+      "code": "CI-INFRA-OOM",
+      "detail": "runner out of memory",
+      "job_id": "test"
+    }
+  ],
+  "freshness": {
+    "reason": null,
+    "state": "current"
+  },
+  "input_digests": {
+    "config": "abc",
+    "generated": [],
+    "lockfiles": []
+  },
+  "pipeline": {
+    "id": "p1",
+    "kind": "default",
+    "name": "default"
+  },
+  "policy_digest": "abc",
+  "producer": {
+    "kind": "coordinator-recorded",
+    "version": "1.5.0"
+  },
+  "repo_id": "local:abc",
+  "result": "pass",
+  "retries": [],
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "run_id": "r1",
+  "runner": {
+    "id": "local",
+    "isolation": "process",
+    "platform": "darwin/arm64",
+    "provider": "local"
+  },
+  "schema": "ci.evidence/v1",
+  "selection": {
+    "digest": "abc",
+    "mode": "affected",
+    "reason": "selection.affected"
+  },
+  "signature": {
+    "kind": "coordinator-recorded"
+  },
+  "source_trust": "owner",
+  "timings": {
+    "duration_ms": null,
+    "finished_at": null,
+    "queued_at": null,
+    "started_at": null
+  },
+  "tool_versions": {},
+  "tracked_changes_digest": null,
+  "trigger": "local",
+  "worktree_state": "clean"
+}

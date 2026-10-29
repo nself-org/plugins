@@ -29,7 +29,7 @@ jobs:
   # (Epic D28).
   truth-banned-literal:
     kind: static
-    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, banned-literal, --root, ../.., .github/truth/org.yaml]
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, banned-literal, --root, ../.., .github/truth/repo.yaml]
     workdir: free/ci
     env:
       CGO_ENABLED: "0"
@@ -37,7 +37,7 @@ jobs:
 
   truth-retired-term:
     kind: static
-    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, retired-term, --root, ../.., .github/truth/org.yaml]
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, retired-term, --root, ../.., .github/truth/repo.yaml]
     workdir: free/ci
     env:
       CGO_ENABLED: "0"
@@ -45,7 +45,23 @@ jobs:
 
   truth-dead-host:
     kind: static
-    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, dead-host, --root, ../.., .github/truth/org.yaml]
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, dead-host, --root, ../.., .github/truth/repo.yaml]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+
+  truth-numeric-claim:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, numeric-claim, --root, ../.., .github/truth/repo.yaml]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+
+  truth-version-claim:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, version-claim, --root, ../.., .github/truth/repo.yaml]
     workdir: free/ci
     env:
       CGO_ENABLED: "0"
@@ -53,9 +69,9 @@ jobs:
 
   truth:
     kind: static
-    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, rules, --root, ../.., .github/truth/org.yaml]
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, rules, --root, ../.., .github/truth/repo.yaml]
     workdir: free/ci
-    deps: [truth-banned-literal, truth-retired-term, truth-dead-host]
+    deps: [truth-banned-literal, truth-retired-term, truth-dead-host, truth-numeric-claim, truth-version-claim]
     env:
       CGO_ENABLED: "0"
     timeout: 600s
@@ -157,7 +173,7 @@ jobs:
 # presence is what plans the check as a job when none declares it (ImpliedBy).
 checks:
   truth:
-    rules: [.github/truth/org.yaml]
+    rules: [.github/truth/org.yaml, .github/truth/claims.yaml, .github/truth/repo.yaml]
 
 # Pipelines. `drills` is a scheduled pipeline of `kind: drill` jobs (P7-CI-02):
 # every directory of scripts/drill that holds an executable `run` is one job,

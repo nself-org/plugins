@@ -7,12 +7,21 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install dr` |
 | **Commands** | `nself dr` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself dr` | - | - | read | document | CLI only (json None) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Promotes a standby, fences the old primary, and runs failover drills.
 

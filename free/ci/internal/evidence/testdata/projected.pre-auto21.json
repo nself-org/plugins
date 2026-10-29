@@ -1,0 +1,59 @@
+{
+  "projection": "nself-ci/1",
+  "fields": {
+    "attempts": {
+      "value": null,
+      "reason": "source key absent: attempts"
+    },
+    "binding": {
+      "value": "bound"
+    },
+    "checks_error": {
+      "value": 0
+    },
+    "checks_fail": {
+      "value": 0
+    },
+    "checks_pass": {
+      "value": 1
+    },
+    "checks_skip": {
+      "value": 0
+    },
+    "checks_total": {
+      "value": 1
+    },
+    "duration_ms": {
+      "value": null,
+      "reason": "source key is null: timings.duration_ms"
+    },
+    "errors": {
+      "value": null,
+      "reason": "source key absent: errors"
+    },
+    "flaky_checks": {
+      "value": []
+    },
+    "freshness": {
+      "value": "current"
+    },
+    "result": {
+      "value": "pass"
+    },
+    "revision": {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "run_id": {
+      "value": "r1"
+    },
+    "runner_id": {
+      "value": "local"
+    },
+    "runner_isolation": {
+      "value": "process"
+    },
+    "source_trust": {
+      "value": "owner"
+    }
+  }
+}

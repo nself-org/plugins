@@ -42,7 +42,8 @@ func TestPresetFixture(t *testing.T) {
 		"fastest":               {map[string]int64{"L": 67500, "N": 57000, "H": 93000, "E": 98000}, "NLHE"},
 		"cheapest":              {map[string]int64{"L": 22500, "N": 14250, "H": 73250, "E": 424500}, "NLHE"},
 	}
-	if len(want) != len(Presets()) {
+	// the auto preset places by tier order, not by these weights; auto_test.go covers it
+	if _, ok := Presets()[AutoPreset]; !ok || len(want)+1 != len(Presets()) {
 		t.Fatal("preset count")
 	}
 	for name, expected := range want {

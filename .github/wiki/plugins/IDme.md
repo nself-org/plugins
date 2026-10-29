@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install idme` |
 | **Requirements** | nSelf >=1.0.0 |
 
@@ -2954,4 +2954,5 @@ nself plugin idme test
 ---
 
 *Last Updated: January 2026*
+
 *Plugin Version: 1.0.0*

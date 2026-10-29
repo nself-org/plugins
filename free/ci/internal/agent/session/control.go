@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
 func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
@@ -24,9 +25,12 @@ func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
 		s.onOffset(m, *b)
 	case *protocol.Upgrade:
 		s.onUpgrade(*b)
+	case *protocol.Digest:
+		s.onInbound(m, transport.BlobFrame{Digest: b})
+	case *protocol.Chunk:
+		s.onInbound(m, transport.BlobFrame{Chunk: b})
 	}
-	// heartbeat, ack, chunk, digest, resume: carried by later
-	// tickets (P7-CACHE-19 cache restore); the session ignores them.
+	// heartbeat, ack, resume: the session ignores them.
 	return false, nil
 }
 

@@ -22,7 +22,9 @@ _spec.loader.exec_module(gen)
 
 
 def ci_manifest(names):
-    return {"commands": {"command": "ci", "subcommands": [{"name": n} for n in names]}}
+    subs = [{"name": n, "json": "none"} if n == "serve" else {"name": n} for n in names]
+    return {"commands": {"command": "ci", "json": "envelope", "output": "document", "side_effect": "read",
+                         "subcommands": subs}}
 
 
 class WikiPagesCase(unittest.TestCase):
@@ -230,6 +232,61 @@ class CeilingTests(WikiPagesCase):
     def test_only_the_first_token_counts(self):
         self.write_manifest([f"nodes sub{i}" for i in range(20)])
         self.assertIn("ci: 1 first-level subcommands", self.check()[1])
+
+
+class MachineSurfaceTests(WikiPagesCase):
+    def vectors(self):
+        with open(os.path.join(FIXTURES, "surface-vectors.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_naming_vectors(self):
+        for v in self.vectors()["names"]:
+            self.assertEqual(gen.tool_name(v["path"]), v["tool"])
+            self.assertEqual(gen.route_path(v["path"]), v["route"])
+
+    def test_exposure_vectors(self):
+        for v in self.vectors()["exposure"]:
+            self.assertEqual(gen.exposure(v["cmd"]), (v["exposure"], v["reason"], v["confirmation"]), v["name"])
+
+    def test_region_follows_catalog_region_with_a_row_per_command(self):
+        self.generate_all()
+        text = self.page("CI.md")
+        self.assertIn(gen.MS_BEGIN, text)
+        self.assertLess(text.index(gen.END), text.index(gen.MS_BEGIN))
+        self.assertIn("| `nself ci nodes provision` | `nself_ci_nodes_provision` | `/v1/commands/ci/nodes/provision` |", text)
+        self.assertIn("| `nself ci serve` | - | - | read | document | CLI only (json none) | none |", text)
+
+    def test_stream_read_row_is_http_only(self):
+        self.write_manifest(["run"])
+        path = os.path.join(self.root, "free", "ci", "plugin.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"commands": {"command": "ci", "json": "envelope", "output": "stream", "side_effect": "read",
+                                    "subcommands": [{"name": "run"}]}}, fh)
+        self.generate_all()
+        self.assertIn("| `nself ci run` | - | `/v1/commands/ci/run` | read | stream | HTTP NDJSON only (stream) | none |",
+                      self.page("CI.md"))
+
+    def test_plugin_without_commands_has_no_region_and_bytes_outside_are_kept(self):
+        self.generate_all()
+        self.assertNotIn(gen.MS_BEGIN, self.page("Jobs.md"))
+        text = self.page("CI.md")
+        extended = text + "\nAuthored tail.\n"
+        self.assertEqual(gen.apply_machine(extended, None).count(gen.MS_BEGIN), 0)
+        self.assertTrue(gen.apply_machine(extended, None).endswith("\nAuthored tail.\n"))
+        self.assertEqual(gen.apply_machine(gen.apply_machine(extended, None), None), gen.apply_machine(extended, None))
+
+    def test_manifest_change_makes_check_fail_naming_the_page(self):
+        self.generate_all()
+        self.write_manifest(["run", "serve", "nodes provision", "nodes verify", "extra"])
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 1)
+        self.assertIn("CI.md: stale region", out)
+
+    def test_second_run_is_a_no_op(self):
+        self.generate_all()
+        before = self.page("CI.md")
+        self.generate_all()
+        self.assertEqual(before, self.page("CI.md"))
 
 
 if __name__ == "__main__":

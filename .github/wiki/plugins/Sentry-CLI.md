@@ -7,12 +7,36 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install sentry-cli` |
 | **Commands** | `nself sentry`: `alerts channels`, `alerts test`, `incidents ack`, `incidents list`, `incidents resolve`, `login`, `logout`, `monitors add`, `monitors list`, `monitors pause`, `monitors resume`, `monitors rm`, `status`, `status-pages create`, `status-pages list`, `whoami` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself sentry alerts channels` | `nself_sentry_alerts_channels` | `/v1/commands/sentry/alerts/channels` | read | document | MCP and HTTP | none |
+| `nself sentry alerts test` | - | - | remote | document | CLI only (remote without confirm) | none |
+| `nself sentry incidents ack` | `nself_sentry_incidents_ack` | `/v1/commands/sentry/incidents/ack` | write | document | MCP and HTTP | none |
+| `nself sentry incidents list` | `nself_sentry_incidents_list` | `/v1/commands/sentry/incidents/list` | read | document | MCP and HTTP | none |
+| `nself sentry incidents resolve` | `nself_sentry_incidents_resolve` | `/v1/commands/sentry/incidents/resolve` | remote | document | MCP and HTTP | nonce |
+| `nself sentry login` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself sentry logout` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself sentry monitors add` | `nself_sentry_monitors_add` | `/v1/commands/sentry/monitors/add` | write | document | MCP and HTTP | none |
+| `nself sentry monitors list` | `nself_sentry_monitors_list` | `/v1/commands/sentry/monitors/list` | read | document | MCP and HTTP | none |
+| `nself sentry monitors pause` | `nself_sentry_monitors_pause` | `/v1/commands/sentry/monitors/pause` | remote | document | MCP and HTTP | nonce |
+| `nself sentry monitors resume` | `nself_sentry_monitors_resume` | `/v1/commands/sentry/monitors/resume` | remote | document | MCP and HTTP | nonce |
+| `nself sentry monitors rm` | `nself_sentry_monitors_rm` | `/v1/commands/sentry/monitors/rm` | destructive | document | MCP and HTTP | nonce |
+| `nself sentry status` | `nself_sentry_status` | `/v1/commands/sentry/status` | read | document | MCP and HTTP | none |
+| `nself sentry status-pages create` | `nself_sentry_status_pages_create` | `/v1/commands/sentry/status-pages/create` | remote | document | MCP and HTTP | nonce |
+| `nself sentry status-pages list` | `nself_sentry_status_pages_list` | `/v1/commands/sentry/status-pages/list` | read | document | MCP and HTTP | none |
+| `nself sentry whoami` | `nself_sentry_whoami` | `/v1/commands/sentry/whoami` | read | document | MCP and HTTP | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Operates a self-hosted ɳSentry instance: monitors, incidents, status pages, and alerts.
 

@@ -23,6 +23,7 @@ const (
 	SelectAlways    = ""
 	SelectNodes     = "nodes"
 	SelectProviders = "providers"
+	SelectSelftest  = "selftest" // CI-DS… (P7-AUTO-20)
 )
 
 // SectionBudget is the time one section may take.
@@ -40,7 +41,7 @@ type Env struct {
 type Section struct {
 	// Name identifies the section; it is unique.
 	Name string
-	// Selector is SelectAlways, SelectNodes or SelectProviders.
+	// Selector is SelectAlways, SelectNodes, SelectProviders or SelectSelftest.
 	Selector string
 	// Run returns the section's checks. It must honour ctx.
 	Run func(ctx context.Context, env Env) []Check
@@ -58,7 +59,7 @@ func RegisterSection(s Section) {
 		panic("doctor: section needs a name and a Run function")
 	}
 	switch s.Selector {
-	case SelectAlways, SelectNodes, SelectProviders:
+	case SelectAlways, SelectNodes, SelectProviders, SelectSelftest:
 	default:
 		panic("doctor: unknown section selector " + s.Selector)
 	}
@@ -85,6 +86,7 @@ func Registered() []Section {
 var noneRegistered = map[string]Check{
 	SelectNodes:     {ID: "CI-D090", Name: "nodes section", Status: Pass, Message: "none registered"},
 	SelectProviders: {ID: "CI-D091", Name: "providers section", Status: Pass, Message: "none registered"},
+	SelectSelftest:  {ID: "CI-D092", Name: "selftest section", Status: Pass, Message: "none registered"},
 }
 
 // RunSections runs the always-on sections plus those whose selector is in
@@ -100,7 +102,7 @@ func RunSections(ctx context.Context, env Env, want map[string]bool, budget time
 		have[s.Selector] = true
 		out = append(out, runOne(ctx, s, env, budget)...)
 	}
-	for _, sel := range []string{SelectNodes, SelectProviders} {
+	for _, sel := range []string{SelectNodes, SelectProviders, SelectSelftest} {
 		if want[sel] && !have[sel] {
 			out = append(out, noneRegistered[sel])
 		}
@@ -149,4 +151,31 @@ func validated(section string, checks []Check) []Check {
 		out = append(out, c)
 	}
 	return out
+}
+
+// Alerter sends the alert of `doctor --selftest --alert` for the checks of one report. The
+// selftest package supplies it through SetAlerter; this package never imports it.
+type Alerter func(ctx context.Context, env Env, checks []Check) (string, error)
+
+var (
+	alertMu sync.Mutex
+	alerter Alerter
+)
+
+// SetAlerter installs the alerter; nil removes it.
+func SetAlerter(a Alerter) {
+	alertMu.Lock()
+	defer alertMu.Unlock()
+	alerter = a
+}
+
+// alert runs the installed alerter; the string says what it did.
+func alert(ctx context.Context, env Env, checks []Check) (string, error) {
+	alertMu.Lock()
+	a := alerter
+	alertMu.Unlock()
+	if a == nil {
+		return "", fmt.Errorf("no alerter is installed")
+	}
+	return a(ctx, env, checks)
 }

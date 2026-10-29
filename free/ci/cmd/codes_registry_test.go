@@ -107,6 +107,10 @@ func TestCodeRegistry(t *testing.T) {
 		if !strings.HasPrefix(p.ImportPath, "github.com/nself-org/plugins/free/ci/") {
 			continue
 		}
+		// tools/ holds generators (refgen renders the codes table in its own codes.go); they register no codes
+		if strings.HasPrefix(p.ImportPath, "github.com/nself-org/plugins/free/ci/tools/") {
+			continue
+		}
 		for _, file := range p.GoFiles {
 			if filepath.Base(file) == "codes.go" {
 				fragments++

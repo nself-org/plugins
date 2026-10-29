@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) and Licensed, in the Claw Bundle |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | free: 1.2.6; licensed: 1.1.2 |
+| **Version** | free: 1.2.13; licensed: 1.1.2 |
 | **Install** | `nself plugin install cron` |
 | **Requirements** | free: nSelf >=0.9.9; licensed: nSelf >=1.0.0 |
 

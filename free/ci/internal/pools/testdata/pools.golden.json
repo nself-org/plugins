@@ -1,0 +1,81 @@
+[
+  {
+    "schema": "ci.pool/v1",
+    "id": "hosted",
+    "scope": "hosted",
+    "members": [
+      {
+        "runner_id": "gh-ubuntu",
+        "location": "hosted",
+        "source": "provider"
+      }
+    ],
+    "effective": {
+      "allowed": false,
+      "reasons": [
+        {
+          "code": "pool.excluded",
+          "detail": "not_in_project_list"
+        }
+      ]
+    }
+  },
+  {
+    "schema": "ci.pool/v1",
+    "id": "local",
+    "scope": "operator",
+    "members": [
+      {
+        "runner_id": "local",
+        "location": "local",
+        "source": "local"
+      }
+    ],
+    "effective": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "schema": "ci.pool/v1",
+    "id": "mine",
+    "scope": "operator",
+    "members": [
+      {
+        "runner_id": "local",
+        "location": "local",
+        "source": "local"
+      },
+      {
+        "runner_id": "vps",
+        "location": "remote",
+        "source": "registry"
+      }
+    ],
+    "effective": {
+      "allowed": false,
+      "reasons": [
+        {
+          "code": "pool.excluded",
+          "detail": "not_in_project_list"
+        }
+      ]
+    }
+  },
+  {
+    "schema": "ci.pool/v1",
+    "id": "team",
+    "scope": "project",
+    "members": [
+      {
+        "runner_id": "t1",
+        "location": "lan",
+        "source": "coordinator"
+      }
+    ],
+    "effective": {
+      "allowed": true,
+      "reasons": []
+    }
+  }
+]

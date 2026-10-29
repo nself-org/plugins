@@ -65,3 +65,22 @@ Details: `scripts/preflight/README.md`.
 
 The licensed tier is measured separately (P7-PLUG-39). The latest evidence is
 kept in the hq plan evidence folder (`PLUG-02-preflight.md`).
+
+## Licensed tier
+
+`scripts/preflight/licensed.sh` measures the licensed entries of
+`$NSELF/plugins-pro/registry.json` against what `ping.nself.org` serves, using
+the scoped, expiring, revocable CI licence from the environment variable
+`NSELF_CI_LICENSE_KEY`. It runs on the owner's machine only; the registry data
+and tarballs are never committed.
+
+```bash
+bash scripts/preflight/licensed.sh --out "$TMPDIR/licensed.json" --strict
+```
+
+Same stages and classes as the free tier, plus `entitlement`: the download
+answered 401 or 403 for an entry the CI licence should cover (reported, never
+skipped). The key is sent only on the first hop, never to a redirect target,
+and is never printed. `--no-build` records skips, and a skip is not a pass.
+The offline test is `free/ci/internal/preflight/licensed_test.go`; the live
+run is P7-PLUG-88.

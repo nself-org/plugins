@@ -2,7 +2,7 @@
 
 This document tracks planned features and upcoming releases across the nSelf ecosystem. It is updated after each sprint cycle.
 
-**Current version:** v1.0.11 LTS  
+**Current version:** see the latest release on GitHub.  
 **Legend:** ✅ Done | 🚧 In Progress | 🔲 Planned | 🚫 Deferred
 
 ---
@@ -14,8 +14,6 @@ Target: Q2 2026
 | Feature | Repo | Status | Notes |
 |---------|------|--------|-------|
 | nFamily social app | nfamily | 🔲 Planned | Family social media, private; bundle $0.99/mo |
-| ClawDE bundle launch | clawde | 🔲 Planned | cloud sync, mobile twin, team features at $0.99/mo |
-| nTV full media server | ntv | 🔲 Planned | Full media server + multi-platform (Roku, Apple TV, Android TV) |
 | Admin multi-user support | admin | 🔲 Planned | Multi-operator via `NSELF_ADMIN_MULTIUSER`. Single-operator in v1.x |
 | nCloud managed hosting | web/cloud | 🔲 Planned | Dedicated Hetzner VPS, $2/mo margin + at-cost infra |
 | Plugin SDK public release | cli/sdk | 🔲 Planned | plugin-sdk-go + plugin-sdk-ts as standalone packages |

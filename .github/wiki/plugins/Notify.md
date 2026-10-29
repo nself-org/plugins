@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) and Licensed, in the Claw Bundle |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | free: 1.2.6; licensed: 1.1.3 |
+| **Version** | free: 1.2.13; licensed: 1.1.3 |
 | **Install** | `nself plugin install notify` |
 | **Requirements** | free: nSelf >=0.9.9; licensed: nSelf >=1.0.0 |
 

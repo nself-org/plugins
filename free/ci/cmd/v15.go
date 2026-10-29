@@ -259,6 +259,7 @@ func runBare(args []string) int {
 	if err != nil {
 		return exitForError(err)
 	}
+	attachPlacement(ctx, o)
 	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: configOutside(ctx, o.Root), Substantive: subst, Out: os.Stdout}
 	res, err := c.Run(ctx)
 	if err != nil {

@@ -7,12 +7,21 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install ai-studio` |
 | **Commands** | `nself ai-studio` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself ai-studio` | - | - | read | document | CLI only (json None) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Bridges a local nSelf instance to Google AI Studio over a secure Cloudflare Tunnel.
 

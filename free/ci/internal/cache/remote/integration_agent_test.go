@@ -68,6 +68,7 @@ func (r *rig) agentSide() *agentSide {
 		r.t.Fatal(err)
 	}
 	drv.SetCancel(srv.Cancel)
+	drv.SetPush(srv.Push)
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
 	r.t.Cleanup(func() {
@@ -113,7 +114,7 @@ func (a *agentSide) addNode(id string) (model.Capability, tls.Certificate) {
 }
 
 // runAgent delivers the rig's lease to a node over the agent pull carrier and returns the driver's result.
-func (r *rig) runAgent(n *node) error {
+func (r *rig) runAgent(n nodeSide) error {
 	r.t.Helper()
 	side := r.agentSide()
 	capab, cert := side.addNode("n-1")

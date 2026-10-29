@@ -196,3 +196,20 @@ func validateCachePlan(plan *protocol.LeaseCache) error {
 	}
 	return nil
 }
+
+// fetchRestores takes the lease's restore blobs from the coordinator over the
+// session's reverse blob path (carrier A) into the read-through copies. Without a
+// feed (carrier B, or no restore) nothing is fetched: copies already held are still
+// used, and a missing one is a cold miss that binds nothing.
+func fetchRestores(ctx context.Context, copies *remote.ReadThrough, l protocol.Lease) {
+	feed, ok := session.FeedFrom(ctx)
+	if !ok {
+		return
+	}
+	defer feed.Close()
+	var blobs []protocol.CacheBlob
+	for _, r := range l.Cache.Restore {
+		blobs = append(blobs, r.Blobs...)
+	}
+	(&remote.NodeRestorer{Copies: copies, Feed: feed, Realm: l.Cache.Namespace}).Fetch(ctx, blobs)
+}

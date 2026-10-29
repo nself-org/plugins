@@ -44,7 +44,7 @@ func sshNode(t *testing.T) (model.Capability, string) {
 }
 
 // runSSH delivers the rig's lease to a node over the ssh driver and returns the driver's result.
-func (r *rig) runSSH(n *node) error {
+func (r *rig) runSSH(n nodeSide) error {
 	r.t.Helper()
 	capab, home := sshNode(r.t)
 	state := r.t.TempDir()

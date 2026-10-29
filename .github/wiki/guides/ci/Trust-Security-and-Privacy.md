@@ -1,8 +1,66 @@
 # CI trust, security and privacy
 
-This page covers the `container` isolation level of `nself ci`: what it blocks, what it does not, and what a node must provide. The sandboxed container level (gVisor) is described in its own section below. The other levels (process, VM) are described next to their own profiles.
+This page is the one guide to what `nself ci` trusts, what it blocks, what it keeps private and what it cannot promise. It has six parts: [Trust and security](#trust-and-security), [Public FOSS PRs](#public-foss-prs), [Secrets](#secrets), [Privacy](#privacy), [Isolation last-verified](#isolation-last-verified) and [Residual risks](#residual-risks). Read the residual risks before you run code you do not trust. Every limit is stated; none is hidden in a footnote.
 
-## The container level
+Commands in `bash` blocks on this page are run by `bash .github/scripts/check-doc-commands.sh`. The reasons table is generated from the code by `go generate ./tools/refgen/...` in `free/ci`. Do not edit it by hand.
+
+## Trust and security
+
+**The model.** Every run has a source trust class (`owner`, `internal`, `collaborator`, `untrusted`). Every job asks for an isolation level, a network scope and secret classes. Every runner declares what it accepts and what it can prove. A job runs only where all three agree. When nothing agrees the job waits with a reason (`E678`). It is never moved to a weaker level.
+
+**Policy sources.** The effective policy is merged from the defaults, your operator rows, the protected default branch, the revision and one run's flags. Each later source can only tighten. See [Policy sources](#policy-sources-and-nself-ci-policy).
+
+**Provenance.** The class comes from facts the forge API gave or from git history, never from a payload field or `.nself/ci.yaml`. See [Source trust](#source-trust-who-made-the-code).
+
+**Isolation levels and what a host must provide.**
+
+| Level | What it gives | Host requirement | Not given |
+|---|---|---|---|
+| `process` | Separate UID per slot on a separated node | Your own PERSONAL node, owner and internal work only | No boundary against the user it runs as |
+| `container` | No privilege, dropped capabilities, read-only root, limits | Docker or Podman with pids, memory and CPU cgroups | Not a boundary for hostile code |
+| `sandboxed-container` | gVisor `runsc`, proven by a real start | Linux with `runsc` | Not a VM (see Residual risks) |
+| `vm` | Tart VM with softnet and a block list | Apple-silicon Mac with Tart and a softnet that supports the block list | Unavailable on Linux (D-0120) |
+| `ephemeral-vm` | One job, destroyed after | Same as `vm` | Unavailable on Linux (D-0120) |
+| `hosted-disposable` | The provider's own isolation | A hosted provider you authorized | nSelf cannot verify it; evidence is `self-reported` |
+
+A probe only lowers a level. A host that cannot provide a level reports it `unavailable`, and no job is placed there on the strength of a promise.
+
+**Network scopes, hygiene and UID separation, evidence and GateAccept, roles and identities, the production boundary and in-stack runners** are in the sections below, in that order of dependence.
+
+**Production boundary.** A production host is CI-ineligible by default. A deploy-host override needs a minimum isolation, and a TEAM coordinator's own host needs the `vm` floor (reasons `boundary.deploy_host`, `boundary.override_minimum`, `boundary.coordinator_host`).
+
+**In-stack runners.** The forgejo plugin ships the forge and no runner, no Docker socket, and registration closed (`FORGEJO_DISABLE_REGISTRATION` defaults to `true`). The github-runner plugin is trusted-only: it refuses a runner group that is open to public repositories, unless `GITHUB_RUNNER_ALLOW_PUBLIC_REPOS` is exactly `true`, an opt-out that is unsafe and logged on every start. It reports a deploy-host warning when `ENV` is `prod`, `production` or `staging`.
+
+**Reason codes.** When admission refuses a placement it names one or more reasons. They are generated from `internal/trust`:
+
+<!-- BEGIN GENERATED:trust-reasons -->
+| Reason | Meaning |
+|---|---|
+| `approval.required` | approval required |
+| `boundary.coordinator_host` | coordinator host floor violated |
+| `boundary.deploy_host` | deploy host ineligible |
+| `boundary.override_minimum` | deploy override minimum violated |
+| `isolation.below_minimum` | isolation below minimum |
+| `isolation.cotenancy` | untrusted and secret-bearing work overlap |
+| `isolation.rootful_runtime` | rootful runtime is unavailable |
+| `isolation.runtime_flag_denied` | runtime flag denied |
+| `isolation.slot_uid_shared` | job slot shares a UID |
+| `isolation.uid_separation` | node lacks UID separation |
+| `isolation.unavailable` | isolation unavailable |
+| `network.lan_for_untrusted` | untrusted work has a LAN route |
+| `network.scope_not_offered` | network scope not offered |
+| `network.scope_unenforceable` | network scope cannot be enforced |
+| `privacy.hosted_not_authorized` | hosted execution not authorized |
+| `privacy.local_only` | local-only work must stay local |
+| `privacy.provider_not_allowlisted` | provider not allowlisted |
+| `secrets.class_not_declared` | secret class not declared |
+| `secrets.not_in_policy` | secrets disallowed by policy |
+| `secrets.untrusted` | untrusted work requests secrets |
+| `trust.not_accepted` | runner does not accept this trust class |
+| `trust.release_needs_dedicated` | release secrets need a dedicated runner or VM |
+<!-- END GENERATED:trust-reasons -->
+
+### The container level
 
 A job at this level runs in a Docker or Podman container that the isolation profile builds from one pure function. The executor refuses any command line that is not on its allowlist, whatever the profile says.
 
@@ -16,17 +74,17 @@ Every container gets:
 - The labels `nself.ci.attempt`, `role=ci-ephemeral` and `coordinator_id`, so an orphan sweep can find them.
 - The job environment through the runtime's stdin env file. No value reaches an argv or a file on disk.
 
-## What it does not block
+### What it does not block
 
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
 - Network egress on `lan`, and anything a job does with the hosts the proxy allows under `restricted` and `internet`.
 - Disk use inside the workspace. The workspace is removed after the attempt. Files the job user created are removed by a cleanup helper that runs in a separate busybox image pinned by digest (image lock entry `ci-cleanup`), never in the job image, so an image without a shell cannot leave them behind. If the helper image cannot start (an air-gapped node that never pulled `ci-cleanup`), the cleanup is tried once in the job image, as before; if that fails too, the job log says so and the host removes what it owns; a workspace it cannot empty fails a passing run as an infra failure (`E610`).
 
-## The sandboxed container level (gVisor)
+### The sandboxed container level (gVisor)
 
 `sandboxed-container` is the container level run with gVisor's `runsc` runtime. The job's syscalls go to gVisor's Sentry, a user-space kernel, and only a filtered set reaches the host kernel. `nself ci --trust untrusted -- <cmd>` needs this level, with network `none`. Without it that command exits with `E647`; it never falls back to a plain container.
 
-### Install
+#### Install
 
 1. Install gVisor from the [install guide](https://gvisor.dev/docs/user_guide/install/) (check the download hash).
 2. Run `sudo runsc install`, then restart the Docker daemon. Docker must list the runtime: `docker info --format '{{json .Runtimes}}'`.
@@ -34,7 +92,7 @@ Every container gets:
 
 A runsc binary or a runtime entry is not availability. The profile starts a small probe container under `runsc` (`docker run --runtime=runsc --network none` of a busybox image pinned by digest, running `dmesg`) and the level is available only when the output has gVisor's banner as a whole line (`Starting gVisor...`, optionally behind a `[ time ]` stamp). The runtime entry must also point at a binary named `runsc`. The runsc version and the platform are reported as facts. The probe image is in the image lock as `ci-gvisor-probe`, so the daily image probe covers it.
 
-### Platform
+#### Platform
 
 The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` is deprecated upstream and may be removed; use it only where systrap does not run on the host kernel. `kvm` is refused where `/dev/kvm` is absent. Any other value is refused too (`isolation.platform_unsupported`).
 
@@ -46,7 +104,7 @@ The probe asks the local daemon: a Docker context that points at a remote host i
 
 On a separated node the agent user's own runtime must be rootless, and the probe starts runsc under it. Rootless Docker usually needs `--ignore-cgroups` for runsc, which is refused, so the level is normally unavailable there (`isolation.runtime_flag_denied`, or `isolation.probe_failed` if the start fails).
 
-### What it does not give you
+#### What it does not give you
 
 gVisor is not a VM.
 
@@ -57,17 +115,17 @@ gVisor is not a VM.
 
 Some toolchains do not run under gVisor because they need a syscall the Sentry lacks. That is recorded as a failed job, not worked around: there is no fallback to a plain container for a sandboxed job.
 
-### Handoff
+#### Handoff
 
 - `ci doctor` does not yet print the install steps; the profile exposes them as the `hint` fact on an unavailable result (`gvisor.InstallHint`).
 - Podman support needs a way to read and judge its runtime table.
 - Network scopes `restricted` and `internet` use the same scope planner as the container level; the sidecar and the job network are created by the container profile, and the sandboxed job runs on that network under `runsc`.
 
-## The macOS VM level (Tart)
+### The macOS VM level (Tart)
 
 On an Apple-silicon Mac the `vm` and `ephemeral-vm` levels run each attempt in a fresh clone of a VM image, through [Tart](https://tart.run). Linux has no `vm` level here. You install Tart and its network filter (softnet) yourself: nSelf does not bundle, download or redistribute either, and `ci doctor` shows the licence note that goes with them. The levels are the same profile; every attempt gets its own clone, so `ephemeral-vm` adds nothing a `vm` job lacks.
 
-### Set up
+#### Set up
 
 1. Install Tart and softnet (for example `brew install cirruslabs/cli/tart`).
 2. Build or pull a base image your jobs need, with Remote Login (ssh) on and a key you control in the image user's `authorized_keys`.
@@ -83,7 +141,7 @@ ci:
 
 No image is shipped and a tag without a digest is refused: the level reports `isolation.tart_base_image` (E678) until the setting is right.
 
-### What a job gets
+#### What a job gets
 
 - A clone named `nself-ci-<attempt>`. The workspace is copied in over the ssh session (a tar stream), the job runs there, and only the artifact paths the job declares come back. Nothing from the host is mounted into the VM.
 - Secrets are written as `export` lines on the ssh session's stdin. They are never on the `tart` or `ssh` command line and never in a file.
@@ -91,7 +149,7 @@ No image is shipped and a tag without a digest is refused: the level reports `is
 - Orphans: each clone has a marker file under `<CI home>/tart/` that the running attempt keeps locked. If the coordinator dies (even `kill -9`), the lock goes with it, and the sweep at the next attempt start stops and deletes the clone. A VM you named `nself-ci-*` by hand has no marker and is never touched.
 - Apple allows two macOS VMs at once. The profile counts free slots (`free_slots` in `ci doctor`) and never starts a third; the job waits.
 
-### Network scopes on Tart
+#### Network scopes on Tart
 
 | Scope | How it is enforced |
 |---|---|
@@ -100,7 +158,7 @@ No image is shipped and a tag without a digest is refused: the level reports `is
 
 `restricted` and `internet` go through the same egress proxy as the container level (public hosts only, the deploy exclusion set refused), served by the coordinator on the gateway address, and the ssh session sets `HTTP_PROXY` and `HTTPS_PROXY`. Before the job starts, a check runs inside the VM: the proxy must answer, the gateway must answer, and the public internet, the Mac's own LAN addresses and the exclusion set must not. The check also fails closed on: a guest that is not macOS, no answer from the gateway (nothing then proves the controls work), the public internet reachable by TCP (IPv4 and IPv6) or ping, any of a fixed list of host service ports open at the gateway address (22, 53, 80, 111, 443, 445, 548, 631, 3283, 5900, 8080), and, under `none` and `restricted`, public names resolving through the VM's resolver. A scope that cannot be proven fails the attempt with `E679` (`network.scope_unenforceable`), and the clone is deleted. The proxy serves only the attempt's own VM address, so a second VM on the same gateway cannot use it. If the installed Tart has no softnet block option, or no proxy can be started, every scope below `lan` is unavailable.
 
-### Known limits
+#### Known limits
 
 - Real-run evidence needs an Apple-silicon Mac with Tart; GitHub-hosted macOS runners do not allow nested virtualisation.
 - softnet filters by destination address, not port. The gateway address is allowed, so anything on your Mac that listens on all interfaces (ssh, file sharing, screen sharing) or on the gateway, and the resolver the VM is given, are reachable from the VM on that address. The check above refuses the attempt when it finds one of the listed ports open or a public name resolving; turn those services off on a Mac that runs untrusted jobs. If the vmnet resolver cannot be closed, `none` and `restricted` stay unavailable on that Mac and `internet` and `lan` still work.
@@ -111,12 +169,12 @@ No image is shipped and a tag without a digest is refused: the level reports `is
 - Declared artifact paths are literal paths (no globs). Symlinks and special files in them are refused, and a collect is capped at 1 GiB, 100000 entries and 64 levels.
 - The Tart gateway is `192.168.64.1` unless the Mac's vmnet network was changed; a different address makes the network check fail closed.
 
-### Handoff
+#### Handoff
 
 - `ci doctor` does not print the Tart facts yet; the profile exposes `tart_version`, `licence_note`, `free_slots`, `softnet_block` and `base_image_cached` as availability facts.
 - The tagged integration tests (`-tags tart`) are the real-run evidence; they run on a Mac with Tart and the environment variables listed at the top of `integration_test.go`.
 
-## Network scopes
+### Network scopes
 
 A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E680`), before any resource exists.
 
@@ -142,11 +200,11 @@ No environment variable loosens the set (`NSELF_ALLOW_PRIVATE_URLS` of the SDK g
 
 A tool that ignores proxy variables fails under `restricted` and `internet`. That is intended: there is no silent bypass.
 
-### What a runner proves
+#### What a runner proves
 
 A scope is offered only where it is enforced. The probe builds the same network and sidecar a job gets, then runs one container on it that tries to connect to the host's own addresses (on a port where the probe listens), to `169.254.169.254` and to a raw public address. If any connection succeeds, or the listener sees one, `restricted` and `internet` are withheld. The result is the capability fact `network.enforced_scopes`; the scheduler derives `NoLANRoute` from it, so a runner cannot declare it. Where the network or the sidecar cannot be created the scope is unavailable (`E679`), never approximated. The sidecar runs the host's own binary in a Linux container, so `restricted` and `internet` are Linux-host features (Docker or Podman, rootless included); on macOS they report unavailable.
 
-### Known limits
+#### Known limits
 
 - The exclusion set is the one this host can build for itself. A team coordinator that keeps the set in its own store can replace it with `run.RegisterNetscopeExclusions`; nothing registers one yet.
 - The scheduler reads the proof for the local runner. A remote node's `network.enforced_scopes` is not reported yet, so no untrusted job is placed on a remote node on the strength of it. The agent does not yet pass the lease's network scope into the executor (container jobs there run with `none`), and `netscope.Effective`, which refuses `lan` and `privileged` for an untrusted job, is called by the scheduler's admission rules only.
@@ -154,7 +212,7 @@ A scope is offered only where it is enforced. The probe builds the same network 
 - Linux route discovery reads all routing tables through netlink, including policy routes. A public address that hairpins to a LAN service through the router cannot be learned from those tables. It still needs an observed egress address from the target network in the never-list; automatic public-NAT discovery is not implemented.
 - The sidecar bind-mounts a private staged copy of this process's binary with mode `0755`; the source binary's permissions are unchanged. The copy is removed with the attempt's network resources. Restricted and internet scopes still require Linux.
 
-## What a node must provide
+### What a node must provide
 
 - Docker or Podman with the pids, memory and CPU cgroup controllers delegated. The probe reads them from `info` and reports the level unavailable (`isolation.limits_unenforceable`) when one is missing, because the runtime would start the container and silently drop the limits. Rootless Docker needs cgroup v2 with systemd delegation. Rootless Podman needs the same.
 - On a node where the agent user has no docker group (a separated node), only a rootless runtime counts. A rootful socket is root-equivalent. Set `NSELF_CI_NODE_SEPARATED=1` on such a node; unset means "not separated" and a rootful runtime is accepted.
@@ -162,7 +220,7 @@ A scope is offered only where it is enforced. The probe builds the same network 
 
 When the level is unavailable the job waits before it fails, and never falls back to a weaker level. A slot the runtime cannot map (`isolation.slot_uid_unmapped`, for example a fifth concurrent attempt on a rootless runtime) is waited out until another attempt frees one, for up to 30 minutes (slot 0 is never waited for: no other attempt can free a better one). A missing runtime, a failed probe or limits the runtime cannot enforce are retried for about a minute. The job log says `waiting for ... isolation` and repeats it every minute. Only a refusal before the job started is waited for. After the wait the job fails with E678 and its stable reason. Other reasons (a rootful runtime, an unenforceable network scope) fail at once.
 
-## Workspace hygiene and job UID separation
+### Workspace hygiene and job UID separation
 
 Every attempt gets its own job root, a fresh `0700` directory under the CI home (`work/<attempt>`). When the attempt ends, `Cleanup` does four things, in this order, and each step runs even if the one before failed:
 
@@ -175,7 +233,7 @@ Every attempt gets its own job root, a fresh `0700` directory under the CI home 
 
 `SweepOrphans` runs once when the first attempt of a process starts. It removes the roots and labelled resources of attempts that no live lease owns. It spares attempts of the running process, attempts with a live process marker and roots younger than 12 hours, because a second `nself ci` on the same machine may still own them. It leaves an attempt alone while a container of that attempt is still running (the executor's own recovery removes the containers of dead coordinators), and it does not run at all while a container runtime is installed but not answering, because a sibling's live job could not be told from an orphan.
 
-### Which user a job runs as
+#### Which user a job runs as
 
 `Separation` picks the host UID for the attempt's slot. Each slot has its own UID, so two concurrent attempts never share a UID and cannot read each other's workspace or `/proc/<pid>/environ`.
 
@@ -191,83 +249,14 @@ The one exception is deliberate and narrow. Evidence from such a job is `coordin
 
 To enable `userns` on user-mode Linux, install `uidmap` (for `newuidmap`), give the agent user a range in `/etc/subuid` and `/etc/subgid`, and allow unprivileged user namespaces. Ubuntu 24.04 restricts them by default (`kernel.apparmor_restrict_unprivileged_userns=1` leaves the namespace without capabilities, so the job cannot switch to the mapped UID): the probe then reports `userns.unavailable` and the node stays non-separated until a profile or that sysctl allows it. The job runs as `unshare --user --map-users=0:<uid>:1 --map-groups=0:<uid>:1 --setuid=0 --setgid=0 -- <command>`; the probe checks that exact command. Hygiene creates no OS users and no sudoers entries; `nself ci nodes add --system` does that once.
 
-### Known limits
+#### Known limits
 
 - Leftover processes of a job that ran under your own UID (the local run loop and the owner exception) are found by the `NSELF_CI_EXEC_ATTEMPT` tag in their environment. A job that strips the tag, or a process that makes its environment unreadable, can evade the scan. Separated attempts are found by their job UID instead. macOS has no `/proc`, so the process and socket scans are skipped there.
 - A job user's `cron` and `at` entries, SysV IPC objects and home directory are not cleaned by hygiene. `nself ci nodes add --system` is where those belong.
 - The agent cannot kill or remove files that a job user owns. A separated node passes hygiene a `JobRunner`, which its job shim implements, and the kill and the removal then run as the job user. Without one, cleanup reports `E681` and the node drains rather than claiming success.
 - Between a check and the action it guards (the process group kill, a volume removal, the mount snapshot) there is a few-millisecond window. Closing it needs a PID namespace or cgroup per job.
 
-## When each level was last verified
-
-A level that worked once may not work today: a runtime update or a kernel change can silently end it. So `nself ci doctor` shows, for each level, the date a passing check last proved it on this machine.
-
-```
-nself ci doctor            # lines isolation.container ... isolation.vm
-nself ci doctor --json     # each of those checks has "verified_at": an RFC 3339 time, or null
-```
-
-| Level | Reads | How it is proven |
-|---|---|---|
-| `isolation.container` | `verified <date> on <host class>` or `unverified since never` | the container integration tests |
-| `isolation.sandboxed-container` | same | the gVisor integration tests (needs `runsc`) |
-| `isolation.network` | same | the network scope integration tests |
-| `isolation.hygiene` | same | the workspace hygiene integration tests (Linux) |
-| `isolation.vm` | same on an Apple-silicon Mac; on Linux `unavailable (no KVM host, D-0120)` | the Tart tests (needs Tart and its test image) |
-| `isolation.ephemeral-vm` | Linux only: `unavailable (no KVM host, D-0120)` | not provable on Linux |
-
-The host class is the platform of the machine that ran the check, for example `linux/amd64`.
-
-**Where the date comes from.** The `isolation-levels` drill (`scripts/drill/isolation-levels/run`, job `drill-isolation-levels` of the `drills` pipeline) runs the integration tests of every level the host can run and records one check per level. Doctor reads the stored evidence of those runs and reports the newest passing check of each level. Doctor never writes. A level with no passing check reads `unverified since never`; that is the honest state of a machine that never ran the drill, so it is not a warning.
-
-**Run it.**
-
-```
-nself ci --pipeline drills --job drill-isolation-levels
-scripts/drill/isolation-levels/run          # same, started directly; NSELF_CI_BIN and NSELF_CI_HOME choose the binary and the store
-```
-
-A level whose prerequisite the host lacks (no running Docker or Podman, no `runsc`, no Tart) ends `error` with `reason: prerequisite.missing` in its excerpt. That is never a pass and never changes the last-verified date. A level that does not exist on the host class (for example `vm` on Linux) gets no check. `ISOLATION_DRILL_LEVELS=container,network` narrows the run to those levels. The drill runs real containers; give its job more than the default 10 minutes with a `drill-isolation-levels` job in `.nself/ci.yaml` if the host is slow. `scripts/drill/isolation-levels/selftest.sh` checks the drill script itself against fake tools.
-
-### Handoff
-
-- Stored evidence keeps each nested check only on the drill check's excerpt: the last line, `passed: <ids>`, lists the nested checks that passed (internal/drill writes it, `store.LastVerified` reads it). A format change must change both; a test pins them together.
-- The linux `ci-isolation-linux.yml` pull-request job runs the drill against a throwaway store and fails unless doctor shows a non-null `verified_at` for `isolation.container`, `isolation.sandboxed-container` and `isolation.network`.
-
-## Whether each level can run now
-
-`nself ci doctor` also probes every isolation profile and prints one `isolation.<level>.availability` line per level (`isolation.container.availability`, `isolation.sandboxed-container.availability`, `isolation.vm.availability`, `isolation.ephemeral-vm.availability`). Each reads `available (<level>)` or `unavailable: <reason>`, such as `isolation.runtime_missing`, `isolation.tart_base_image` or `isolation.tart_no_free_slot`.
-
-For an unavailable level the line carries the fix as its `remediation` (the install steps: Tart from `brew install cirruslabs/cli/tart`, gVisor from its install page then `sudo runsc install`) and prints the profile facts under it. For Tart the facts are `tart_version`, `base_image`, `base_image_cached`, `free_slots`, `running_vms`, `softnet_block` and `licence_note`: Tart and softnet are third-party tools under their own licences, you install them, nSelf neither bundles nor redistributes them. An unavailable level is not a failure: these lines always pass, because a host without Tart or gVisor is a normal state.
-
-## Secrets
-
-A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
-
-| Class | Store file (`.secrets/`) | Who may get it |
-|---|---|---|
-| `project` | `ci.age` | trusted jobs on an eligible runner |
-| `environment/<env>` | `ci-<env>.age` | trusted jobs on an eligible runner |
-| `release` | `release.age` | `internal` or `owner` jobs on a dedicated-trusted node or a VM |
-| `deploy/<env>` | `<env>.age` | same as `release` |
-| `team` | the node's own team store | trusted jobs on an eligible runner; node-local, never granted with `nodes secrets grant` |
-
-How it works:
-
-- Refs are checked first: trust class of the job, the runner's facts, the runner's declared secret classes and the policy's `trust.secrets` allowlist. A refusal (`E677`) names the reasons and makes no resolver call. Untrusted jobs never get a secret.
-- Values come from one place: `nself config secrets resolve`, run on the node that executes the job. A TEAM coordinator passes references only and never holds a value. Only a PERSONAL coordinator over the SSH carrier to your own node may send a `project` or `environment` value.
-- On an agent node the resolver runs with `SECRETS_AGE_KEY_PATH` set to that node's own age identity, so the node decrypts only the files you granted to it: `nself ci nodes secrets grant <node> --class project` (also `environment/<env>`, `release`, `deploy/<env>`). `release` and `deploy` files go only to a dedicated-trusted node. A node whose registry entry has `secrets_eligible: false` (jobs could read its age key) is refused with `E677`. `revoke` always works; it does not unsee plaintext the node already read, so rotate the value afterwards.
-- Delivery is by environment only: the process environment, `docker run -e NAME` with the value in the docker CLI's own environment (never in argv), or `export` lines on the SSH stdin of a Tart VM. No file, URL, cache key, artifact or log ever holds a value.
-- Every value is registered with the output redactor before the job starts. If the installed redactor is the pass-through default, or a value cannot be registered (shorter than 6 bytes), nothing is injected and the attempt fails (`E676`) before it starts. Buffers are zeroed when the attempt ends, whether it passed, failed, was cancelled or lost.
-- No `nself config secrets resolve` in the installed CLI: the job fails before it starts with `E675`.
-
-Limits: only the byte buffers the Source owns are zeroed. Copies in Go strings (the job environment slice handed to the process, the redaction registry, the legacy-environment read) stay in the nself-ci process until it exits, and a failed availability probe is remembered until it restarts. Values live in process memory and the job's environment for the attempt. For container jobs dockerd also keeps `-e` values in the container configuration until the container is removed (`--rm` and the hygiene sweep remove it). `/proc/<pid>/environ` is readable only by that attempt's own job user.
-
-Android release builds: until `release.age` holds the keystore secrets, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` in your own environment still work, on your own machine only. One audit row (`secret.legacy_env`, value-free) is written first; if it cannot be written the legacy value is not used. The `legacy-env` label is kept on the Source and is not yet copied into run evidence. A remote node never uses this path.
-
-A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.
-
-## Source trust: who made the code
+### Source trust: who made the code
 
 Every run has a source trust class: `owner`, `internal`, `collaborator` or `untrusted`. It decides what the run may touch (secrets, network, isolation) and it is never taken from a payload field, a job input or `.nself/ci.yaml`. A coordinator that runs jobs as you only starts `owner` and `internal` work; anything below needs an isolated runner.
 
@@ -302,7 +291,7 @@ Limits, so you can judge them: the reflog expires and is read for the last 5000 
 
 Handoff for later Tickets: `source.Classify(model.TriggerFacts) Result` and `source.ClassifyLocal(source.GitFacts) Result` are pure (`internal/trust/source`). `run.SourceTrust` is the registered `TrustClassifier`; `Decide` returns the reasons, `ClassifyForge(ctx, root, facts)` classifies a forge trigger (P7-TRUST-17 feeds it recorded deliveries; P7-TRUST-24 reads `RequiresApproval`). The `Kind`, `Auth` and `Repo` fields of the facts carry no source label: the adapters must derive them from the authenticated delivery, not from its body. `source.ApplyCap` is the one place the machine cap lowers a class.
 
-### Run approvals
+#### Run approvals
 
 A run that needs approval waits in the `approval` admission step with the placement reason `approval.required` until a valid approval exists. A run needs approval when the source facts recorded for it say so, or, with no facts recorded, when its source trust is `untrusted` (a collaborator's pushed commit is not held; a stranger's is).
 
@@ -320,7 +309,7 @@ nself ci runs approve <run> [--sha <sha>] [--spend] [--json]
 
 Handoff: `source.Binding`, `source.VoidReasons` and `source.RequiresApproval` are the pure rules (`internal/trust/source/approval.go`); the rows live in `internal/store/trust_approvals.go` (`trust_run_facts`, `trust_approvals`). The source hook records the facts with `Store.RecordApprovalFacts` (not yet wired: see the Epic Invalidations).
 
-## The production boundary
+### The production boundary
 
 CI work stays off the machines that run production, and off a coordinator host that is not isolated enough. Two rules apply, and every refusal carries error code `E689` with the reason `boundary.deploy_host`, `boundary.override_minimum` or `boundary.coordinator_host`.
 
@@ -338,7 +327,7 @@ Details:
 - Matching is done from the deploy inventory on the coordinator, never from what a node says about itself.
 - `E689` fix: run the job on a node that is not a deploy host, or on one you overrode with owner or internal work at `vm` or stronger and no release jobs or release or deploy secrets. On a coordinator host, run collaborator and untrusted work elsewhere, or move the coordinator to a VM.
 
-## Roles, tokens and the audit log
+### Roles, tokens and the audit log
 
 A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.
 
@@ -350,7 +339,7 @@ A TEAM coordinator knows three roles, ordered `member < release < admin`, and no
 
 A grant or token names the projects it covers (`--project <id>` repeated, or `--project '*'`). An actor scoped to named projects cannot do a project-wide `release` or `admin` action. Every refusal is `E687`; the reason key says why (`role`, `project`, `no_grant`, `node_kind`, `bad_certificate`, `token_unknown`, `token_expired`, `token_revoked`, `self_approval`, `author_unknown`, `unknown_action`, `unknown_role`, `bad_request`, `audit_secret`).
 
-### Identities
+#### Identities
 
 - **User certificate** from `pki.IssueUser`: `ActorFromPeer` maps it to the principal's live grant. An actor is not a snapshot: every decision re-reads the grant, the token and the certificate's denied state, so a revoked grant, token or serial, or an expired certificate, ends access on an actor resolved earlier, and a lowered role applies at once. A token keeps the role it was issued with: lowering or replacing a grant does not change the principal's tokens (revoke them with the grant). A node or coordinator certificate is refused (`node_kind`), as is a revoked, denied or expired one. A certificate with no grant has no role.
 - **Scoped token**: 32 random bytes in base64url, stored only as its sha256, with a role, projects and an expiry (default 720 h, at most 8760 h). `nself ci serve admin token issue` prints it once; later commands show the id and state, never the token. `roles revoke <principal>` ends the grant and every live token issued to that principal in one step and one audit row. Send tokens over TLS only: the transport enforces that, not the role check.
@@ -371,17 +360,17 @@ nself ci serve admin audit seal
 
 Every grant, token and user certificate records a `subject`: `self` when it was issued with `--self` to the data directory's own operator identity, otherwise the named principal. `self` is reserved: a principal cannot be named `self`, so a remote identity cannot hide among the operator's own. `roles.NonSelfPrincipals` counts the live grants, tokens and user certificates whose subject is not `self` (a certificate nobody marked counts as non-self); the node-mode check reads it.
 
-### Issuing user certificates
+#### Issuing user certificates
 
 On the coordinator host, `NSELF_V15=1 nself ci serve admin cert issue <principal>` issues a user mTLS certificate and prints the certificate chain, private key and root as PEM once. Redirect stdout to a private file (for example, set `umask 077` first); `--json` returns these as `cert_pem`, `key_pem` and `root_pem`. The private key is never stored by the coordinator. The TTL defaults to seven days and must be between one minute and seven days.
 
 Issuance requires admin access and does not grant a role: grant the principal its role separately. Each successful issuance records a certificate subject and a `cert.issue` audit event before returning the credentials. `--self` is accepted only for the operator's own principal and records subject `self`; otherwise the named principal counts toward TEAM mode, including when issuing to yourself without `--self`. Use the coordinator's `NSELF_CI_HOME` for both the store and its CA keys. If subject recording or audit fails, no credential is returned; a certificate already recorded before that failure can remain counted conservatively as non-self.
 
-### The audit log
+#### The audit log
 
 There is one audit table. The `trust-audit` set chains it: each sealed row's `head` is the sha256 of the previous head and the canonical row (seq, time, actor, action, target, detail). `Append` inserts a row and seals every pending row in one `BEGIN IMMEDIATE` transaction, so concurrent writers, even in a second process, lose no row. Rows other packages write through the core audit API (every node mutation) are sealed by the next `Append`, by `audit seal`, or by a sealer the TEAM coordinator runs every 60 s. `audit --verify` only reads, inside one snapshot: it prints `unsealed: <n>` and exits 1 when rows are still unsealed after 60 s, when a sealed row no longer matches its hash (the row is named), when the chain link is broken, when a seq number is missing (rows are never deleted, so a gap or an AUTOINCREMENT counter above the last row means rows were removed, including the newest ones), or when an unsealed row sits below a sealed one (a cleared head). `audit seal` refuses to re-chain such a row (E609), so the damage stays visible. An `Append` or a mutation still records its row, left unsealed, so a revocation is never blocked by tampering; `--verify` keeps failing until the log is restored from backup (there is no accept-the-break command yet). An event whose actor, action, target or detail contains a registered secret value, in any encoding the redactor knows, is refused (`E687`, reason `audit_secret`) and nothing is written. P7-TRUST-26 policy writes call `audit.AppendTx` to put their row in the policy write's own transaction.
 
-### Recovering a damaged audit chain
+#### Recovering a damaged audit chain
 
 For E609 or a failed `audit --verify`, restore a known-good coordinator backup; there is no command to accept a break. Do not clear heads, delete rows or recompute the chain in SQL: that destroys evidence of the break.
 
@@ -407,7 +396,7 @@ Handoff for later Tickets: `roles.Authorize(ctx, actor, role, project)` and `rol
 Wiring left to the coordinator process (P7-NODE-10 and P7-TRUST-26): start `audit.Log.RunSealer` (60 s) so rows other packages write get sealed, call `audit.SetScanner(run.Redactions)` before its first `Append` or `AppendTx` (the `serve admin` commands do this themselves), and resolve an Actor per request, not per connection. `store.CertSubjectPut` has no caller until the command that issues user certificates records their subject.
 
 
-## Signed evidence, revocation and the audit checkpoint
+### Signed evidence, revocation and the audit checkpoint
 
 A node that is signing eligible signs the evidence of every job it runs. The signature is Ed25519 with the node key over `nself-ci-evidence/v1`, a newline, and the canonical JSON of the document without its `signature` and `freshness` fields (numbers kept as written, fields a newer producer added stay in). The key id is `ci-node-` plus the first 16 hex characters of the sha256 of the public key. The coordinator accepts a `signed-remote` document only when all of these hold; otherwise the gate sees `evidence.signature_unverifiable` and the log gets an `E686` reason:
 
@@ -437,7 +426,7 @@ nself ci serve admin audit checkpoint verify --pubkey <fingerprint> <path> [--js
 
 Handoff for later Tickets: the coordinator calls `run.UseAttestStore(st)` at start (the first attempt also sets it), a node revocation calls `run.RevokeNode`, and the coordinator that receives a result frame builds the signed-remote document with `producer.kind: signed-remote` and `signature: {kind: runner-ed25519, key_id, value}` from the frame; the agent signs the document it sends, so that document must already carry `attempt.id`, `job`, the real `repo_id`, `run_id`, `source_trust`, `policy_digest` and checks for its own job only (the agent's base document does not yet: D-1299; the marker file and the revoke caller are unwired: D-1300).
 
-## Policy sources and `nself ci policy`
+### Policy sources and `nself ci policy`
 
 The effective policy of a repository is merged from, loosest first: the defaults, your operator rows (scopes `user`, `team`, `project`, kept in the CI store), the protected default branch's `.nself/ci.yaml` `policy:` block read at the fetched `origin/<default>` tip (or at an admin pin), the checked-out revision's own `policy:` block, and the flags of one run. Every later scope can only tighten. A widening in the revision, and any Spend key (`economics.*`, `burst.*`) in the branch or the revision, is ignored and listed. A `policy:` block in a pull request therefore never loosens anything.
 
@@ -453,11 +442,11 @@ nself ci policy pin <sha> | --clear [--json]
 - `pin <sha>` fixes the protected-branch commit the policy is read at. It accepts only a full commit id reachable from the fetched `origin/<default>` (else `E672`); `--clear` returns to the tip.
 - Every `set`, `unset`, `pin` and `--clear` needs the `admin` role (the local operator of a PERSONAL coordinator has it) and writes its policy row and one `policy.*` audit row in one transaction: both land or neither does. The role check itself writes its own `authorize` row first, so a successful write leaves two rows and a refused one leaves only the `authorize` row (`policy.refused` for a machine-invoked refusal). The audit row names the scope, the quoted subject, the key, a short digest and the new value; a Secret key's value is never written.
 
-### Machine-invoked callers cannot loosen trust policy
+#### Machine-invoked callers cannot loosen trust policy
 
 When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can export it for an agent that uses the CLI), `set`, `unset` and `pin` refuse, with `E687` reason `machine_invoked`, any write that loosens a `trust.*` key: raising `trust.machine_invoked_cap`, unsetting any `trust.*` key, and every `pin` or `--clear`. The refusal writes nothing to the policy and one `policy.refused` audit row. Lowering a trust key (`trust.machine_invoked_cap` from `owner` to `untrusted`) works, and so do keys outside `trust.*`. A first value for a `trust.*` list key that has no default (`trust.providers`, `trust.self_reported_gates`) counts as loosening, because an unset list means none allowed. With the variable unset the operator's writes work as before. This guard is advisory against an agent that controls its own environment, which can simply unset the variable; the plan also marks the three write commands `cli-only` on the MCP and HTTP surfaces (P7-CI-62) so a remote caller cannot reach them at all; that mapping is not part of this command.
 
-### Known limits
+#### Known limits
 
 - A `team` row applies to every run, plan and dispatch of the process whose environment sets `NSELF_CI_TEAM=<team id>` (the coordinator's own environment, never a job's env or a repository file; same alphabet as `--team`). A malformed value fails the resolve with `E672` rather than dropping the team's rows; `show --team <id>` overrides it. With the variable unset no team row applies.
 - `pin` needs a fetched origin; with no origin there is nothing to pin against.
@@ -495,3 +484,184 @@ on exit or a handled signal. An uncatchable SIGKILL or host crash can leave a
 temporary directory for the host's normal temporary-file cleanup; container
 scratch lives on the attempt's temporary filesystem. No `.nself-ci` directory is
 created in the project by preparation.
+
+### Machine-invoked runs
+
+An agent that starts CI (an MCP tool, an HTTP caller or a CLI agent) is a machine-invoked caller. The MCP and HTTP invokers set `NSELF_INVOKED_BY` themselves. For a CLI agent, export it. The run's source trust class is then capped by the policy key `trust.machine_invoked_cap` (default `owner`, no cap), with the reason `source.machine_invoked_cap`.
+
+For unattended agents, set the cap to `untrusted`. Lowering the cap always works:
+
+```bash
+nself ci policy set --scope user trust.machine_invoked_cap untrusted
+```
+
+Observed on a fresh store, a machine-invoked caller then cannot raise it again:
+
+```
+$ NSELF_INVOKED_BY=agent nself ci policy set --scope user trust.machine_invoked_cap owner
+E687: a machine-invoked caller (NSELF_INVOKED_BY) cannot loosen trust policy: set user/trust.machine_invoked_cap (machine_invoked)
+```
+
+The cap is applied where the run is classified. A `--coordinator` submission from a machine-invoked process is classified on the TEAM coordinator, where the cap of the coordinator's own policy applies. The submit API carries no invoked-by claim the coordinator could trust, so the caller's cap does not travel with the submission. For a CLI agent the cap is advisory, because the agent controls its own environment (residual risk 9).
+
+### Coordinator host
+
+A PERSONAL coordinator runs as you, on your machine, and starts only `owner` and `internal` work. A TEAM coordinator holds the queue, the store, the certificate authority and the audit log. It holds secret references and never values.
+
+Two-box advice: do not run a TEAM coordinator on the same box as a node that runs untrusted code. A compromised job on that box would sit next to the store and the keys. In team mode the coordinator's own host needs the `vm` floor (`boundary.coordinator_host`); a host that cannot give it is refused. Put the coordinator on its own small host and add nodes separately.
+
+### macOS nodes
+
+| Node | Layout | Eligible for | Notes |
+|---|---|---|---|
+| System install (`nself ci nodes add user@mac --system`) | Hidden agent user, one hidden job user per slot, a LaunchDaemon, a root-owned uninstall copy | Separated layout; secrets and signing eligible; TEAM eligible | Recorded as separated only once D-1230 closes. Until then the node is recorded not UID-separated and the agent does not yet run jobs through the job shim |
+| User mode | The agent runs as your own user | The I17 exception only: owner work from a PERSONAL coordinator, no secrets, never signing | A TEAM coordinator refuses it (`isolation.uid_separation`, `E657`) |
+
+For a system install the ssh user needs passwordless sudo, and the Xcode license must be accepted first (`sudo xcodebuild -license accept`). Remove the node with the root-owned copy: `sudo /Library/PrivilegedHelperTools/org.nself.ci-agent uninstall --system`. The `vm` level uses Tart and is limited by Apple to two VMs at once on one Mac.
+
+## Public FOSS PRs
+
+A pull request from a stranger is the hardest case. The defaults treat it as hostile.
+
+**Defaults.**
+
+- A fork PR is `untrusted`. So is any run whose head repository is not this repository, any `[bot]`, Dependabot or Renovate author, any diff that touches only lockfiles, and any run whose head moved after the delivery.
+- An untrusted job gets no secrets, no `lan` or `privileged` network, and no trusted cache or artifact namespace.
+- Its isolation minimum is `sandboxed-container` on a runner with no route to your LAN, or a disposable hosted runner. The `container` level is never the minimum.
+- A first-time contributor's run waits for an approval.
+
+**Approvals.** `nself ci runs pending` lists held runs. `nself ci runs approve <run> --sha <head>` approves one. The approver needs `release` or `admin` and must not be the author. An approval binds the run, the head SHA, the config digest and the head repository, and any change voids it. Details are in [Run approvals](#run-approvals).
+
+**Setup without hosted capacity.** Use a Linux node with `runsc` that has no LAN route. Check it:
+
+```
+nself ci doctor        # isolation.sandboxed-container verified <date> on linux/amd64
+```
+
+If no such node exists, the PR run waits (`E678`) and never falls back to the container level. That wait is the safe answer.
+
+**Setup with hosted capacity.** The repository's visibility must come from the forge API as `public`. The project must be authorized for the provider (`nself ci providers authorize <id> --project <repository path>`), and the privacy zone must allow a send (see [Privacy](#privacy)). Hosted runs get no secret classes, and their evidence stays `self-reported`. A hosted runner on a public repository is the provider's isolation, not yours.
+
+**Do not** point a persistent runner that holds your secrets or sits on your LAN at a public repository. The github-runner plugin refuses a runner group that is open to public repositories for that reason.
+
+## Secrets
+
+A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
+
+| Class | Store file (`.secrets/`) | Who may get it |
+|---|---|---|
+| `project` | `ci.age` | trusted jobs on an eligible runner |
+| `environment/<env>` | `ci-<env>.age` | trusted jobs on an eligible runner |
+| `release` | `release.age` | `internal` or `owner` jobs on a dedicated-trusted node or a VM |
+| `deploy/<env>` | `<env>.age` | same as `release` |
+| `team` | the node's own team store | trusted jobs on an eligible runner; node-local, never granted with `nodes secrets grant` |
+
+How it works:
+
+- Refs are checked first: trust class of the job, the runner's facts, the runner's declared secret classes and the policy's `trust.secrets` allowlist. A refusal (`E677`) names the reasons and makes no resolver call. Untrusted jobs never get a secret.
+- Values come from one place: `nself config secrets resolve`, run on the node that executes the job. A TEAM coordinator passes references only and never holds a value. Only a PERSONAL coordinator over the SSH carrier to your own node may send a `project` or `environment` value.
+- On an agent node the resolver runs with `SECRETS_AGE_KEY_PATH` set to that node's own age identity, so the node decrypts only the files you granted to it: `nself ci nodes secrets grant <node> --class project` (also `environment/<env>`, `release`, `deploy/<env>`). `release` and `deploy` files go only to a dedicated-trusted node. A node whose registry entry has `secrets_eligible: false` (jobs could read its age key) is refused with `E677`. `revoke` always works; it does not unsee plaintext the node already read, so rotate the value afterwards.
+- Delivery is by environment only: the process environment, `docker run -e NAME` with the value in the docker CLI's own environment (never in argv), or `export` lines on the SSH stdin of a Tart VM. No file, URL, cache key, artifact or log ever holds a value.
+- Every value is registered with the output redactor before the job starts. If the installed redactor is the pass-through default, or a value cannot be registered (the redactor refuses one shorter than 6 bytes with `E673`), nothing is injected and the attempt fails (`E676`) before it starts. Buffers are zeroed when the attempt ends, whether it passed, failed, was cancelled or lost.
+- No `nself config secrets resolve` in the installed CLI: the job fails before it starts with `E675`.
+
+Limits: only the byte buffers the Source owns are zeroed. Copies in Go strings (the job environment slice handed to the process, the redaction registry, the legacy-environment read) stay in the nself-ci process until it exits, and a failed availability probe is remembered until it restarts. Values live in process memory and the job's environment for the attempt. For container jobs dockerd also keeps `-e` values in the container configuration until the container is removed (`--rm` and the hygiene sweep remove it). `/proc/<pid>/environ` is readable only by that attempt's own job user.
+
+Android release builds: until `release.age` holds the keystore secrets, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` in your own environment still work, on your own machine only. One audit row (`secret.legacy_env`, value-free) is written first; if it cannot be written the legacy value is not used. The `legacy-env` label is kept on the Source and is not yet copied into run evidence. A remote node never uses this path.
+
+A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.
+
+## Privacy
+
+**Zones.** The policy key `trust.privacy_zone` decides what may leave your machine. From strictest to loosest:
+
+| Zone | What may leave the machine |
+|---|---|
+| `local-only` | Nothing. The job runs only on your own PERSONAL node (`privacy.local_only` otherwise) |
+| `private-infrastructure` | Nothing to a hosted provider. Your own nodes only. This is the default when no zone is set |
+| `provider-allowlist` | The job and its source go to a hosted provider only if that provider is listed in `trust.providers` (`privacy.provider_not_allowlisted` otherwise) |
+| `hosted-allowed` | Any provider you authorized for the project |
+
+A hosted send needs two things: the project is authorized for the provider (an admin runs `nself ci providers authorize`), and the zone allows it. A public repository's untrusted job can go to hosted capacity without a project authorization; a private repository cannot. `authorize --allow-private` writes the zone first and prints the ceiling command for you to review. It does not run it.
+
+**What leaves the machine, per zone.** A hosted send carries the source of the revision and the job's command, environment (no secret values) and artifacts. The provider sees all of it. nSelf cannot verify what a provider does with it (residual risk 11). Under `local-only` and `private-infrastructure` nothing goes to a provider, but a commit status post goes to your forge unless you pass `--no-status`.
+
+**Lifecycle.** Run records, evidence and logs live in the CI store on the coordinator's disk, under the CI home of the operator. They stay in that store. A secret value is not stored when the redactor recognises it: logs go through the redactor and values are registered before the job starts. See residual risk 8 (redaction limits).
+
+**Publication profile.** A release publishes only what you ask it to: signed artifacts and their evidence, from `nself ci artifacts sign`. Publication is deterministic and repeatable. See [Cache and artifacts](Cache-and-Artifacts.md).
+
+**No telemetry.** The engine has no usage-reporting call to any nSelf service. The `nself.org` URLs in the code are identifiers in schemas and provenance statements, not endpoints it contacts. The only network calls are to the forge and providers you configured, and the registry and toolchain pulls you ask for.
+
+## Isolation last-verified
+
+Each level below lists the host it needs and the source of its last-verified date. A level that worked once may not work today, because a runtime update or a kernel change can end it silently. So `nself ci doctor` shows, for each level, the date a passing check last proved it on this machine.
+
+Observed on a macOS machine that never ran the drill:
+
+```
+$ nself ci doctor
+PASS isolation.container unverified since never
+PASS isolation.hygiene unverified since never
+PASS isolation.network unverified since never
+PASS isolation.sandboxed-container unverified since never
+PASS isolation.vm unverified since never
+```
+
+```
+nself ci doctor            # lines isolation.container ... isolation.vm
+nself ci doctor --json     # each of those checks has "verified_at": an RFC 3339 time, or null
+```
+
+| Level | Host requirement | Reads | How it is proven |
+|---|---|---|---|
+| `isolation.container` | Docker or Podman, cgroup limits | `verified <date> on <host class>` or `unverified since never` | the container integration tests |
+| `isolation.sandboxed-container` | Linux with `runsc` | same | the gVisor integration tests (needs `runsc`) |
+| `isolation.network` | Docker or Podman, Linux | same | the network scope integration tests |
+| `isolation.hygiene` | Linux | same | the workspace hygiene integration tests (Linux) |
+| `isolation.vm` | Apple-silicon Mac with Tart | same on an Apple-silicon Mac; on Linux `unavailable (no KVM host, D-0120)` | the Tart tests (needs Tart and its test image) |
+| `isolation.ephemeral-vm` | Apple-silicon Mac with Tart | Linux only: `unavailable (no KVM host, D-0120)` | not provable on Linux |
+
+The host class is the platform of the machine that ran the check, for example `linux/amd64`.
+
+**Where the date comes from.** The `isolation-levels` drill (`scripts/drill/isolation-levels/run`, job `drill-isolation-levels` of the `drills` pipeline) runs the integration tests of every level the host can run and records one check per level. Doctor reads the stored evidence of those runs and reports the newest passing check of each level. Doctor never writes. A level with no passing check reads `unverified since never`; that is the honest state of a machine that never ran the drill, so it is not a warning.
+
+**Run it.**
+
+```
+nself ci --pipeline drills --job drill-isolation-levels
+scripts/drill/isolation-levels/run          # same, started directly; NSELF_CI_BIN and NSELF_CI_HOME choose the binary and the store
+```
+
+A level whose prerequisite the host lacks (no running Docker or Podman, no `runsc`, no Tart) ends `error` with `reason: prerequisite.missing` in its excerpt. That is never a pass and never changes the last-verified date. A level that does not exist on the host class (for example `vm` on Linux) gets no check. `ISOLATION_DRILL_LEVELS=container,network` narrows the run to those levels. The drill runs real containers; give its job more than the default 10 minutes with a `drill-isolation-levels` job in `.nself/ci.yaml` if the host is slow. `scripts/drill/isolation-levels/selftest.sh` checks the drill script itself against fake tools.
+
+### Handoff
+
+- Stored evidence keeps each nested check only on the drill check's excerpt: the last line, `passed: <ids>`, lists the nested checks that passed (internal/drill writes it, `store.LastVerified` reads it). A format change must change both; a test pins them together.
+- The linux `ci-isolation-linux.yml` pull-request job runs the drill against a throwaway store and fails unless doctor shows a non-null `verified_at` for `isolation.container`, `isolation.sandboxed-container` and `isolation.network`.
+
+## Whether each level can run now
+
+`nself ci doctor` also probes every isolation profile and prints one `isolation.<level>.availability` line per level (`isolation.container.availability`, `isolation.sandboxed-container.availability`, `isolation.vm.availability`, `isolation.ephemeral-vm.availability`). Each reads `available (<level>)` or `unavailable: <reason>`, such as `isolation.runtime_missing`, `isolation.tart_base_image` or `isolation.tart_no_free_slot`.
+
+For an unavailable level the line carries the fix as its `remediation` (the install steps: Tart from `brew install cirruslabs/cli/tart`, gVisor from its install page then `sudo runsc install`) and prints the profile facts under it. For Tart the facts are `tart_version`, `base_image`, `base_image_cached`, `free_slots`, `running_vms`, `softnet_block` and `licence_note`: Tart and softnet are third-party tools under their own licences, you install them, nSelf neither bundles nor redistributes them. An unavailable level is not a failure: these lines always pass, because a host without Tart or gVisor is a normal state.
+
+## Residual risks
+
+These risks stay after every control above is built. They are repeated here from the threat model so you can judge them.
+
+1. **A container is not a boundary for hostile code.** The `container` level protects against mistakes and trusted-code accidents. Untrusted work never runs at that level.
+2. **No Linux microVM.** Linux `vm` and `ephemeral-vm` report `unavailable` because no KVM host exists for nSelf to use (D-0120). Untrusted work runs under gVisor or on hosted-disposable. Linux release jobs use a dedicated trusted runner.
+3. **gVisor residuals.** The host kernel is shared through the Sentry's seccomp-filtered syscall set. There is no protection against side channels (Spectre-class, cache timing). `runsc` has its own CVEs. Resource exhaustion beyond cgroup limits is possible. gVisor is not a VM.
+4. **The I17 exception.** An owner `process`-level job from the operator's own PERSONAL coordinator runs under the operator's UID on a non-separated node whose key is `signing_eligible` false and to which TEAM coordinators never lease. The same exception covers a user-mode macOS node. A `--trust owner` override on hostile code lets that job read the PERSONAL coordinator's store and CA key. The node can neither sign evidence nor receive secret classes.
+5. **dockerd keeps `-e` values until the container is removed.** `--rm` and the hygiene sweep remove it. Anyone with Docker access on the node can read the value until then.
+6. **Runner credential.** The job shares the runner's container and user and can read the runner's own JIT config, which admits only this one job. For GitLab the token stays valid until the runner is deleted, so the pause on the running job hook and the delete at job end are the controls.
+7. **Legacy `ci serve` until v1.6.** The frozen v1.4 engine keeps today's allowlisted-fork plain-docker behaviour until v1.6 (D-0119). The controls on this page run only in the V15 engine.
+8. **Redaction limits.** A value shorter than 6 bytes cannot be registered (the redactor refuses it with `E673`, and the attempt then fails with `E676` before it starts). An encoding the redactor does not list (compression, a split across lines, a derived hash) can pass. Redaction is the last defence. The first defence is that untrusted jobs never receive a value.
+9. **The machine-invoked cap is advisory for CLI agents.** An agent that uses the CLI controls its own environment, so `NSELF_INVOKED_BY` can be unset. The MCP and HTTP invoker always sets it.
+10. **Audit log in PERSONAL mode.** The chain detects edits that were not recomputed. PERSONAL has no off-host checkpoint, so a writer who recomputes the chain is not detected.
+11. **Hosted providers.** nSelf cannot verify a provider's isolation. Hosted evidence stays `self-reported`. A provider sees everything sent to it once the zone allows a send.
+12. **Tart.** If the installed Tart lacks the softnet block option, `vm` is `unavailable` for untrusted work.
+13. **In-stack runner decisions.** The forgejo plugin keeps the forge and loses its runner. github-runner stays, trusted-only, with isolation `process`, persistent, on the same host as the stack, and not for fork PRs. `GITHUB_RUNNER_ALLOW_PUBLIC_REPOS=true` is an unsafe opt-out that is logged on every start. The production check records what runs and changes nothing.
+14. **The operator's machine is the root of trust.** A compromised operator workstation defeats every control that lives there.
+15. **Watch host identity.** Whoever holds the forge token of a watch host's station identity writes statuses that count as trusted claims and results. The ledger cannot tell a stolen token from the host. Rotate the token and list `claims.trusted_creators` narrowly.
+16. **Authorized personal nodes.** When a person authorizes their own node for a team's private project, that node sees the project's code by design. The controls decide which node is chosen; they do not hide code from a node the project authorizes.

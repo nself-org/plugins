@@ -1,0 +1,15 @@
+{
+  "schema": "perfbench/v1",
+  "budgets": [
+    {
+      "metric": "restore_ms",
+      "unit": "ms",
+      "p95_max": 250
+    },
+    {
+      "metric": "save_ms",
+      "unit": "ms",
+      "p95_max": 220
+    }
+  ]
+}

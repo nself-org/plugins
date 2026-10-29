@@ -7,12 +7,21 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.12 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install webhooks` |
 | **Commands** | `nself webhooks` |
 | **Requirements** | nSelf >=0.9.9 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself webhooks` | - | - | read | document | CLI only (json None) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue for nself. Reliably deliver events from your application to external endpoints with automatic retries and comprehensive delivery tracking.
 

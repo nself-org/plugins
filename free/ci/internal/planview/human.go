@@ -4,7 +4,10 @@ package planview
 // `ci explain` (the chosen runner and every alternative).
 // Inputs: a model.PlacementPlan. Outputs: strings; no colour, no timestamps.
 // Constraints: secret classes by name only; an unknown value prints as
-// "unknown", never as 0; alternatives print in the document's order (runner id).
+// "unknown", never as 0; alternatives print in the document's order (runner id);
+// the `auto` preset adds the chosen runner's tier and bias and the tier.waiting
+// detail (the held better runner and the wait left), every other preset's
+// lines are unchanged.
 
 import (
 	"fmt"
@@ -12,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
 // Cells returns one PLACEMENT cell per job, in job order.
@@ -35,7 +39,18 @@ func cell(j model.JobPlacement) string {
 	if len(codes) == 0 {
 		return j.Status
 	}
-	return j.Status + ": " + strings.Join(codes, ",")
+	text := j.Status + ": " + strings.Join(codes, ",")
+	for _, r := range j.Reasons {
+		if r.Code == string(model.TierWaiting) && r.Detail != "" {
+			text += " (" + r.Detail + ")"
+		}
+	}
+	return text
+}
+
+// tierText is the chosen runner's tier and its tier_rank bias under `auto`.
+func tierText(pl *model.Placement) string {
+	return fmt.Sprintf("  tier %s  bias %d", sched.TierFor(pl.Location, pl.CostClass), pl.Components["tier_rank"].ValueMs)
 }
 
 func costText(e model.Estimate) string {
@@ -113,7 +128,11 @@ func ExplainLines(p model.PlacementPlan, source string) []string {
 			out = append(out, fmt.Sprintf("  reason  %s  %s", r.Code, r.Detail))
 		}
 		if pl := j.Placement; pl != nil {
-			out = append(out, fmt.Sprintf("  chosen  %s  provider %s  %s  %s  score %d  cost %s", pl.RunnerID, orNone(pl.Provider), pl.Location, pl.CostClass, pl.Score, costText(pl.Estimate)))
+			line := fmt.Sprintf("  chosen  %s  provider %s  %s  %s  score %d  cost %s", pl.RunnerID, orNone(pl.Provider), pl.Location, pl.CostClass, pl.Score, costText(pl.Estimate))
+			if p.Pipeline.Preset == sched.AutoPreset {
+				line += tierText(pl)
+			}
+			out = append(out, line)
 			out = append(out, "    "+componentText(pl.Components))
 		}
 		chosen := ""

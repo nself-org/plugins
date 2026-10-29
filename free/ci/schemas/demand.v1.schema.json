@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contract:ci.demand/v1",
+  "title": "CI Demand v1",
+  "description": "Host-level CI demand document published atomically every watcher pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ts",
+    "host",
+    "queued",
+    "held",
+    "running",
+    "ready",
+    "ready_why",
+    "watcher"
+  ],
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC RFC3339 timestamp of this publication."
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Hostname that published this document."
+    },
+    "queued": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of queued work items across watched repos."
+    },
+    "held": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of held work items."
+    },
+    "running": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of currently running work items."
+    },
+    "ready": {
+      "type": "boolean",
+      "description": "Whether the host is ready to accept new CI work."
+    },
+    "ready_why": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Reasons the host is not ready; empty when ready."
+    },
+    "watcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alive",
+        "last_pass",
+        "interval_sec"
+      ],
+      "properties": {
+        "alive": {
+          "type": "boolean",
+          "description": "True when the watcher loop is publishing."
+        },
+        "last_pass": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC RFC3339 timestamp of the last watcher pass."
+        },
+        "interval_sec": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Configured watcher interval in seconds."
+        }
+      }
+    }
+  }
+}

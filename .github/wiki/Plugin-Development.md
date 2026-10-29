@@ -1,6 +1,6 @@
 # Plugin Development
 
-This page walks through building a new nSelf plugin from empty directory to shipped service. It targets free + pro plugins written in Go against [`plugin-sdk-go`](https://github.com/nself-org/plugin-sdk-go).
+This page walks through building a new nSelf plugin from empty directory to shipped service. It targets free and licensed plugins written in Go against [`plugin-sdk-go`](https://github.com/nself-org/plugin-sdk-go).
 
 See also:
 - [[Home]]
@@ -219,11 +219,11 @@ log.Error("upstream 5xx", "err", err, "retry", 2)
 
 ---
 
-## 6. License (Pro Plugins Only)
+## 6. License (Licensed Plugins Only)
 
 Free plugins: skip this section.
 
-Pro plugins rely on the CLI loader to gate install. At runtime, use `sdk/license` only if you need to re-check a long-running entitlement (e.g. a daily cron):
+Licensed plugins rely on the CLI loader to gate install. At runtime, use `sdk/license` only if you need to re-check a long-running entitlement (e.g. a daily cron):
 
 ```go
 import "github.com/nself-org/plugin-sdk-go/license"
@@ -300,7 +300,7 @@ Minimum fields:
 }
 ```
 
-Pro plugins additionally set:
+Licensed plugins additionally set:
 
 ```json
 {
@@ -329,7 +329,7 @@ nself plugin verify my-notifier
 # Package it
 nself plugin package my-notifier
 
-# Submit (free plugins → plugins repo PR; pro plugins → plugins-pro via invite)
+# Submit (free plugins → plugins repo PR; licensed plugins → the Bundles repo via invite)
 nself plugin submit my-notifier
 ```
 

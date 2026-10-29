@@ -30,6 +30,9 @@ type Evidence struct {
 	Freshness            Freshness            `json:"freshness"`
 	Signature            Signature            `json:"signature"`
 	ProviderAttestation  *ProviderAttestation `json:"provider_attestation,omitempty"`
+	// P7-AUTO-21, additive within v1: per-attempt runner and timings, and coded infra errors.
+	Attempts []AttemptEvidence `json:"attempts,omitempty"`
+	Errors   []EvidenceError   `json:"errors,omitempty"`
 }
 
 // Pipeline is one planned run and its selected jobs.

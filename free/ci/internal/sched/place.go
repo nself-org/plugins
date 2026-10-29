@@ -13,7 +13,7 @@ func Place(w World, jobs []Job) Result {
 	w.Budgets.Providers = copyBudgets(w.Budgets.Providers)
 	runners := append(append([]Runner(nil), w.Runners...), w.Hosted...)
 	sort.Slice(runners, func(i, j int) bool { return runners[i].ID < runners[j].ID })
-	result := Result{Placements: []Placement{}, Explanations: []Explanation{}, FastPath: fastPath(w, jobs, runners)}
+	result := Result{Placements: []Placement{}, Explanations: []Explanation{}, FastPath: placementFastPath(w, jobs, runners)}
 	for _, j := range jobs {
 		x := Explanation{JobKey: j.Key, Alternatives: []model.Alternative{}, Reasons: []model.PlacementReasonDetail{}}
 		if !has(j.Pipeline.Support, j.Requirements.Platform) {
@@ -92,7 +92,10 @@ func Place(w World, jobs []Job) Result {
 			}
 			x.Alternatives = append(x.Alternatives, alt)
 		}
-		if best != nil {
+		if hold, held := tierHold(w, j, runners, x.Alternatives, bestIndex); best != nil && held {
+			x.Status = "waiting" // the auto preset waits a bounded step for a busy better tier
+			x.Reasons = append(x.Reasons, hold)
+		} else if best != nil {
 			x.Status = "placed"
 			result.Placements = append(result.Placements, *best)
 			w.reservePlacement(&runners[bestIndex], *best)

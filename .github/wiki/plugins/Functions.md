@@ -7,12 +7,25 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.11 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install functions` |
 | **Commands** | `nself functions`: `delete`, `deploy`, `invoke`, `list`, `logs` |
 | **Requirements** | nSelf >=1.4.12 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself functions delete` | `nself_functions_delete` | `/v1/commands/functions/delete` | destructive | document | MCP and HTTP | nonce |
+| `nself functions deploy` | `nself_functions_deploy` | `/v1/commands/functions/deploy` | write | document | MCP and HTTP | none |
+| `nself functions invoke` | `nself_functions_invoke` | `/v1/commands/functions/invoke` | write | document | MCP and HTTP | none |
+| `nself functions list` | `nself_functions_list` | `/v1/commands/functions/list` | read | document | MCP and HTTP | none |
+| `nself functions logs` | `nself_functions_logs` | `/v1/commands/functions/logs` | read | document | MCP and HTTP | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Deploy and manage nself serverless functions.
 

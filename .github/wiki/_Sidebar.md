@@ -38,7 +38,7 @@
 - [[Realtime|plugins/Realtime]]
 - [[Analytics|plugins/Analytics]]
 
-**View All:** [[Home|Home#plugin-directory-64-of-129-shown]] (or see the full alphabetical list below — 129/129 synced with `registry.json`)
+**View All:** [[Home|Home#plugin-directory-sample]] (or see the full alphabetical list below, synced with `registry.json`)
 
 ### All Free Plugins
 - [[Access-Controls|plugins/Access-Controls]]
@@ -162,13 +162,27 @@
 - [[Tokens|plugins/Tokens]]
 - [[Torrent-Manager|plugins/Torrent-Manager]]
 - [[Traefik|plugins/Traefik]]
-- [[Transactional-Email|plugins/Transactional-Email]]
 - [[VPN|plugins/VPN]]
 - [[WAF|plugins/WAF]]
 - [[Watchdog|plugins/Watchdog]]
 - [[Web3|plugins/Web3]]
 - [[Webhooks|plugins/Webhooks]]
 - [[Workflows|plugins/Workflows]]
+
+<!-- BEGIN GENERATED:guides-ci -->
+### CI
+- [[Evidence and machine output|guides/ci/Evidence-and-Machine-Output]]
+- [[Nodes and Runners|guides/ci/Nodes-and-Runners]]
+- [[CI trust, security and privacy|guides/ci/Trust-Security-and-Privacy]]
+- [[CI scheduling and cost|guides/ci/Scheduling-and-Cost]]
+- [[Hosted providers|guides/ci/Hosted-Providers]]
+- [[Cache and artifacts|guides/ci/Cache-and-Artifacts]]
+- [[CI reference|guides/ci/Reference]]
+- [[CI agent reference|guides/ci/Agent-Reference]]
+- [[Auto placement and pools|guides/ci/Auto-Placement-and-Pools]]
+- [[Watch and services|guides/ci/Watch-and-Services]]
+- [[macOS node ownership checks|guides/ci/macOS-Nodes]]
+<!-- END GENERATED:guides-ci -->
 
 ### Guides
 - [[Configuration|guides/Configuration]]
@@ -191,5 +205,5 @@
 
 **Related**
 - [nSelf CLI Wiki](https://github.com/nself-org/cli/wiki)
-- [Pro Plugins](https://github.com/nself-org/plugins-pro)
+- [Licensed Plugins (Bundles)](https://github.com/nself-org/bundles)
 - [nself.org Plugin Catalog](https://nself.org/plugins)

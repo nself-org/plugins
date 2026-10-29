@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.nself.org/ci-conformance.v1.schema.json",
+  "title": "ci-conformance/v1 leg line",
+  "description": "One line of free/ci/scripts/ci-conformance.sh --json: a leg result, a catalogue row (--list) or the final summary.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["leg", "pass", "reason", "evidence_ref", "duration_ms"],
+      "properties": {
+        "schema": { "const": "ci-conformance/v1" },
+        "leg": { "type": "string", "pattern": "^(A([1-9]|10)|F[0-9]+)$" },
+        "kind": { "enum": ["sim", "hardware"] },
+        "status": { "enum": ["pass", "fail", "skip"] },
+        "pass": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "evidence_ref": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["id", "kind", "path"],
+      "properties": {
+        "schema": { "const": "ci-conformance/v1" },
+        "id": { "type": "string", "pattern": "^(A([1-9]|10)|F[0-9]+)$" },
+        "kind": { "enum": ["sim", "hardware"] },
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["summary"],
+      "properties": {
+        "schema": { "const": "ci-conformance/v1" },
+        "summary": {
+          "type": "object",
+          "required": ["kind", "pass", "fail", "skip"],
+          "properties": {
+            "kind": { "enum": ["sim", "hardware"] },
+            "pass": { "type": "integer", "minimum": 0 },
+            "fail": { "type": "integer", "minimum": 0 },
+            "skip": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

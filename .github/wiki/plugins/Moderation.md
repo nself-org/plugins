@@ -1104,5 +1104,6 @@ ORDER BY created_at DESC;
 ---
 
 **Last Updated**: February 11, 2026
+
 **Plugin Version**: 1.0.0
 **Minimum nself Version**: 0.4.8

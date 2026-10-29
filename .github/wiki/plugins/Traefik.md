@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.7 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install traefik` |
 | **Requirements** | nSelf >=1.4.12 |
 

@@ -35,8 +35,8 @@ Command pages include action/subcommand syntax, argument shapes, and option flag
 
 ### Plugin Documentation
 
-<!-- Registry has 129 free plugins across 14 categories, generated via `jq '.plugins|length' registry.json` — the table below (64 rows) is a partial sample pending full regen (P6-E9-W4-S3-T2 tracks the related F03 SPORT regen); see `_Sidebar.md` § All Free Plugins or `.github/wiki/plugins/` for the complete 129-plugin list. -->
-See [[All Plugins|#plugin-directory-64-of-129-shown]] below for a sample; the full catalog is 129 free plugins across 14 categories (see `_Sidebar.md` § All Free Plugins for the complete alphabetical list, or `registry.json`).
+<!-- The plugin count and categories are generated from `registry.json` (`jq '.plugins|length' registry.json`); this page does not type them. The table below is a partial sample. -->
+See [[All Plugins|#plugin-directory-sample]] below for a sample; the full catalog is in `_Sidebar.md` § All Free Plugins and in `registry.json`.
 
 **Popular Plugins:**
 - [[Stripe|plugins/Stripe]] - Payment processing and subscription management
@@ -101,10 +101,10 @@ Legacy `docs/` is retired. Public docs belong in `.github/wiki/` only.
 2. Commands in `Commands.md` and `commands/*.md` must match action/CLI source files.
 3. Any drift between code and docs is treated as a defect.
 
-## Plugin Directory (64 of 129 Shown)
+## Plugin Directory (Sample)
 
-<!-- Registry (129 plugins) uses 14 canonical categories per registry.json; this sample table's category column is synced to those values. -->
-This is a partial sample (64 of 129 free plugins). Registry categories (14, from `registry.json`): **authentication**, **automation**, **commerce**, **communication**, **compliance**, **content**, **data**, **development**, **infrastructure**, **integrations**, **media**, **social**, **sports**, **streaming**.
+<!-- Categories come from registry.json; this sample table's category column is synced to those values. -->
+This is a partial sample of the free plugins. Registry categories, from `registry.json`: **authentication**, **automation**, **commerce**, **communication**, **compliance**, **content**, **data**, **development**, **infrastructure**, **integrations**, **media**, **social**, **sports**, **streaming**.
 
 | Plugin | Port | Category | Description |
 |--------|------|----------|-------------|

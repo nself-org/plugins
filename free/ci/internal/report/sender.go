@@ -120,7 +120,7 @@ func (d *Sender) Complete(ctx context.Context, seq int64, s Status) error {
 	if err != nil {
 		return err
 	}
-	if err = d.Store.OutboxReady(ctx, s.Revision, key(s.Owner, s.Repo), seq, body); err != nil {
+	if err = d.Store.OutboxReady(ctx, s.Revision, keyFor(s), seq, body); err != nil {
 		return err
 	}
 	_, err = d.Drain(ctx)

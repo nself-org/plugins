@@ -280,7 +280,7 @@ GOOGLE_KEY=...
 - Media: 3700-3799
 - Streaming: 3800-3899
 - Development: 3900-3999
-- Integrations: 4000-4099
+- Integration services: 4000-4099
 
 **Note**: Port ranges are guidelines only. Existing ports should not be changed without coordination.
 

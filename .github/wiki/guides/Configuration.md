@@ -23,7 +23,7 @@
 
 ## Overview
 
-All nself plugins are configured via environment variables, typically stored in `.env` files. This guide provides a complete reference for all configuration options across all 8 plugins.
+All nself plugins are configured via environment variables, typically stored in `.env` files. This guide provides a complete reference for all configuration options across the plugins covered here.
 
 ### Configuration Principles
 
@@ -1188,7 +1188,7 @@ If environment variables aren't loading:
 ls -la plugins/stripe/ts/.env
 
 # Check permissions
-chmod 600 plugins/stripe/ts/.env
+chmod 0600 plugins/stripe/ts/.env
 
 # Validate syntax (no spaces around =)
 # WRONG: STRIPE_API_KEY = sk_test_123

@@ -7,12 +7,28 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | experimental ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install infra` |
 | **Commands** | `nself infra`: `apply`, `destroy`, `plan`, `server destroy`, `server list`, `server provision`, `server resize`, `validate` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself infra apply` | - | - | remote | document | CLI only (surface cli-only) | none |
+| `nself infra destroy` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself infra plan` | - | - | read | document | CLI only (json legacy) | none |
+| `nself infra server destroy` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself infra server list` | - | - | read | document | CLI only (surface cli-only) | none |
+| `nself infra server provision` | - | - | remote | document | CLI only (surface cli-only) | none |
+| `nself infra server resize` | - | - | remote | document | CLI only (surface cli-only) | none |
+| `nself infra validate` | - | - | read | document | CLI only (json legacy) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Provisions nSelf infrastructure on Hetzner Cloud via OpenTofu/Terraform.
 

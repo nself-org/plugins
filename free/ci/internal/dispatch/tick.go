@@ -80,7 +80,7 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 		if pr.err != nil || len(pr.jobs) == 0 {
 			continue
 		}
-		res := place(pr.world, pr.jobs)
+		res := place(pr.world, pr.jobs, now)
 		pr.placed, pr.explained = map[string]sched.Placement{}, map[string]sched.Explanation{}
 		for _, p := range res.Placements {
 			pr.placed[p.JobKey] = p
@@ -123,11 +123,16 @@ func (d *Dispatcher) buildWorlds(ctx context.Context, ordered []Queued) (map[str
 	return runs, first
 }
 
-// place hands every queued job, in the given order, to sched.Place.
-func place(w sched.World, ordered []Queued) sched.Result {
+// place hands every queued job, in the given order, to sched.Place. Each job's
+// QueuedMs is how long it has waited at now (never negative: a clock that went
+// back reads as no wait), so the scheduler itself never reads a clock.
+func place(w sched.World, ordered []Queued, now time.Time) sched.Result {
 	jobs := make([]sched.Job, len(ordered))
 	for i, q := range ordered {
 		jobs[i] = q.Job.Sched
+		if !q.EnqueuedAt.IsZero() {
+			jobs[i].QueuedMs = max(0, now.Sub(q.EnqueuedAt).Milliseconds())
+		}
 	}
 	return sched.Place(w, jobs)
 }
@@ -137,7 +142,7 @@ func place(w sched.World, ordered []Queued) sched.Result {
 // returns are what a tick would try to admit, in that order.
 func (d *Dispatcher) Plan(w sched.World, queued []Queued) ([]Queued, sched.Result) {
 	ordered := d.cfg.Orderer.Order(queued)
-	return ordered, place(w, ordered)
+	return ordered, place(w, ordered, d.cfg.Clock())
 }
 
 // settle admits one job's placement, or explains why it waits, and records the decision.
