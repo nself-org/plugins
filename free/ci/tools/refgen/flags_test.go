@@ -36,6 +36,8 @@ func TestReferenceListsListenerAndPackageFlags(t *testing.T) {
 // owner (found by P7-AUTO-13/generator-gaps work, reported, not guessed).
 var unmappedFlagPackages = map[string]string{
 	"bench/cache/cmd/cachebench":        "benchmark tool, not a nself ci command",
+	"bench/cmd/cibench":                 "benchmark tool, not a nself ci command",
+	"bench/cmd/schedbench":              "benchmark tool, not a nself ci command",
 	"cmd/agent":                         "the nself-ci-agent binary has its own CLI",
 	"internal/agent/update":             "agent upgrade CLI (nself-ci-agent)",
 	"internal/gates/truth":              "gate helper CLI; owner command not mapped",
