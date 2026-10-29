@@ -353,7 +353,7 @@
         "name": "forgejo",
         "output": "document",
         "side_effect": "read",
-        "summary": "Show Forgejo server + runner health (ops profile)"
+        "summary": "Show Forgejo server health (ops profile)"
       },
       {
         "args": [

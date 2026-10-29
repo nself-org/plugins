@@ -144,7 +144,7 @@ commands:
       - {name: "runner", type: "string"}
       - {name: "trigger", type: "string"}
   - path: forgejo
-    summary: "Show Forgejo server + runner health (ops profile)"
+    summary: "Show Forgejo server health (ops profile)"
     side_effect: read
     output: document
     json: none
