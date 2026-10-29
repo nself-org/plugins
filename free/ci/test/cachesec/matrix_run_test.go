@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -79,7 +80,8 @@ func (r *rig) run(id string) (error, string) {
 		return r.remoteWrite(id), ""
 	case "restore-traversal", "restore-absolute", "restore-symlink", "restore-hardlink", "restore-fifo", "restore-device",
 		"restore-ratio", "secret-snapshot", "corrupt-local", "partial-local":
-		return r.restore(id), ""
+		err := r.restore(id)
+		return err, r.note
 	case "cache-secret-raw", "cache-secret-base64", "artifact-secret-raw", "artifact-secret-base64":
 		return r.secret(id), ""
 	case "artifact-overwrite", "artifact-substitution":
@@ -126,6 +128,9 @@ func TestCacheSecMatrix(t *testing.T) {
 			} else {
 				row.Outcome = "refused"
 				row.Code, row.Reason = observe(err)
+				if row.Reason == "" && c.Reason != "" && strings.Contains(err.Error(), c.Reason) {
+					row.Reason, row.Note = c.Reason, "reason key read from the error text (the error type has no Reason field)"
+				}
 			}
 			if c.Expected == "refused" {
 				row.AuditFound = r.audit(c.Audit, c.Reason)

@@ -30,6 +30,7 @@ type rig struct {
 	engine  *specs.Engine
 	red     *redact.Redactor
 	audits  []store.AuditRow
+	note    string // set by a runner when the admitted action was a clean miss rather than a restore
 }
 
 func newRig(t *testing.T) *rig {
