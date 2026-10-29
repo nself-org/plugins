@@ -10,14 +10,16 @@ package signing
 // the repository of the stored evidence and the revision of the run; the
 // resolved dependencies hold the git commit of that revision; the invocation
 // id is "<run id>/<attempt id>" of a passed attempt of a release job of the
-// run; the job is the attempt's job, the builder id is a release builder id and
+// run; the job is the attempt's job, the builder id names the recorded coordinator and
 // the evidence.json byproduct carries the stored evidence digest; everything
 // else in the predicate is carried through unchecked.
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
 )
 
@@ -54,7 +56,7 @@ type predicate struct {
 }
 
 // checkPredicate validates the predicate and returns the release attempt it names.
-func (f *runFacts) checkPredicate(raw json.RawMessage) (string, error) {
+func (f *runFacts) checkPredicate(ctx context.Context, raw json.RawMessage) (string, error) {
 	var p predicate
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return "", Failf(ReasonPayloadRejected, "statement: the predicate is not a SLSA provenance v1 object")
@@ -70,7 +72,7 @@ func (f *runFacts) checkPredicate(raw json.RawMessage) (string, error) {
 	if !ok || !f.passedRelease(attempt) {
 		return "", Failf(ReasonPayloadRejected, "statement: invocationId is not <run>/<passed release attempt> of this run")
 	}
-	if bd.ExternalParameters.Job != f.jobName(attempt) || !strings.HasPrefix(p.RunDetails.Builder.ID, builderPrefix) || !f.byproduct(p, manifest.EvidencePath, f.evDigest) {
+	if bd.ExternalParameters.Job != f.jobName(attempt) || !f.builderMatches(ctx, attempt, p.RunDetails.Builder.ID) || !f.byproduct(p, manifest.EvidencePath, f.evDigest) {
 		return "", Failf(ReasonPayloadRejected, "statement: job, builder id or the evidence byproduct differ from the stored run")
 	}
 	return attempt, nil
@@ -124,4 +126,23 @@ func (f *runFacts) pinsRevision(p predicate) bool {
 		pinned++
 	}
 	return pinned == 1
+}
+
+// builderMatches binds the builder to the coordinator recorded on the release
+// attempt. Public repositories use its stable per-repository pseudonym.
+func (f *runFacts) builderMatches(ctx context.Context, attempt, id string) bool {
+	coord, err := f.src.AttemptCoordinator(ctx, attempt)
+	if err != nil {
+		return false
+	}
+	if coord == "" {
+		coord = "local"
+	}
+	public := attest.ProfileFor(attest.RepoFacts{RepoID: f.evidence.RepoID}).CoordinatorID(coord)
+	for _, c := range []string{coord, public} {
+		if runner, ok := strings.CutPrefix(id, builderPrefix+c+"/"); ok && runner != "" && !strings.Contains(runner, "/") {
+			return true
+		}
+	}
+	return false
 }

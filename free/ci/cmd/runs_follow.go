@@ -11,13 +11,15 @@ package main
 // usage) or 2 (the stream failed or the run died before it finished).
 // Constraints: read class (HTTP serves it as NDJSON, MCP lists no tool for it);
 // a run started with `--detach` replays its own event file byte for byte; any
-// other run (foreground, or on a coordinator) gets the records rebuilt from its
-// observable state, the store keeps no event log (event_index is not written);
+// other new run replays its durable event_index journal; older runs without
+// a journal fall back to state reconstruction;
 // a run that died without a result ends with an E648 child_exit error line.
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -78,6 +80,25 @@ func runFollow(args []string) int {
 	}
 	if path := detach.StreamPath(detach.Home(""), v.RunID); path != "" {
 		return followFile(ctx, src, v.RunID, path, f.from)
+	}
+	if src.remote {
+		if stream, ok := src.resolver.(interface {
+			FollowEvents(context.Context, string, int64, io.Writer) (int, error)
+		}); ok {
+			code, err := stream.FollowEvents(ctx, v.RunID, f.from, os.Stdout)
+			if err != nil {
+				return followFail(err, "", 2)
+			}
+			return code
+		}
+	}
+
+	records, err := src.events(ctx, v.RunID, 0)
+	if err != nil {
+		return followFail(err, "", 2)
+	}
+	if len(records) > 0 || (!src.remote && !detach.Terminal(v.State)) {
+		return followJournal(ctx, src, v, f.from)
 	}
 	return followSynth(ctx, src, v, f.from)
 }
@@ -189,4 +210,58 @@ func followFail(err error, msg string, exit int, code ...string) int {
 		_, _ = os.Stdout.Write(b)
 	}
 	return exit
+}
+
+// followJournal replays durable records from the local coordinator store.
+func followJournal(ctx context.Context, src *runSource, v detach.View, from int64) int {
+	last := int64(0)
+	terminalSince := time.Time{}
+	for {
+		records, err := src.events(ctx, v.RunID, last+1)
+		if err != nil {
+			return followFail(err, "", 2)
+		}
+		for _, raw := range records {
+			rec, ok := detach.ParseLine(raw)
+			if !ok {
+				return followFail(nil, "invalid stored event", 2)
+			}
+			if rec.Seq <= last {
+				continue
+			}
+			last = rec.Seq
+			if rec.Final() || rec.Seq >= from {
+				if _, err := os.Stdout.Write(append(append([]byte(nil), rec.Raw...), '\n')); err != nil {
+					return 2
+				}
+			}
+			if rec.Final() {
+				return 0
+			}
+		}
+		if detach.Terminal(v.State) {
+			if terminalSince.IsZero() {
+				terminalSince = time.Now()
+			}
+			if time.Since(terminalSince) >= followIdle {
+				return followFail(nil, "the run ended without a journal result", 2, detach.CodeID)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return followFail(ctx.Err(), "", 1)
+		case <-time.After(waitPoll):
+		}
+		v, err = src.View(ctx)
+		if err != nil {
+			return followFail(err, "", 2)
+		}
+	}
+}
+
+func (s *runSource) events(ctx context.Context, run string, from int64) ([]json.RawMessage, error) {
+	if s.st == nil {
+		return nil, nil
+	}
+	return s.st.RunEventsFrom(ctx, run, from)
 }

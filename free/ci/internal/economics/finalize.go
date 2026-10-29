@@ -103,3 +103,17 @@ func Actual(row store.LedgerRow, observed time.Duration, start, end int64) (ms, 
 	}
 	return ms, micro, conf
 }
+
+// RecoverRun settles using the recovery caller's store. No spend policy or
+// process-wide Env is needed: the admitted row retains its original rate.
+func (finalizer) RecoverRun(ctx context.Context, st *store.Store, runID string) error {
+	rows, err := st.LedgerOpen(ctx, runID)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, row := range rows {
+		errs = append(errs, settle(ctx, st, row, 0))
+	}
+	return errors.Join(errs...)
+}

@@ -9,7 +9,7 @@ A job at this level runs in a Docker or Podman container that the isolation prof
 Every container gets:
 
 - `--cap-drop=ALL`, `--security-opt no-new-privileges` and a read-only root filesystem, with a 256 MB `/tmp`.
-- A numeric user, `65532 + slot`, never root and never the agent's own UID. Two concurrent attempts that share a home never share a slot.
+- A numeric user, `65532 + slot`, never root and never the agent's own UID. On Linux, kernel leases keep slots distinct across coordinators, CI homes and OS users in the host network namespace. Leases disappear when the holder exits. Coordinators using one rootful Docker daemon must share that namespace; other platforms retain home-scoped locks.
 - A pids, memory and CPU limit.
 - Network `none` unless the job asks for more. `restricted` and `internet` go through a per-attempt proxy (see Network scopes). `lan` is NAT on the default bridge; it does not block the host gateway, which is why an untrusted job can never have it.
 - One bind mount, the attempt workspace at `/repo`. A cache restore may add read-only binds. Read-write host mounts, runtime sockets, `/var/run`, `/run` and system directories are refused.

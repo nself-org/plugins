@@ -6,7 +6,7 @@ package clientapi
 // Inputs:  the run in the path or the `run` query, `from` (first event seq wanted), `after`, `attempt`,
 //          `follow`.
 // Outputs: NDJSON lines flushed as they exist; the evidence body.
-// Constraints: the event stream is rebuilt from run state by detach.Synth, so a run always yields the same
+// Constraints: durable event journals are replayed byte for byte; legacy runs fall back to detach.Synth, with stable
 //          records and seqs and a client that reconnects with from=lastSeq+1 gets no duplicate and no gap;
 //          a stream never outlives Config.MaxLife; the evidence body is the stored signed bytes, never
 //          re-encoded; a log stream carries stored (already redacted) lines only.
@@ -72,6 +72,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
 	ctx, stop := s.streamContext(r)
 	defer stop()
+	if s.journalEvents(ctx, w, r, it, from) {
+		return
+	}
 	synth := detach.NewSynth(startNDJSON(w), it.ID, from)
 	tick := time.NewTicker(s.cfg.Poll)
 	defer tick.Stop()

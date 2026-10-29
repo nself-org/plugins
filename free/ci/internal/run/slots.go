@@ -2,10 +2,11 @@ package run
 
 // Purpose: give each concurrent container attempt its own execution slot, so the isolation
 // profile derives a distinct job UID (65532 + slot, Epic D12), across coordinators too.
-// Inputs:  take(dir)/put(n) around the executor call; dir is <home>/slots.
-// Outputs: the lowest slot nobody holds, in this process or in another one using the same home.
-// Constraints: another process's hold is an advisory flock on <dir>/slot-<n>.lock (released by
-// the kernel if that process dies); where locking is unavailable the slot is process-local.
+// Inputs: take(dir)/put(n) around the executor call; Linux uses host-wide leases.
+// Outputs: the lowest unheld slot, shared across Linux coordinators and OS users.
+// Constraints: Linux uses abstract Unix sockets in the host network namespace;
+// other Unix platforms use advisory flock files under the home. Both are released
+// by the kernel if the holder dies; Windows remains process-local.
 // The node's slot lease (P7-NODE-23) supersedes this by setting JobSpec.Slot itself.
 
 import (
@@ -19,19 +20,34 @@ type slotPool struct {
 	held map[int]*os.File // nil file: held in this process only
 }
 
-// slotDir is where the slot locks live for a run home.
+// resolveCIHome returns the CI state directory: Options.Home, else NSELF_CI_HOME,
+// else ~/.nself/ci. It is independent of slot allocation so hygiene targets the
+// real workspace even on Linux, where slots live in an abstract socket namespace.
+func resolveCIHome(home string) string {
+	if home != "" {
+		return home
+	}
+	if home = os.Getenv("NSELF_CI_HOME"); home != "" {
+		return home
+	}
+	user, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(user, ".nself", "ci")
+}
+
+// slotDir selects the host namespace on Linux, otherwise the run home locks.
+// It must NOT be used to derive the CI home; use resolveCIHome for that.
 func slotDir(home string) string {
-	if home == "" {
-		home = os.Getenv("NSELF_CI_HOME")
+	if dir := hostSlots(); dir != "" {
+		return dir
 	}
-	if home == "" {
-		user, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		home = filepath.Join(user, ".nself", "ci")
+	h := resolveCIHome(home)
+	if h == "" {
+		return ""
 	}
-	return filepath.Join(home, "slots")
+	return filepath.Join(h, "slots")
 }
 
 // maxSlots bounds the search; take returns -1 (JobUID refuses it, so the attempt fails as

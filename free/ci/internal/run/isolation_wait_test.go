@@ -25,8 +25,10 @@ func (r *refusing) Prepare(_ context.Context, s *ciexec.JobSpec) error {
 
 func waitRun(t *testing.T, iso ciexec.Isolator) (*runState, ciexec.JobSpec) {
 	t.Helper()
+	privateSlots(t)
 	home := t.TempDir()
 	rs := &runState{c: &Coordinator{exec: &ciexec.Executor{Isolation: iso}}, sess: &Session{Home: home}}
+	t.Cleanup(func() { releaseAll(&rs.sess.slots) })
 	return rs, ciexec.JobSpec{AttemptID: "wait-1", CoordinatorID: "coord", Home: home, Command: []string{"true"}, Job: model.Job{Isolation: "process"}}
 }
 

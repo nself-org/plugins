@@ -46,7 +46,8 @@ type fakeSrc struct {
 	evidence []store.EvidenceView
 	recs     []records.Record
 	err      error
-	extra    int // fake rows returned beyond the real ones, to reach the store's row cap
+	coord    *string // the coordinator recorded on the attempt; nil: coordinator-1
+	extra    int     // fake rows returned beyond the real ones, to reach the store's row cap
 }
 
 func (f *fakeSrc) PipelineByID(_ context.Context, id string) (store.PipelineRow, bool, error) {
@@ -76,6 +77,13 @@ func (f *fakeSrc) ArtifactList(_ context.Context, flt records.Filter) ([]records
 		out = append(out, records.Record{ID: "pad", Project: flt.Project, Run: "other"})
 	}
 	return out, f.err
+}
+
+func (f *fakeSrc) AttemptCoordinator(context.Context, string) (string, error) {
+	if f.coord != nil {
+		return *f.coord, f.err
+	}
+	return "coordinator-1", f.err
 }
 
 // fakeBlobs is the blob store: digest -> bytes.
