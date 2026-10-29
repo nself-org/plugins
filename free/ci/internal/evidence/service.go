@@ -268,7 +268,7 @@ func (env Env) recorded(ctx context.Context) func(model.Evidence) *model.Evidenc
 		if err != nil || len(docs) == 0 {
 			return nil
 		}
-		return &docs[0].Evidence
+		return &docs[matchingDoc(ev, docs)].Evidence
 	}
 }
 

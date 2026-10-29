@@ -213,6 +213,17 @@ func sameDocument(a, b model.Evidence) bool {
 	return errA == nil && errB == nil && string(x) == string(y)
 }
 
+// matchingDoc is the index of the stored document of a run that equals ev, else 0 (the newest).
+// A dev run also stores the pools.record refusal copy, so a run can hold more than one genuine document.
+func matchingDoc(ev model.Evidence, docs []Stored) int {
+	for i := range docs {
+		if sameDocument(ev, docs[i].Evidence) {
+			return i
+		}
+	}
+	return 0
+}
+
 // MissingInputs lists the lockfile and generated paths the document binds
 // that do not exist in the tree of the revision.
 func MissingInputs(ev model.Evidence, tree fs.FS) []string {

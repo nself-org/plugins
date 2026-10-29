@@ -50,6 +50,10 @@ func TestUnitGoldens(t *testing.T) {
 					t.Errorf("watch unit missing %q: %s", want, watch)
 				}
 			}
+			// path-valued settings take the path literally: systemd refuses a quoted WorkingDirectory=
+			if want := "WorkingDirectory=" + strings.ReplaceAll(i.Config.Repo, "%", "%%") + "\n"; !strings.Contains(watch, want) {
+				t.Errorf("watch unit missing %q: %s", want, watch)
+			}
 			self := string(files["nself-ci-selftest.service"])
 			if !strings.Contains(self, "Type=oneshot\n") || !strings.Contains(self, "ci doctor --selftest --alert\n") || strings.Contains(self, "Restart=") {
 				t.Fatal(self)

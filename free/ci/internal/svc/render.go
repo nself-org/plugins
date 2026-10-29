@@ -85,6 +85,12 @@ func systemdQuote(s string) string {
 	return strconv.Quote(strings.ReplaceAll(s, "%", "%%"))
 }
 
+// systemdPath escapes a path for a path-valued setting (WorkingDirectory=, EnvironmentFile=).
+// These settings take the value literally and accept no quotes; specifiers still expand.
+func systemdPath(s string) string {
+	return strings.ReplaceAll(s, "%", "%%")
+}
+
 func unit(c Config, path string, selftest bool) string {
 	kind, desc := "simple", "watcher"
 	if selftest {
@@ -95,12 +101,12 @@ func unit(c Config, path string, selftest bool) string {
 	if c.System {
 		b.WriteString("User=nself-ci-watch\nGroup=nself-ci-watch\n")
 	}
-	fmt.Fprintf(&b, "WorkingDirectory=%s\n", systemdQuote(c.Repo))
+	fmt.Fprintf(&b, "WorkingDirectory=%s\n", systemdPath(c.Repo))
 	for _, e := range []string{"PATH=" + path, "HOME=" + c.Home, "NSELF_CI_HOME=" + c.CIHome, "NSELF_CI_REPO=" + c.Repo, "NSELF_V15=1"} {
 		fmt.Fprintf(&b, "Environment=%s\n", systemdQuote(e))
 	}
 	if c.EnvFile != "" {
-		fmt.Fprintf(&b, "EnvironmentFile=%s\n", systemdQuote(c.EnvFile))
+		fmt.Fprintf(&b, "EnvironmentFile=%s\n", systemdPath(c.EnvFile))
 	}
 	fmt.Fprintf(&b, "ExecStart=%s %s\n", systemdQuote(strings.ReplaceAll(c.Binary, "$", "$$")), strings.Join(arguments(selftest), " "))
 	b.WriteString("StandardOutput=journal\nStandardError=journal\nUMask=0077\n")
