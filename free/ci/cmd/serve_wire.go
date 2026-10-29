@@ -85,6 +85,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		return func() {}, err
 	}
 	undoHosted := serveHosted(st, home, cfg.AllowedRepos)
+	undoNetscope := serveNetscope(st, home)
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
@@ -102,7 +103,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
+	return func() { stopBeat(); undoNetscope(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
