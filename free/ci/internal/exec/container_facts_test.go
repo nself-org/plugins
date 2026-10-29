@@ -36,7 +36,7 @@ func TestExit137IsVerifiedAgainstTheRuntime(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fakeRuntime(t, "", "137")
 			fakeEvents(t, tc.events...)
-			res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-137-"+name, hardPlanner{}))
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-137-"+name, hardPlanner{}))
 			if res.Reason != tc.reason {
 				t.Fatalf("reason %q want %q (%+v)", res.Reason, tc.reason, res)
 			}
@@ -48,7 +48,7 @@ func TestExit125IsVerifiedAgainstTheRuntime(t *testing.T) {
 	t.Run("jobs own exit", func(t *testing.T) {
 		fakeRuntime(t, "", "125")
 		fakeEvents(t, "create", "start", "die")
-		res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-125-job", hardPlanner{}))
+		res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-125-job", hardPlanner{}))
 		if res.Err != nil || res.ExitCode != 125 || res.Attempt.FailureClass != "code" {
 			t.Fatalf("a job that ran and exited 125 is a code failure, not a runtime one: %+v", res)
 		}
@@ -56,7 +56,7 @@ func TestExit125IsVerifiedAgainstTheRuntime(t *testing.T) {
 	t.Run("runtime failed", func(t *testing.T) {
 		fakeRuntime(t, "", "125")
 		fakeEvents(t, "create", "destroy") // created, never started
-		res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-125-rt", hardPlanner{}))
+		res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-125-rt", hardPlanner{}))
 		var e *Error
 		if !errors.As(res.Err, &e) || e.Code != "E613" {
 			t.Fatalf("a container that never started is an E613 runtime failure: %+v", res)

@@ -7976,7 +7976,7 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "workflows",
-      "port": 3733,
+      "port": 3712,
       "releaseTag": "v1.2.13",
       "release_signature": {
         "alg": "ed25519",

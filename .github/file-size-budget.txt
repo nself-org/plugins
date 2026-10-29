@@ -55,7 +55,6 @@ free/github-runner/third_party/sdk/identity.go	338
 free/idme/internal/handlers.go	536
 free/invitations/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/invitations/third_party/sdk/identity.go	338
-free/job-queue/go/api/handlers.go	356
 free/link-preview/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/link-preview/third_party/sdk/identity.go	338
 free/linkedin/internal/handlers.go	346
