@@ -158,10 +158,7 @@ func TestRunsWait(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-run", "running", time.Now(), map[string]string{"build": "running"})
 		code, w, took := waitJSON(t, "r-run", "--timeout", "300ms", "--json")
-		// The budget covers opening the store and the first read, so on a loaded host it can end before
-		// that read: the state is then "unknown" (what the exit and the caps below assert is the budget,
-		// not the host's speed). The state of a run that was read is pinned by the capped-wait test.
-		if code != 10 || (w.Data.State != "running" && w.Data.State != "unknown") || w.Data.Terminal || took < 300*time.Millisecond || took > 3*time.Second {
+		if code != 10 || w.Data.State != "running" || w.Data.Terminal || took < 300*time.Millisecond || took > 3*time.Second {
 			t.Fatalf("exit %d %+v in %v", code, w, took)
 		}
 	})
@@ -184,12 +181,8 @@ func TestRunsWait(t *testing.T) {
 		}
 	})
 	t.Run("the invoke deadline caps the wait", func(t *testing.T) {
-		runsHome(t)
-		// A resolver that answers at once: the 200 ms budget must not also have to pay for opening the
-		// store and recovering dead coordinators, which on a loaded host takes longer than the budget.
-		old := cirun.Registered.Remote
-		cirun.Registered.Remote = []cirun.RemoteResolver{steadyRemote{ref: "r-cap"}}
-		t.Cleanup(func() { cirun.Registered.Remote = old })
+		home := runsHome(t)
+		seedRun(t, home, "r-cap", "running", time.Now(), map[string]string{"build": "running"})
 		t.Setenv("NSELF_INVOKE_DEADLINE_MS", "10200") // 10.2 s minus the 10 s margin = 200 ms
 		code, w, took := waitJSON(t, "r-cap", "--json")
 		if code != 10 || w.Data.State != "running" || took > 3*time.Second {
@@ -268,16 +261,6 @@ func (f *fakeRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool
 	i := min(f.calls, len(f.views)-1)
 	f.calls++
 	return f.views[i], true, nil
-}
-
-// steadyRemote reports its run as running, at once, on every look.
-type steadyRemote struct{ ref string }
-
-func (r steadyRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool, error) {
-	if ref != r.ref {
-		return cirun.RunView{}, false, nil
-	}
-	return cirun.RunView{ID: ref, Status: "running"}, true, nil
 }
 
 // stalledRemote answers the first look at once, then blocks until its context ends. The look count
