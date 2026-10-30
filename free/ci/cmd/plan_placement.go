@@ -29,6 +29,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -116,7 +117,10 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	deps := world.Deps{Store: st, Jobs: jobs, LocalCapacity: &capacity, Clock: func() time.Time { return now },
 		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}
-	w, digest, err := world.BuildForLocal(ctx, deps, world.LocalInput{Project: project, Platform: pd.world.Platform, Capacity: capacity,
+	// the run of these jobs starts no network proof unless their class reads it (P7-CI-46): the plan's world
+	// must be the run's world, so it skips the proof by the same rule
+	wctx := world.WithRunUse(ctx, world.RunUse{NoNetworkProof: !trust.NetworkProofMatters(class)})
+	w, digest, err := world.BuildForLocal(wctx, deps, world.LocalInput{Project: project, Platform: pd.world.Platform, Capacity: capacity,
 		Docker: pd.world.Docker, Tools: pd.world.Tools, Now: now}, pipe) // the same builder a run uses (P7-AUTO-28)
 	if err != nil {
 		return model.PlacementPlan{}, err

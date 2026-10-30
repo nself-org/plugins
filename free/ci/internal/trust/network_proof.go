@@ -18,3 +18,10 @@ func NoLANRoute(scope model.NetworkScope, enforced []model.NetworkScope) bool {
 	}
 	return false
 }
+
+// NetworkProofMatters reports whether a runner's proven network scopes (and so its NoLANRoute fact) can change
+// any decision for a job of the class: only untrusted admission reads NoLANRoute (Admissible); MinIsolation and
+// the secret gate do not. An unknown or empty class decodes as untrusted, so it matters.
+func NetworkProofMatters(class model.TrustClass) bool {
+	return DecodeTrust(string(class)) == "untrusted"
+}

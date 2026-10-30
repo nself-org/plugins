@@ -7,7 +7,8 @@ package run
 // Outputs: the isolation.AttemptPlanner every profile built with the default planner uses; the world
 //          contributor that sets sched.World.Network["local"] from the probe, so SCHED derives NoLANRoute.
 // Constraints: an exclusion set that exists and cannot be read makes restricted and internet unavailable (E679)
-//          rather than run with less than the operator wrote down; the probe runs in the background and never blocks a world build; until it has a result the
+//          rather than run with less than the operator wrote down; the probe runs in the background and never blocks a world build, and starts only for a run that has a job
+//          whose admission reads it (world.RunUse); until it has a result the
 // fact is absent (never guessed), so an untrusted job is not admitted on the strength of it; a node without a
 // container runtime publishes nothing.
 
@@ -151,6 +152,9 @@ func contributeNetwork(ctx context.Context, w *sched.World) error {
 		id = local.Capability.Identity
 	}
 	if n != 1 || id.Transport != "local" || id.Provider != "local" || !hasLabel(id.Labels, world.LocalLabel) {
+		return nil
+	}
+	if world.RunUseFrom(ctx).NoNetworkProof { // no job of the run can read the proof: start none, publish none (P7-CI-46)
 		return nil
 	}
 	if scopes := localProof.get(ctx); len(scopes) > 0 {

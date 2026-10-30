@@ -111,6 +111,9 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err := checkSandboxRuntime(s.Job.Isolation, cmd, run.Image); err != nil {
 		return -1, "", err
 	}
+	if err := markRuntimeUsed(s.Home, cmd.Binary); err != nil { // the orphan sweep lists only marked runtimes
+		return -1, "", err
+	}
 	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
 	tail := &outputTail{max: 4096}
 	sink := func(b []byte) {
@@ -190,6 +193,9 @@ func (e *Executor) cleanupOnce(s JobSpec, run ContainerRun) (helper bool, err er
 		return helper, err
 	}
 	if err := checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image); err != nil {
+		return helper, err
+	}
+	if err := markRuntimeUsed(s.Home, cmd.Binary); err != nil {
 		return helper, err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)

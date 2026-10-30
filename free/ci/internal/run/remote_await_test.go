@@ -348,7 +348,7 @@ func TestPlanRunWorldDigestEqual(t *testing.T) {
 		t.Fatal(err)
 	}
 	capacity := testCapacity()
-	planW, planDigest, err := world.BuildForLocal(context.Background(), world.Deps{Store: st, Clock: func() time.Time { return fixed },
+	planW, planDigest, err := world.BuildForLocal(world.WithRunUse(context.Background(), world.RunUse{NoNetworkProof: !trust.NetworkProofMatters(rd.jobTrust())}), world.Deps{Store: st, Clock: func() time.Time { return fixed },
 		Jobs:   []sched.Job{{Key: "plan", ID: "plan", Pipeline: sched.Pipeline{ID: "r1"}}},
 		Policy: func(context.Context, string) (sched.Policy, error) { return sched.Policy{Preset: "balanced"}, nil }},
 		world.LocalInput{Project: "/proj", Platform: runtime.GOOS + "/" + runtime.GOARCH, Capacity: capacity, DockerUnknown: true, Now: fixed}, sched.Pipeline{ID: "r1"})
@@ -376,7 +376,7 @@ func TestRunWorldFollowsThePlansMeasuredFacts(t *testing.T) {
 	digestOf := func(in world.LocalInput) string {
 		t.Helper()
 		in.Project, in.Platform, in.Capacity, in.Now = "/proj", runtime.GOOS+"/"+runtime.GOARCH, testCapacity(), fixed
-		_, d, err := world.BuildForLocal(context.Background(), world.Deps{Store: st, Clock: func() time.Time { return fixed },
+		_, d, err := world.BuildForLocal(world.WithRunUse(context.Background(), world.RunUse{NoNetworkProof: !trust.NetworkProofMatters(rd.jobTrust())}), world.Deps{Store: st, Clock: func() time.Time { return fixed },
 			Jobs:   []sched.Job{{Key: "plan", ID: "plan", Pipeline: sched.Pipeline{ID: "r1"}}},
 			Policy: func(context.Context, string) (sched.Policy, error) { return sched.Policy{Preset: "balanced"}, nil }}, in, sched.Pipeline{ID: "r1"})
 		if err != nil {
