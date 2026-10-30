@@ -51,6 +51,33 @@ func TestMountedOwnershipScanPreservesNonstandardMountpoint(t *testing.T) {
 	}
 }
 
+// A sealed read-only volume (the macOS system volume) is not walked; a read-only volume that is not sealed still is.
+func TestMountedOwnershipScanSkipsSealedReadOnlyVolumes(t *testing.T) {
+	mk := func(name string) (dir, file string) {
+		dir = filepath.Join(t.TempDir(), name)
+		file = filepath.Join(dir, "owned")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return dir, file
+	}
+	sealed, _ := mk("sealed")
+	plainRO, plainFile := mk("plain-ro")
+	listing := "echo '/dev/s on " + sealed + " (apfs, sealed, local, read-only, journaled)'; echo '/dev/r on " + plainRO + " (apfs, local, read-only, journaled)'"
+	out, err := exec.Command("sh", "-c", mountedOwnershipScan(listing, fmt.Sprintf("-type f -uid %d", os.Getuid()), 30)).Output()
+	if err != nil || strings.TrimSpace(string(out)) != plainFile {
+		t.Fatalf("scan = %q, %v; want only %q (the sealed volume must be skipped, the plain read-only one walked)", out, err, plainFile)
+	}
+	only := "echo '/dev/s on " + sealed + " (apfs, sealed, local, read-only, journaled)'"
+	out, err = exec.Command("sh", "-c", mountedOwnershipScan(only, "-uid 450", 30)).Output()
+	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
+		t.Fatalf("a listing of only sealed volumes = %q, %v; want scan-incomplete (fail closed)", out, err)
+	}
+}
+
 // Exercise the generated shell with controlled find results, without scanning the host.
 func TestOwnershipScanFailsClosed(t *testing.T) {
 	for _, tc := range []struct{ name, find, want string }{
