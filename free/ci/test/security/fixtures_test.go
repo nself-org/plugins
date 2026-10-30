@@ -185,8 +185,14 @@ func worldOf(st *store.Store, eff trust.Effective, runners ...sched.Runner) func
 			return sched.World{}, "", err
 		}
 		w := sched.World{Policy: sched.Policy{Preset: "balanced", Trust: eff}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Allowances: map[string]sched.Allowance{},
-			Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
+			Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}, Network: map[string]sched.NetworkFact{}}
 		for _, r := range runners {
+			// Placement derives "no route to the LAN" from a probe's proof, never from a declaration, so a
+			// fixture runner that has no LAN route proves the scopes it offers, as the network probe does.
+			// A runner that can reach the LAN proves nothing and stays refused for untrusted code.
+			if r.Decl.NoLANRoute && r.Capability.Trust.Network.Value != nil {
+				w.Network[r.ID] = sched.NetworkFact{Enforced: *r.Capability.Trust.Network.Value}
+			}
 			if r.Location != "local" && r.Location != "hosted" {
 				registerNode(st, r)
 			}
