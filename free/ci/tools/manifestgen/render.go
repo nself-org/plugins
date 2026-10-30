@@ -3,7 +3,8 @@ package main
 // Purpose: render the `commands` block of free/ci/plugin.json from a Spec and splice it into the manifest.
 // Inputs:  a Spec and the current plugin.json bytes.
 // Outputs: the new plugin.json bytes: only the `commands` key changes; keys are sorted, 2-space indent, trailing newline.
-// Constraints: root args and flags stay in the spec only (manifest v2 roots declare none); the root summary feeds the v1
+// Constraints: root flags are emitted (manifest v2 `commands.flags`, so the MCP tool of `nself ci` takes --detach and the
+//              rest); root args stay in the spec only (manifest v2 roots declare no args); the root summary feeds the v1
 //              compatibility key cliCommands[0].description, so it must equal it; deterministic (same inputs, same bytes); no HTML escaping; rows are ordered by path.
 
 import (
@@ -30,9 +31,8 @@ func Commands(s *Spec) (map[string]any, error) {
 		return nil, err
 	}
 	root["binary"], root["command"] = s.Binary, s.Command
-	// The manifest v2 root declares no args or flags (cli manifestv2: the root has none); the spec keeps them for the tests.
+	// The manifest v2 root declares flags but no args (cli manifestv2 commands.flags); the spec keeps the args for the tests.
 	delete(root, "args")
-	delete(root, "flags")
 	rows := append([]Row(nil), s.Commands...)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Path < rows[j].Path })
 	subs := make([]any, 0, len(rows))
