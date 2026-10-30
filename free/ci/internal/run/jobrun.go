@@ -113,7 +113,7 @@ func (rs *runState) runAttemptN(ctx context.Context, i int, pj plan.PlannedJob, 
 		return rs.markOutcome(o, m)
 	}
 	job := &rs.mp.Jobs[i]
-	spec := AttemptSpec{Pipeline: rs.mp, Job: job, N: n, Foreground: true}
+	spec := AttemptSpec{Pipeline: rs.mp, Job: job, N: n, Foreground: true, Platform: pj.Platform}
 	if aid, e := AttemptIDFor(WithSession(jctx, rs.sess), spec); e == nil { // a cancel intent finds the attempt while it waits for admission
 		rs.mu.Lock()
 		rs.attempts[aid] = pj.ID

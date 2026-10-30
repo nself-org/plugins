@@ -52,7 +52,7 @@ A job is one command with a kind, and everything the planner needs to place and 
 | `workdir` | directory inside the repository the job runs in |
 | `deps` | jobs that must finish first; a failed dependency skips the job with `dep.failed` |
 | `needs_services` | disposable services the job uses; see [Services](#services) |
-| `matrix.platform` | a list of platforms such as `darwin/arm64`; one planned job per platform |
+| `matrix.platform` | a list of platforms such as `darwin/arm64`; one planned job per platform, and each entry is placed on a node of that platform |
 | `required` | `true` by default; an optional job cannot fail the run |
 | `allow_failure` | the job runs and is reported, and its failure does not fail the run |
 | `idempotent` | `false` marks a job that must never be retried automatically |
@@ -70,6 +70,8 @@ A job is one command with a kind, and everything the planner needs to place and 
 **Affected selection.** When a base commit is known, a job whose `when.paths` do not match the change is left out, except that a default-branch or release plan always keeps every required deep job, even one outside the named pipeline. With no base the whole plan runs, with the reason `selection.no_base`. A job that does not run always has a reason code, so a skip is never silent.
 
 **Matrices come from your support policy.** `support:` lists the platforms you support, and a matrix is expanded from it, never invented.
+
+**A platform on a job steers where it runs.** A job planned from a matrix entry asks for that platform, so one run from one machine can use amd64 and arm64 nodes: each entry goes to an online node of its platform. A job with no matrix entry asks for the platform of the machine you run on. If no online node has the platform, the job is refused (`E618`) and never runs on another architecture; `nself ci explain <job>` lists every node with `platform.mismatch`.
 
 ### Requirements and Xcode
 

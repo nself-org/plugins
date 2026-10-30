@@ -34,11 +34,17 @@ jobs:
           go-version-file: plugins/free/ci/go.mod
           cache-dependency-path: plugins/free/ci/go.sum
 
-      - name: Scenario 2 and write-load legs
+      - name: Load the netem kernel module
+        run: |
+          sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" || true
+          sudo modprobe sch_netem
+          lsmod | grep sch_netem
+
+      - name: Scenario 2, scenario 3, platform steering and write-load legs
         working-directory: plugins/free/ci
         run: |
-          go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario2|TestWriteLoad' ./test/sim \
-            -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestWriteLoad
+          go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario(2|3)|TestPlatformSteering|TestWriteLoad' ./test/sim \
+            -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario3 TestPlatformSteering TestWriteLoad
 
       - name: Check the perf budget
         working-directory: cli

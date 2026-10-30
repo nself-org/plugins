@@ -1,9 +1,10 @@
 {
-  "_note": "Absolute p95 ceilings in ms, each the measured p95 times 1.5 (P7-NODE-17). store.write_p99_ms: 138.301 ms on mm4 (the p99 of the intake write in each 10 s window of the 10 minute write-load leg, darwin/arm64, shared host, load average about 30), ceiling 208. node.dispatch_ms: 144.601 ms on mm6 (darwin/arm64, run start to the first job process on a paired LAN node over 20 runs of TestScenario2), ceiling 217. One baseline each; the Linux baseline from the hosted ci-node-scenarios run is still to be added. node.heartbeat_cpu_pct and node.discovery_cpu_pct are recorded, not budgeted. Evidence: hq plan/p7/evidence/NODE-perf.md and NODE-acceptance.md.",
+  "_note": "Absolute p95 ceilings in ms, each the measured p95 times 1.5 (P7-NODE-17). store.write_p99_ms: 138.301 ms on mm4 (the p99 of the intake write in each 10 s window of the 10 minute write-load leg, darwin/arm64, shared host, load average about 30), ceiling 208. node.dispatch_ms: 144.601 ms on mm6 (darwin/arm64, run start to the first job process on a paired LAN node over 20 runs of TestScenario2), ceiling 217. node.vps_dispatch_ms: 1390.7 ms on mm6 (darwin/arm64 host, a linux/arm64 Docker sshd node with the real agent behind netem delay 80 ms, one lease delivered and finished over 24 runs of TestScenario3), ceiling 2086. One baseline each; the Linux baseline from the hosted ci-node-scenarios run is still to be added. node.heartbeat_cpu_pct and node.discovery_cpu_pct are recorded, not budgeted. Evidence: hq plan/p7/evidence/NODE-perf.md and NODE-acceptance.md.",
   "schema": "perfbench-budget/v1",
   "platform": "darwin/arm64",
   "p95_ms": {
     "store.write_p99_ms": 208,
-    "node.dispatch_ms": 217
+    "node.dispatch_ms": 217,
+    "node.vps_dispatch_ms": 2086
   }
 }

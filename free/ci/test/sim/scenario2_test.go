@@ -51,6 +51,12 @@ func drain(chs ...chan string) {
 // explainLines is `ci explain` for job unit of a run: the recorded placement decision, every alternative with its reason.
 func explainLines(t *testing.T, f *fixture, runID string) string {
 	t.Helper()
+	return explainJob(t, f, runID, "unit")
+}
+
+// explainJob is `ci explain` for the named job of a run.
+func explainJob(t *testing.T, f *fixture, runID, job string) string {
+	t.Helper()
 	src := schedtel.Source{Open: func(context.Context) (*store.Store, func(), error) {
 		st, err := store.Open(f.home+"/state.db", store.Options{})
 		if err != nil {
@@ -58,7 +64,7 @@ func explainLines(t *testing.T, f *fixture, runID string) string {
 		}
 		return st, func() { _ = st.Close() }, nil
 	}}
-	plan, err := src.Decision(context.Background(), runID, "unit")
+	plan, err := src.Decision(context.Background(), runID, job)
 	if err != nil {
 		t.Fatalf("explain: %v", err)
 	}
