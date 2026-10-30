@@ -152,6 +152,86 @@ jobs:
             ${{ runner.temp }}/sched-bench.json
           if-no-files-found: ignore
 
+  # P7-CACHE-12: the cache engine's own cold/warm cycles (specs.Begin, Finalize) on seeded Go, pnpm and Rust trees, plus
+  # the throughput of the ssh and agent carriers in both directions. Every number is measured; nothing is simulated.
+  # It is a job of its own so that a red CI-46 gate in the bench job cannot skip it.
+  cache:
+    name: cache (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            budget: perf-budget.json
+          - name: macos-arm64
+            os: macos-14
+            budget: perf-budget-darwin-arm64.json
+    env:
+      BUDGET: ${{ github.workspace }}/free/ci/bench/cache/${{ matrix.budget }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/cli
+          ref: ${{ env.CLI_SHA }}
+          path: cli
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+
+      - name: Harness tests
+        working-directory: free/ci
+        run: go test -mod=vendor -count=1 ./bench/cache/...
+
+      - name: Cache cold and warm (cachebench)
+        working-directory: free/ci
+        env:
+          NSELF_V15: '1'
+          NSELF_CACHE_BENCH_RUNS: '20'
+          NSELF_CACHE_BENCH_OUT: ${{ runner.temp }}/cache-carriers.json
+        run: |
+          set -euo pipefail
+          export NSELF_REVISION="$(git rev-parse --short=12 HEAD)"
+          go test -mod=vendor -tags integration -count=1 -run '^TestRemoteCarrierThroughput$' ./internal/cache/remote/
+          go run -mod=vendor ./bench/cache/cmd/cachebench -runs 20 -carriers "$NSELF_CACHE_BENCH_OUT" -json > "$RUNNER_TEMP/cache-bench.json"
+          python3 -c 'import json,sys; [print("%-34s p50 %10.3f p95 %10.3f n %d" % (m["name"],m["p50"],m["p95"],m["n"])) for m in json.load(open(sys.argv[1]))["metrics"]]' "$RUNNER_TEMP/cache-bench.json"
+
+      - name: Absolute p95 budget (cli perfbench check)
+        working-directory: cli
+        run: go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/cache-bench.json"
+
+      - name: Control - the budget fails a recorded run slowed 2x
+        working-directory: free/ci
+        run: |
+          set -u
+          go run -mod=vendor ./bench/cache/cmd/cachebench -from "$RUNNER_TEMP/cache-bench.json" -synthetic-slowdown 2 -json > "$RUNNER_TEMP/cache-bench-slow.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["schema"]=="perfbench/v1" and d.get("injected") is False else 1)' "$RUNNER_TEMP/cache-bench-slow.json"
+          rc=0
+          (cd ../../cli && go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/cache-bench-slow.json") > "$RUNNER_TEMP/cache-slow-out.txt" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/cache-slow-out.txt"
+          if [ "$rc" -ne 1 ] || ! grep -Eq 'cache\.go\.cold\.save_ms p95 .* > budget' "$RUNNER_TEMP/cache-slow-out.txt"; then
+            echo "::error::perfbench check exited $rc on a 2x slowed cache result; want 1 naming cache.go.cold.save_ms"; exit 1
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: cache-bench-${{ matrix.name }}
+          path: |
+            ${{ runner.temp }}/cache-bench.json
+            ${{ runner.temp }}/cache-bench-slow.json
+            ${{ runner.temp }}/cache-carriers.json
+          if-no-files-found: ignore
+
   schedbench:
     if: github.repository == 'nself-org/plugins'
     runs-on: ubuntu-latest

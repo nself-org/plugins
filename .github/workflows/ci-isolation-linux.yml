@@ -74,6 +74,28 @@ jobs:
           echo "run=$run"
           echo "run=$run" >> "$GITHUB_OUTPUT"
 
+  # D-1508: the cache, artifact and release security matrix (free/ci/test/cachesec, build tag cachesec) on a hosted Linux
+  # runner, as a job of its own so that an unrelated red in the isolation job cannot hide it. The drill fails on a case
+  # whose observed outcome differs from its expected one and on any skip. Not continue-on-error.
+  cachesec:
+    name: cachesec (ubuntu)
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Cache security matrix
+        run: |
+          set -euo pipefail
+          bash scripts/drill/cache-security/run 2>&1 | tee "$RUNNER_TEMP/cachesec.txt"
+
   linux:
     name: isolation (ubuntu)
     needs: scope
