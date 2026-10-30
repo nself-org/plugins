@@ -151,7 +151,12 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 		in.Availability.Persistence = old.Availability.Persistence
 		in.Availability.OnBattery = old.Availability.OnBattery
 		in.Availability.InteractivePolicy = old.Availability.InteractivePolicy
-		if !strings.HasPrefix(actor, PolicyActorPrefix) {
+		if strings.HasPrefix(actor, PolicyActorPrefix) {
+			// preservePlacement kept the stored kind; the coordinator-side policy actor is the operator, so its
+			// kind (hosted, or cleared) lands as an assigned fact (D-1402).
+			in.Location.Kind = payload.Location.Kind
+			in.Location.Kind.Source = "assigned"
+		} else {
 			in.Location.Kind = keepHostedKind(old.Location.Kind, in.Location.Kind)
 			in.Identity.Labels = keepProviderLabels(old.Identity.Labels, in.Identity.Labels)
 		}

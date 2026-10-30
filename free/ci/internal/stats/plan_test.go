@@ -4,7 +4,7 @@ package stats
 // through an index (no full table scan), and the whole document is built inside the read budget.
 // Inputs:  buildFixture(t, 80000): 80 000 jobs and 100 000 attempts.
 // Outputs: pass or fail.
-// Constraints: the budget is 500 ms on the Linux runner and ten times that elsewhere, where the machine
+// Constraints: the budget is 500 ms of CPU time on the Linux runner and ten times that elsewhere, where the machine
 //          is shared and the file system slower, and ten times again under the race detector; the statements are the ones internal/store runs.
 
 import (
@@ -61,10 +61,13 @@ func TestStatsQueryPlan(t *testing.T) {
 	if raceEnabled {
 		budget *= 10 // the budget is a plain-build figure; the detector multiplies the cost of every memory access
 	}
-	start := time.Now()
+	// The budget bounds the work Compute does, not how busy the runner is: on a shared runner the same read runs
+	// several times slower in wall time (120 ms idle, 870 ms with every package testing at once). CPU time of the
+	// process is load-independent where the platform reports it; elsewhere cpuTime falls back to wall time.
+	start := cpuTime()
 	d, err := Compute(ctx, st, Options{Now: fixtureNow, Since: 24 * time.Hour, Global: true})
-	if took := time.Since(start); err != nil || took > budget {
-		t.Fatalf("Compute took %s (budget %s), err %v", took, budget, err)
+	if took := cpuTime() - start; err != nil || took > budget {
+		t.Fatalf("Compute took %s of CPU (budget %s), err %v", took, budget, err)
 	}
 	if d.Attempts == nil || d.Attempts.Finished != 100000 {
 		t.Fatalf("attempts = %+v", d.Attempts)
