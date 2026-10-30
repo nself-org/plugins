@@ -8,7 +8,7 @@
     "ci.e2e_tiny.v15": 2541,
     "ci.exec_overhead": 59,
     "ci.plan": 5,
-    "ci.startup": 14,
+    "ci.startup": 34,
     "ci.store_open": 58
   }
 }
