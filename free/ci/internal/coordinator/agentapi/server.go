@@ -63,6 +63,8 @@ type Config struct {
 	Blobs BlobHandler
 	// PinnedAge returns the age recipient pinned for a node; nil trusts what hello presents.
 	PinnedAge func(ctx context.Context, nodeID string) (*string, error)
+	// CheckAge pins or compares a validated hello recipient before a session opens.
+	CheckAge func(ctx context.Context, nodeID, recipient string) error
 
 	Versions        []int         // protocol versions spoken (default {1})
 	MinAgentVersion string        // default "0.0.0"

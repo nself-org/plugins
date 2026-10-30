@@ -14,11 +14,7 @@ const QuarantineReason = "age_recipient_changed"
 
 // AgeRecipient returns the recipient pinned by the first hello, if any.
 func (r *Registry) AgeRecipient(ctx context.Context, id string) (*string, error) {
-	n, err := r.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return n.Capability.Identity.AgeRecipient.Value, nil
+	return r.Store.NodeAgeRecipient(ctx, id)
 }
 
 // CheckAgeRecipient pins once, then flags a changed recipient without replacing it.
@@ -26,19 +22,15 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 	if presented == "" {
 		return invalid("age recipient required")
 	}
-	n, err := r.Get(ctx, id)
+	pin, err := r.Store.NodePinAgeRecipient(ctx, id, presented)
 	if err != nil {
 		return err
 	}
-	if n.Capability.Identity.AgeRecipient.Value != nil && *n.Capability.Identity.AgeRecipient.Value != presented {
-		_, err = r.SetState(ctx, id, "maintenance", QuarantineReason, actor)
-		if err != nil {
+	if pin != presented {
+		if _, err = r.SetState(ctx, id, "maintenance", QuarantineReason, actor); err != nil {
 			return err
 		}
-		return &Error{Code: "E660", Reason: "age_recipient_changed"}
-	}
-	if n.Capability.Identity.AgeRecipient.Value != nil {
-		return nil
+		return &Error{Code: "E660", Reason: QuarantineReason}
 	}
 	_, err = r.mutate(ctx, id, actor, "capability", func(n *Node) error {
 		if n.Capability.Identity.AgeRecipient.Value != nil {
