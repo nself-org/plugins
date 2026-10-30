@@ -62,13 +62,19 @@ func buildVPSAgent(t *testing.T, arch string) string {
 // registerVPS stores the node as an online, paired ssh node with operator-assigned trust.
 func registerVPS(t *testing.T, f *fixture, n *simharness.Node, arch string) {
 	t.Helper()
+	registerVPSWith(t, f, n, arch, false)
+}
+
+// registerVPSWith is registerVPS for a node whose container runtime the caller proved: docker states it in the facts.
+func registerVPSWith(t *testing.T, f *fixture, n *simharness.Node, arch string, docker bool) {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(filepath.Join(f.home, "state.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
-	c, err := planview.LocalCapability(planview.LocalFacts{Project: f.repo, Platform: "linux/" + arch, CPUs: 2, MemMB: 2048, Now: time.Now()})
+	c, err := planview.LocalCapability(planview.LocalFacts{Project: f.repo, Platform: "linux/" + arch, Docker: docker, CPUs: 2, MemMB: 2048, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}

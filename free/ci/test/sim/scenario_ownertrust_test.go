@@ -126,7 +126,7 @@ func TestScenario3OwnerTrust(t *testing.T) {
 	if err = pins.Replace("nself-ci-vps", hostKey); err != nil {
 		t.Fatal(err)
 	}
-	registerVPS(t, f, &simharness.Node{Host: "127.0.0.1", Port: port, User: me.Username}, runtime.GOARCH)
+	registerVPSWith(t, f, &simharness.Node{Host: "127.0.0.1", Port: port, User: me.Username}, runtime.GOARCH, true)
 	useRealSSH(t, f, clientKey)
 
 	platform := "linux/" + runtime.GOARCH
