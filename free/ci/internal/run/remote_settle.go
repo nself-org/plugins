@@ -58,15 +58,24 @@ func (rs *runState) finalizePassed(id string, o JobOutcome, info AttemptInfo) Jo
 	return o
 }
 
-// toLost makes sure the attempt is lost: a remote attempt the dispatcher already marked lost
-// stays so; a running one is moved.
+// toLost makes sure the attempt is lost: a remote attempt the dispatcher already marked lost stays so; one
+// the lease engine's expiry sweep already fenced (retryable) is lost for good; a running one is moved.
 func (rs *runState) toLost(id string) bool {
 	bg, done := background(context.Background())
 	defer done()
-	if state, _, err := rs.sess.Store.AttemptStateEpoch(bg, id); err == nil && state == "lost" {
+	if state, _, err := rs.sess.Store.AttemptStateEpoch(bg, id); err == nil && (state == "lost" || state == "retryable") {
 		return true
 	}
 	return rs.trans(id, "running", "lost", "infra") == nil
+}
+
+// swept says the lease engine's expiry sweep already took the attempt from lost to retryable (P7-NODE-11). The
+// store queued the successor row with it; the run adopts that row as its next attempt (attemptIDs).
+func (rs *runState) swept(id string) bool {
+	bg, done := background(context.Background())
+	defer done()
+	state, _, err := rs.sess.Store.AttemptStateEpoch(bg, id)
+	return err == nil && state == "retryable"
 }
 
 // localOnly says a job must run on this machine because the remote path cannot honour what the

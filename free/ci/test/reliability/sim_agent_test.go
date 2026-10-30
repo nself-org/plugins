@@ -108,14 +108,21 @@ func simRunner(id string) sched.Runner {
 		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", NoLANRoute: true}}
 }
 
-// place runs the scheduler for one job attempt; previous is the runner retry anti-affinity excludes.
-func place(jobKey string, attempt int, previous string, runners ...sched.Runner) sched.Result {
+// placeInputs is the scheduler's world and the one job a placement of jobKey asks about; previous is the runner
+// retry anti-affinity excludes.
+func placeInputs(jobKey string, attempt int, previous string, runners ...sched.Runner) (sched.World, sched.Job) {
 	w := sched.World{Runners: runners, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 	if previous != "" {
 		w.Previous[jobKey] = previous
 	}
 	j := sched.Job{Key: jobKey, ID: jobKey, Project: "project", Attempt: attempt, Pipeline: sched.Pipeline{ID: "pipe", Support: []string{"linux/amd64"}},
 		Requirements: model.PlacementRequirements{Platform: "linux/amd64", CPU: 1, MemMB: 128}, Trust: "owner", Network: "lan", TimeoutMs: 60000}
+	return w, j
+}
+
+// place runs the scheduler for one job attempt.
+func place(jobKey string, attempt int, previous string, runners ...sched.Runner) sched.Result {
+	w, j := placeInputs(jobKey, attempt, previous, runners...)
 	return sched.Place(w, []sched.Job{j})
 }
 

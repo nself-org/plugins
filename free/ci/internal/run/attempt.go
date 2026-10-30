@@ -76,7 +76,14 @@ func attemptIDs(ctx context.Context, s AttemptSpec) (attemptID, jobRow string, e
 	if !ok {
 		return "", "", fail(CodeRun, "job is not part of this run")
 	}
-	return fmt.Sprintf("%s.a%d", row, s.N), row, nil
+	id := fmt.Sprintf("%s.a%d", row, s.N)
+	if s.N > 1 {
+		// the lease engine's expiry sweep queues the successor of a lost attempt itself: the run adopts that row
+		if sid, state, found, e := sess.Store.AttemptAt(ctx, row, s.N); e == nil && found && state == "queued" && sid != id {
+			id = sid
+		}
+	}
+	return id, row, nil
 }
 
 // idempotencyKey is set for jobs that must run at most once.
@@ -104,8 +111,10 @@ func CreateAttempt(ctx context.Context, s AttemptSpec) (Admitted, error) {
 	}
 	sess := SessionFrom(ctx)
 	key := idempotencyKey(s.Job, id)
-	if err = sess.Store.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: row, CoordinatorID: sess.Coordinator.ID, N: s.N}, keyDigest(key)); err != nil {
-		return Admitted{}, err
+	if !strings.HasSuffix(id, fmt.Sprintf("-retry-%d", s.N)) { // an adopted row (attemptIDs) exists already
+		if err = sess.Store.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: row, CoordinatorID: sess.Coordinator.ID, N: s.N}, keyDigest(key)); err != nil {
+			return Admitted{}, err
+		}
 	}
 	var adm Admitted
 	if Dispatch != nil {

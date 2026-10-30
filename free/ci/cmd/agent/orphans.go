@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/slots"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 )
 
 // agentIncarnation is the coordinator id this process gives its jobs.
@@ -59,4 +60,25 @@ func (agentStale) Stale(_ context.Context, id string) (bool, error) {
 func execHome(base string) (string, error) {
 	home := filepath.Join(base, "exec-home")
 	return home, os.MkdirAll(home, 0o700)
+}
+
+// sweepOrphanJobs kills the job process groups an earlier incarnation of this agent left behind (a SIGKILLed
+// agent cannot stop its jobs). runPull calls it before the first session: until then the orphan would run to
+// its end, and finish a side effect the coordinator has already handed to another node (P7-NODE-11). A sweep
+// that cannot run is reported and does not stop the agent.
+func sweepOrphanJobs(ctx context.Context, coordinator string, logf func(string, ...any)) {
+	base, err := workBase()
+	if err != nil {
+		logf("orphan sweep: %v", err)
+		return
+	}
+	home, err := execHome(base)
+	if err != nil {
+		logf("orphan sweep: %v", err)
+		return
+	}
+	ex := &ciexec.Executor{Stale: agentStale{}}
+	if err = ex.SweepStaleProcesses(ctx, home, agentIncarnation(coordinator)); err != nil {
+		logf("orphan sweep: %v", err)
+	}
 }
