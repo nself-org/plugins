@@ -155,7 +155,7 @@ func TestScenario3OwnerTrust(t *testing.T) {
 			t.Logf("diag %s %v: %v\n%s", name, args, e, o)
 		}
 		diag("ssh", "-i", clientKey, "-p", strconv.Itoa(port), "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", me.Username+"@127.0.0.1", "id; docker info --format '{{.ServerVersion}} {{.MemoryLimit}}' 2>&1; ls -R "+me.HomeDir+"/.nself | head -40; tail -n 30 "+me.HomeDir+"/.nself/ci-agent*/*.log "+me.HomeDir+"/.nself/ci-agent/*.log 2>&1")
-		diag("sh", "-c", "strings "+filepath.Join(f.home, "state.db*")+" | grep -i -E 'E6[0-9][0-9]|isolation|unavailable|docker|runtime|container' | grep -v -E 'CREATE|INSERT|sql' | sort -u | cut -c1-400 | head -40")
+		diag("sh", "-c", "strings "+filepath.Join(f.home, "state.db*")+" | grep -o -E '\"checks\":.{0,900}' | sort -u | head -6")
 		diag("docker", "ps", "-a", "--format", "{{.ID}} {{.Image}} {{.Status}} {{.Names}}")
 		t.Fatalf("exit %d result %s: the owner-trust job did not run to completion", res.Exit, res.Summary.Result)
 	}
