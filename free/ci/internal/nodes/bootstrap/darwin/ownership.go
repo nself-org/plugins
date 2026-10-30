@@ -7,6 +7,9 @@ import "fmt"
 // Constraints: one cap (ownershipBudget) spans all volumes; errors fail closed so an unchecked UID is never freed.
 // A hosted macOS runner needs more than 30 seconds to walk its volumes, so the cap is generous and the
 // allocation script walks once for the whole id range instead of once per candidate id.
+// A volume that is both sealed and read-only (the macOS system volume, signed asset images) is not walked: its content is
+// fixed by Apple's signature, so it cannot hold a file owned by an nself-ci id, and walking it cost 4 to 6 minutes of the
+// 10 minute budget on a hosted runner (D-1513). Every other volume, read-only or not, is walked.
 // The script touches no filesystem metadata itself: a missing or hung mountpoint is validated by the
 // watchdog-bounded find, so a blocked lookup cannot outlive the budget.
 func ownershipScan(match string) string {
@@ -46,6 +49,7 @@ paths=$(echo "$mounts" | awk '
     details=substr(tail,at+2,length(tail)-at-2)
     split(details, flags, ","); kind=flags[1]
     if (substr(dir,1,1)!="/" || kind=="" || index(kind," ") || index(kind,"(") || index(kind,")")) { bad=1; next }
+    if (index(details, "sealed") && index(details, "read-only")) next
     if (kind!="devfs" && kind!="autofs") print dir
   }
   END { if (bad) print "scan-incomplete" }

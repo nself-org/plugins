@@ -81,17 +81,6 @@ jobs:
                       CAST(strftime('%s','now') AS INTEGER));"
           done
 
-      - name: Diagnose the ownership scan cost
-        run: |
-          mount; df -h
-          mounts=$(/sbin/mount | awk '{ if (split($0, a, " on ") == 2) { t=a[2]; sub(/ \(.*/, "", t); print t } }')
-          echo "$mounts" | while IFS= read -r d; do
-            case "$d" in /dev|/dev/*) continue;; esac
-            start=$(date +%s)
-            sudo perl -e 'alarm 420; exec @ARGV' find "$d" -xdev -ignore_readdir_race -uid +449 -uid -500 -print -quit 2>"$RUNNER_TEMP/scan.err"; rc=$?
-            echo "SCAN $d rc=$rc secs=$(( $(date +%s) - start )) err=$(head -n 2 "$RUNNER_TEMP/scan.err" | tr '\n' '|')"
-          done
-
       - name: Start the loopback sshd (port 2222, throwaway key)
         run: |
           set -euo pipefail
