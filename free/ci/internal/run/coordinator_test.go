@@ -125,6 +125,9 @@ func TestJobSelectionRunsDependenciesOnly(t *testing.T) {
 	r := newRig(t, map[string]model.Job{"a": sh("true"), "b": sh("true", "a"), "c": sh("true")}, gitFake{})
 	r.C.Opts.Job = "b"
 	res := r.run(t)
+	if res.Exit != 0 {
+		t.Fatalf("selected jobs passed, exit = %d", res.Exit)
+	}
 	if o := outcome(res, "c"); o.State != StateSkipped || o.Reason != "pipeline.excluded" {
 		t.Fatalf("c: %+v", o)
 	}

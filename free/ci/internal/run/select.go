@@ -6,7 +6,10 @@ package run
 // Constraints: moved out of coordinator.go unchanged (P7-AUTO-27) so that file
 // stays under the 300-line limit.
 
-import "github.com/nself-org/plugins/free/ci/internal/plan"
+import (
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
+)
 
 // subset returns the jobs --job selects with their dependencies; nil means all.
 func subset(pl *plan.Plan, name string) (map[string]bool, error) {
@@ -45,4 +48,18 @@ func requireRunnable(pl *plan.Plan, keep map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+// selectedExit preserves fail-closed evidence while reporting the requested jobs' outcome.
+func selectedExit(ev model.Evidence, selected bool) int {
+	if !selected || ev.Result != "fail" {
+		return exitFor(ev.Result)
+	}
+	checks := make([]model.Check, 0, len(ev.Checks))
+	for _, c := range ev.Checks {
+		if c.Result != "skip" || c.Reason != "pipeline.excluded" {
+			checks = append(checks, c)
+		}
+	}
+	return exitFor(runResult(checks))
 }

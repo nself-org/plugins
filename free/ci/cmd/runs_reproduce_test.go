@@ -54,3 +54,16 @@ func TestReproduceRunReturnsPlanError(t *testing.T) {
 		t.Fatal("an unloadable pipeline file must be an error")
 	}
 }
+
+func TestReproduceSelectedJobExitsSuccessfully(t *testing.T) {
+	r := newEvRepo(t)
+	put(t, r.dir, ".nself/ci.yaml", ciYAML+"  other:\n    kind: test\n    required: true\n    run: [\"sh\", \"-c\", \"true\"]\n")
+	git(t, r.dir, "add", "-A")
+	git(t, r.dir, "commit", "-q", "-m", "add another required job")
+	if _, stderr, code := r.ci("--no-status"); code != 0 {
+		t.Fatalf("original: %d %s", code, stderr)
+	}
+	if _, stderr, code := r.ci("runs", "reproduce", "unit"); code != 0 {
+		t.Fatalf("selected reproduction: %d %s", code, stderr)
+	}
+}

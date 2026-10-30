@@ -200,7 +200,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		notes = append(notes, "run row not finished: "+firstLineOf(err.Error()))
 	}
 	info := RunInfo{RunID: f.RunID, Revision: f.Rev.SHA, EvidenceDigest: digest, Result: ev.Result, Evidence: ev, Jobs: f.Jobs, Dirty: f.Rev.Dirty}
-	exit := exitFor(ev.Result)
+	exit := selectedExit(ev, c.Opts.Job != "")
 	if x := runAfter(bg, f.Hooks.AfterRuns, true, info, &notes); x > 0 { // a gate's failure is the status's too
 		exit = max(exit, x)
 		f.Veto = "release not published (nself ci artifacts sign " + f.RunID + ")"
