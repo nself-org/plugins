@@ -5,7 +5,8 @@ package stats
 // Inputs:  buildFixture(t, 80000): 80 000 jobs and 100 000 attempts.
 // Outputs: pass or fail.
 // Constraints: the budget is 500 ms of CPU time on the Linux runner and ten times that elsewhere, where the machine
-//          is shared and the file system slower, and ten times again under the race detector; the statements are the ones internal/store runs.
+//          is shared and the file system slower, and ten times again under the race detector; the budget is not enforced
+//          in a coverage-instrumented build (the query-plan check always runs); the statements are the ones internal/store runs.
 
 import (
 	"context"
@@ -64,10 +65,21 @@ func TestStatsQueryPlan(t *testing.T) {
 	// The budget bounds the work Compute does, not how busy the runner is: on a shared runner the same read runs
 	// several times slower in wall time (120 ms idle, 870 ms with every package testing at once). CPU time of the
 	// process is load-independent where the platform reports it; elsewhere cpuTime falls back to wall time.
+	// A coverage-instrumented binary (go test -cover) inflates CPU time too, so the budget is a plain-build
+	// figure: the "Go Build & Test" job enforces it, and the coverage job only logs the measurement.
 	start := cpuTime()
 	d, err := Compute(ctx, st, Options{Now: fixtureNow, Since: 24 * time.Hour, Global: true})
-	if took := cpuTime() - start; err != nil || took > budget {
-		t.Fatalf("Compute took %s of CPU (budget %s), err %v", took, budget, err)
+	took := cpuTime() - start
+	if err != nil {
+		t.Fatalf("Compute: %v", err)
+	}
+	if testing.CoverMode() != "" {
+		t.Logf("Compute took %s of CPU (budget %s not enforced under coverage instrumentation, mode %q)", took, budget, testing.CoverMode())
+	} else {
+		t.Logf("Compute took %s of CPU (budget %s)", took, budget)
+		if took > budget {
+			t.Fatalf("Compute took %s of CPU (budget %s)", took, budget)
+		}
 	}
 	if d.Attempts == nil || d.Attempts.Finished != 100000 {
 		t.Fatalf("attempts = %+v", d.Attempts)
