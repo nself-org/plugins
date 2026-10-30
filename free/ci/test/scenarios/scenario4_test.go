@@ -24,6 +24,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -103,8 +104,24 @@ func TestScenario4EachEntryLandsOnAMatchingRunner(t *testing.T) {
 // TestScenario4MissingPlatformWaitsOnACoordinator: with darwin/arm64 absent, the coordinator's
 // registry is open (a node can still enrol), so the entry waits with platform.none_available.
 func TestScenario4MissingPlatformWaitsOnACoordinator(t *testing.T) {
-	w := sched.World{Runners: []sched.Runner{runner("amd", "lan", "linux/amd64", 1), runner("arm", "lan", "linux/arm64", 1)}, Policy: sched.Policy{Preset: "balanced"},
-		Costs: map[string]sched.Cost{}, Previous: map[string]string{}, OpenRegistry: true}
+	st := openStore(t)
+	putNode(t, st, "amd", "linux/amd64")
+	putNode(t, st, "arm", "linux/arm64")
+	serving := true
+	if err := world.RegisterCoordinatorFacts(func(context.Context) (world.CoordinatorFacts, error) {
+		return world.CoordinatorFacts{Serving: serving, Mode: "team"}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { serving = false })
+	w, _, err := world.Build(context.Background(), world.Deps{Store: st,
+		Policy:         func(context.Context, string) (sched.Policy, error) { return sched.Policy{Preset: "balanced"}, nil },
+		LocalAddresses: func(context.Context) ([]string, error) { return nil, nil },
+		ResolveHost:    func(context.Context, string) ([]string, error) { return nil, nil },
+	}, sched.Pipeline{ID: "pipe", Support: matrixPlatforms})
+	if err != nil {
+		t.Fatal(err)
+	}
 	jobs := []sched.Job{job("amd", "linux/amd64"), job("arm", "linux/arm64"), job("mac", "darwin/arm64")}
 	for i := range jobs {
 		jobs[i].Pipeline.Support = matrixPlatforms
@@ -122,6 +139,13 @@ func TestScenario4MissingPlatformWaitsOnACoordinator(t *testing.T) {
 	if mac.Status != "waiting" || !hasCode(mac.Reasons, string(model.PlatformNoneAvailable)) {
 		t.Fatalf("mac entry: status %q reasons %v", mac.Status, codes(mac.Reasons))
 	}
+	doc := planview.Build(planview.Input{World: w, Jobs: jobs, Result: res})
+	cells := strings.Join(planview.Cells(doc), "\n")
+	explain := strings.Join(planview.ExplainLines(doc, planview.SourcePlan), "\n")
+	if !strings.Contains(cells, "waiting: platform.none_available") || !strings.Contains(explain, "platform.none_available") {
+		t.Fatalf("missing coordinator wait in plan/explain: %s\n%s", cells, explain)
+	}
+
 }
 
 // TestScenario4MissingPlatformFailsAFreshForegroundRun: a foreground PERSONAL run with a closed
