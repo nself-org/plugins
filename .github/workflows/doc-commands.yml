@@ -6,7 +6,8 @@
 #   pages of the other CI tickets as well as the core pages. Step two runs the reference generator in check mode, so
 #   Reference.md, the evidence tables and the sidebar block cannot drift from the code.
 # Inputs:  this checkout. `nself ci ...` in a block is answered by the plugin built from this checkout, through a
-#   one-line shim named `nself` (the real CLI hands `ci ...` to the plugin binary unchanged). No secrets, and no
+#   one-line shim named `nself`, both made by check-doc-commands.sh (the real CLI hands `ci ...` to the plugin binary
+#   unchanged, but it needs a signed ci release, E107 without one). No secrets, and no
 #   network beyond the runner's own checkout and toolchain download.
 # Outputs: pass or fail; a failure names the page, the block number and the exit code.
 # Constraints: actions pinned by SHA; `permissions: contents: read`; the workflow interpolates no event payload field,
@@ -49,26 +50,7 @@ jobs:
           go-version-file: free/ci/go.mod
           cache: false
 
-      - name: Build the plugin from this checkout and put `nself` on the path
-        run: |
-          set -euo pipefail
-          bindir="$RUNNER_TEMP/doc-commands-bin"
-          mkdir -p "$bindir"
-          CGO_ENABLED=0 go -C free/ci build -mod=vendor -o "$bindir/nself-ci" ./cmd
-          cat > "$bindir/nself" <<'SHIM'
-          #!/bin/sh
-          # nself ci ARGS... -> nself-ci ARGS... (the plugin binary built from this checkout)
-          if [ "${1:-}" != ci ]; then
-            echo "nself shim: only 'nself ci' is available in the doc check" >&2
-            exit 127
-          fi
-          shift
-          exec "$(dirname "$0")/nself-ci" "$@"
-          SHIM
-          chmod +x "$bindir/nself"
-          echo "$bindir" >> "$GITHUB_PATH"
-
-      - name: Run every command block of every guides/ci page
+      - name: Run every command block of every guides/ci page (the script builds the plugin and the nself shim)
         run: |
           set -euo pipefail
           bash .github/scripts/check-doc-commands.sh .github/wiki/guides/ci/*.md
