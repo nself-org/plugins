@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -194,7 +193,7 @@ func forkBombOnce(t *testing.T, id string) {
 	start := time.Now()
 	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	if res.Reason != "resource_limit" {
-		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q\nDIAG:\n%s", res, tail(out, 1500), runscDiag(id))
+		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
@@ -262,9 +261,4 @@ func TestIntegrationPlainExit2StaysCode(t *testing.T) {
 	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
 		t.Fatalf("exit 2 must stay a code failure: %+v", res)
 	}
-}
-
-func runscDiag(id string) string {
-	b, _ := osexec.Command("sudo", "sh", "-c", `cd /var/log/runsc && for f in $(grep -l "work/`+id+`" *boot.txt); do echo "== $f"; ls -l $f; grep -n -i -E "fatal|panic|runtime:|failed to create|resource temp|EAGAIN|stub|clone|exit" $f | head -25 | cut -c1-300; tail -4 $f | cut -c1-300; done`).CombinedOutput()
-	return string(b)
 }

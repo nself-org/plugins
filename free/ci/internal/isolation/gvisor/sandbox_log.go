@@ -8,6 +8,7 @@ package gvisor
 // own boot log says so (seen on the GitHub ubuntu runner, gVisor 20261012.0):
 //   handlePtraceSyscallRequest failed: unable to create a stub process: creating stub process: resource temporarily unavailable
 //   panic: Unknown syscall 57 error: createStub: failed to get clone
+//   panic: Unknown syscall 57 error: createSysmsgThread: failed to get clone
 // A boot log is the attempt's when it mounted the attempt's workspace. A script that merely runs `exit 2`
 // leaves no such line, so it stays a code failure. Without a configured debug log nothing is claimed.
 
@@ -25,7 +26,7 @@ const maxBootLog = 256 << 20
 // deathSignatures are the runsc log fragments that show the stub-process (thread) limit was hit.
 var deathSignatures = []string{
 	"unable to create a stub process: creating stub process: resource temporarily unavailable",
-	"createStub: failed to get clone",
+	"failed to get clone", // createStub / createSysmsgThread: the clone syscall (57) was refused
 }
 
 // debugLogOf returns the --debug-log value of the runtime arguments ("" when none).
