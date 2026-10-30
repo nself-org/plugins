@@ -8,6 +8,7 @@ package gvisor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -182,16 +183,23 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 }
 
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
+	for i := 0; i < 8; i++ {
+		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
+	}
+}
+
+func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, "t05-fork", `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	if res.Reason != "resource_limit" {
 		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
 	}
-	assertGone(t, "nself-ci-t05-fork")
+	t.Logf("DIAG %s: %+v tail=%q", id, res, tail(out, 600))
+	assertGone(t, "nself-ci-"+id)
 }
 
 func TestIntegrationMemoryHogIsKilledAndClassified(t *testing.T) {
