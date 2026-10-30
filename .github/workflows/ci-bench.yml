@@ -5,7 +5,8 @@ name: ci-bench
 # per-platform budget (absolute p95) and `cibench -ratio-check` (V15 median against
 # the v1.4 median). Two controls prove the gates can fire: a result ten times over
 # every budget must fail both checks, and a result inside the relative budget must
-# pass. Budgets and baselines: hq plan/p7/evidence/CI-46-perf.md.
+# pass. The scheduling steps run even when a cibench step above failed, so a red
+# P7-CI-46 budget never hides the scheduling measurement or its budget result. Budgets and baselines: hq plan/p7/evidence/CI-46-perf.md.
 
 on:
   pull_request:
@@ -90,14 +91,17 @@ jobs:
         run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
 
       - name: Scheduling cost (schedbench)
+        if: ${{ !cancelled() }}
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/schedbench -runs 20 -warmup 2 -out "$RUNNER_TEMP/sched-bench.json"
 
       - name: Scheduling p95 budget (cli perfbench check)
+        if: ${{ !cancelled() }}
         working-directory: cli
         run: go run -mod=vendor ./tools/perfbench check -budget "$SCHED_BUDGET" -in "$RUNNER_TEMP/sched-bench.json"
 
       - name: Scheduling share budget
+        if: ${{ !cancelled() }}
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/schedbench -share-check "$SHARE_BUDGET" -in "$RUNNER_TEMP/sched-bench.json"
 

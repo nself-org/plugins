@@ -1,0 +1,6 @@
+{
+  "_note": "Ceilings for the scheduling cost on linux/amd64: the highest p95 of three 20-sample baseline runs on GitHub-hosted ubuntu-latest (ci-bench workflow_dispatch runs 41028748027, 41028750819 and 41028753653, revision 157f47ec9269) plus 25 percent; the millisecond ceilings are never below 5 ms (the P7-CI-46 floor, below it a timing is runner noise). Baselines and update rule: hq plan/p7/evidence/SCHED-perf.md. perfbench check reads the ms ceilings; schedbench -share-check reads the share ceiling.",
+  "schema": "schedbench-share-budget/v1",
+  "platform": "linux/amd64",
+  "p95_pct": 0.5
+}
