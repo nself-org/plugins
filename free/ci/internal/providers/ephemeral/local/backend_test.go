@@ -80,6 +80,7 @@ func TestContainerLeftoversAreLimitedToTheBurstNamespace(t *testing.T) {
 		return []byte(inspectLine("/nself-ci-burst-A1", "2026-10-19T12:00:00.5Z", labels("burst-A1")) +
 			inspectLine("/nself-ci-run-77-job", "2026-10-19T12:00:00Z", labels("run-77-job")) +
 			inspectLine("/nself-ci-burst-A1-clean", "2026-10-19T12:00:01Z", labels("burst-A1")) +
+			inspectLine("/nself-ci-burst-A1-px", "2026-10-19T12:00:01Z", labels("burst-A1")) +
 			inspectLine("/nself-ci-burst-B2", "not a time", labels("burst-B2")) +
 			inspectLine("/nself-ci-burst-P3", `"2026-10-19T08:00:00.123456789-04:00"`, labels("burst-P3")) +
 			inspectLine("/nself-ci-burst-G4", "2026-10-19 12:00:00.5 +0000 UTC", labels("burst-G4")) +
@@ -92,7 +93,7 @@ func TestContainerLeftoversAreLimitedToTheBurstNamespace(t *testing.T) {
 	if asked[0] != "docker" || asked[1] != "inspect" {
 		t.Fatalf("asked %v", asked)
 	}
-	if len(got) != 5 {
+	if len(got) != 6 {
 		t.Fatalf("an ordinary job container and garbage must be skipped, an unreadable time must not hide a leak: %+v", got)
 	}
 	byID := map[string]Found{}

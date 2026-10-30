@@ -48,8 +48,8 @@ const (
 var (
 	// tokenRe is what an intent token must look like: it becomes part of a container or VM name.
 	tokenRe = regexp.MustCompile(`^[A-Za-z0-9]{1,63}$`)
-	// idRe is every id this provider can have issued: burst-<token>, or the cleanup helper of one, burst-<token>-clean.
-	idRe = regexp.MustCompile(`^burst-[A-Za-z0-9]{1,63}(-clean)?$`)
+	// idRe accepts a burst job, its cleanup helper, or its network proxy.
+	idRe = regexp.MustCompile(`^burst-[A-Za-z0-9]{1,63}(-clean|-px)?$`)
 )
 
 // Options configures a Provider; every field but Backend has a default.
@@ -250,7 +250,7 @@ func (p *Provider) Teardown(ctx context.Context, id string) error {
 	p.mu.Lock()
 	coord := p.ledger[id].res.Labels[coordKey]
 	p.mu.Unlock()
-	if err := p.opts.Backend.Teardown(ctx, isolation.Attempt{ID: id, CoordinatorID: coord}); err != nil {
+	if err := p.opts.Backend.Teardown(ctx, isolation.Attempt{ID: strings.TrimSuffix(strings.TrimSuffix(id, "-clean"), "-px"), CoordinatorID: coord}); err != nil {
 		return classify(ctx, err)
 	}
 	p.mu.Lock()
