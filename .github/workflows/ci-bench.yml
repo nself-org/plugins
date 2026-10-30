@@ -89,27 +89,6 @@ jobs:
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
 
-      # P7-CACHE-12: the cache engine's own cold/warm cycles (specs.Begin, Finalize) on seeded Go, pnpm and Rust trees,
-      # plus the throughput of the ssh and agent carriers in both directions. Every number is measured; nothing is simulated.
-      - name: Cache cold and warm (cachebench)
-        working-directory: free/ci
-        env:
-          NSELF_V15: '1'
-          NSELF_CACHE_BENCH_RUNS: '20'
-          NSELF_CACHE_BENCH_OUT: ${{ runner.temp }}/cache-carriers.json
-        run: |
-          set -euo pipefail
-          export NSELF_REVISION="$(git rev-parse --short=12 HEAD)"
-          go test -mod=vendor -tags integration -count=1 -run '^TestRemoteCarrierThroughput$' ./internal/cache/remote/
-          for i in 1 2 3; do
-            go run -mod=vendor ./bench/cache/cmd/cachebench -runs 20 -carriers "$NSELF_CACHE_BENCH_OUT" -json > "$RUNNER_TEMP/cache-bench-$i.json"
-          done
-          cp "$RUNNER_TEMP/cache-bench-1.json" "$RUNNER_TEMP/cache-bench.json"
-          for i in 1 2 3; do
-            echo "repetition $i"
-            python3 -c 'import json,sys; [print("%-34s p50 %10.3f p95 %10.3f n %d" % (m["name"],m["p50"],m["p95"],m["n"])) for m in json.load(open(sys.argv[1]))["metrics"]]' "$RUNNER_TEMP/cache-bench-$i.json"
-          done
-
       - name: Scheduling cost (schedbench)
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/schedbench -runs 20 -warmup 2 -out "$RUNNER_TEMP/sched-bench.json"
@@ -165,10 +144,78 @@ jobs:
           name: ci-bench-${{ matrix.name }}
           path: |
             ${{ runner.temp }}/ci-bench.json
-            ${{ runner.temp }}/cache-bench-*.json
-            ${{ runner.temp }}/cache-carriers.json
             ${{ runner.temp }}/ci-bench-services.json
             ${{ runner.temp }}/sched-bench.json
+          if-no-files-found: ignore
+
+  # P7-CACHE-12: the cache engine's own cold/warm cycles (specs.Begin, Finalize) on seeded Go, pnpm and Rust trees, plus
+  # the throughput of the ssh and agent carriers in both directions. Every number is measured; nothing is simulated.
+  # It is a job of its own so that a red CI-46 gate in the bench job cannot skip it.
+  cache:
+    name: cache (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            budget: perf-budget.json
+          - name: macos-arm64
+            os: macos-14
+            budget: perf-budget-darwin-arm64.json
+    env:
+      BUDGET: ${{ github.workspace }}/free/ci/bench/cache/${{ matrix.budget }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/cli
+          ref: ${{ env.CLI_SHA }}
+          path: cli
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+
+      - name: Harness tests
+        working-directory: free/ci
+        run: go test -mod=vendor -count=1 ./bench/cache/...
+
+      - name: Cache cold and warm (cachebench)
+        working-directory: free/ci
+        env:
+          NSELF_V15: '1'
+          NSELF_CACHE_BENCH_RUNS: '20'
+          NSELF_CACHE_BENCH_OUT: ${{ runner.temp }}/cache-carriers.json
+        run: |
+          set -euo pipefail
+          export NSELF_REVISION="$(git rev-parse --short=12 HEAD)"
+          go test -mod=vendor -tags integration -count=1 -run '^TestRemoteCarrierThroughput$' ./internal/cache/remote/
+          for i in 1 2 3; do
+            go run -mod=vendor ./bench/cache/cmd/cachebench -runs 20 -carriers "$NSELF_CACHE_BENCH_OUT" -json > "$RUNNER_TEMP/cache-bench-$i.json"
+          done
+          cp "$RUNNER_TEMP/cache-bench-1.json" "$RUNNER_TEMP/cache-bench.json"
+          for i in 1 2 3; do
+            echo "repetition $i"
+            python3 -c 'import json,sys; [print("%-34s p50 %10.3f p95 %10.3f n %d" % (m["name"],m["p50"],m["p95"],m["n"])) for m in json.load(open(sys.argv[1]))["metrics"]]' "$RUNNER_TEMP/cache-bench-$i.json"
+          done
+          python3 -c 'import json,sys; [print(f) for f in json.load(open(sys.argv[1]))["fixtures"]]' "$RUNNER_TEMP/cache-bench-1.json"
+          python3 -c 'import json,sys; [print(f) for f in json.load(open(sys.argv[1]))["transfers"]]' "$RUNNER_TEMP/cache-bench-1.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: cache-bench-${{ matrix.name }}
+          path: |
+            ${{ runner.temp }}/cache-bench-*.json
+            ${{ runner.temp }}/cache-carriers.json
           if-no-files-found: ignore
 
   schedbench:
