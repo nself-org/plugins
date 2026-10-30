@@ -16,9 +16,10 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
+	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
-	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // Env is one engine instance over a work directory.
@@ -67,7 +68,7 @@ func (e *Env) Attempt(ctx context.Context, id string) error {
 			return s.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: "p" + id, Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"})
 		},
 		func() error { return s.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, "") },
-		func() error { return storetest.Admit(ctx, s, id) },
+		func() error { return admit(ctx, s, id) },
 		func() error { return s.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}) },
 	}
 	for i, step := range steps {
@@ -76,6 +77,16 @@ func (e *Env) Attempt(ctx context.Context, id string) error {
 		}
 	}
 	return nil
+}
+
+// admit leases the queued attempt id through dispatch.Admit, the production
+// admission path (R-SEC-22): the bench never names a store admission function and
+// imports no test-support package. The host has room for any number of attempts.
+func admit(ctx context.Context, s *store.Store, id string) error {
+	_, err := dispatch.Admit(ctx, s, dispatch.Request{AttemptID: id, Local: true, Host: "bench-host",
+		Placement:   sched.Placement{RunnerID: "bench-runner", CPU: 1, MemMB: 256},
+		CapacityCPU: 1 << 20, CapacityMemMB: 1 << 20})
+	return err
 }
 
 // Finalizing moves the running attempt id to finalizing and returns the epoch a

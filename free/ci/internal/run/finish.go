@@ -205,6 +205,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		exit = max(exit, x)
 		f.Veto = "release not published (nself ci artifacts sign " + f.RunID + ")"
 	}
+	ev.Errors = append(ev.Errors, annotations(f.Hooks.AfterRuns, f.RunID)...) // the stored document carries them too
 	// the status has its own budget: slow hooks must not eat it
 	pctx, pdone := context.WithTimeout(context.WithoutCancel(context.Background()), 60*time.Second)
 	line, pnotes := c.postStatus(pctx, f, info, ev)

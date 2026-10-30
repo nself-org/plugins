@@ -85,6 +85,24 @@ type AfterRunHook interface {
 	AfterRun(ctx context.Context, r RunInfo) error
 }
 
+// EvidenceAnnotator is an AfterRun hook that stored errors on the run's evidence
+// (the record gate's E809). finish adds them to the document the run returns, so
+// `nself ci evidence verify` prints on the first call what the store holds for
+// every later call, over the CLI, HTTP and MCP alike (P7-CI-62, D-1519).
+type EvidenceAnnotator interface {
+	EvidenceErrors(runID string) []model.EvidenceError
+}
+
+// annotations collects the errors the hooks stored on the evidence of runID.
+func annotations(hooks []AfterRunHook, runID string) (out []model.EvidenceError) {
+	for _, h := range hooks {
+		if a, ok := h.(EvidenceAnnotator); ok {
+			out = append(out, a.EvidenceErrors(runID)...)
+		}
+	}
+	return out
+}
+
 // Finalizer closes a run; finalizers run in Name order.
 type Finalizer interface {
 	Name() string
