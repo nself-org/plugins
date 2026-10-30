@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -193,7 +194,7 @@ func forkBombOnce(t *testing.T, id string) {
 	start := time.Now()
 	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second; s.MemoryMB = 1024 })
 	if res.Reason != "resource_limit" {
-		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
+		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q\nrunsc logs:\n%s", res, tail(out, 1500), runscLogDigest())
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
@@ -252,4 +253,10 @@ func assertGone(t *testing.T, name string) {
 	if err != nil || strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("container %s still exists: %q %v", name, out, err)
 	}
+}
+
+// runscLogDigest lists the newest runsc debug logs and their fatal-looking lines (diagnostic).
+func runscLogDigest() string {
+	b, _ := osexec.Command("sudo", "sh", "-c", `cd /var/log/runsc && ls -lt | head -12; for f in $(ls -t | head -6); do echo "== $f"; grep -i -E "fatal|panic|runtime:|thread|pids|resource temp|cgroup|exit|killed|oom" "$f" | tail -12 | cut -c1-300; done`).CombinedOutput()
+	return string(b)
 }

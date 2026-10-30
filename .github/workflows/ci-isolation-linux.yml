@@ -123,7 +123,9 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/gvisor.tar.bz2" "$base/gvisor.tar.bz2"
           echo "${GVISOR_SHA512}  $RUNNER_TEMP/gvisor.tar.bz2" | sha512sum -c -
           sudo tar -xjf "$RUNNER_TEMP/gvisor.tar.bz2" -C /usr/local/bin
-          sudo runsc install
+          sudo mkdir -p /var/log/runsc
+          sudo chmod 755 /var/log/runsc
+          sudo runsc install -- --debug-log=/var/log/runsc/
           sudo systemctl restart docker
           docker info --format '{{json .Runtimes}}' | tee "$RUNNER_TEMP/runtimes.json"
           grep -q runsc "$RUNNER_TEMP/runtimes.json"
