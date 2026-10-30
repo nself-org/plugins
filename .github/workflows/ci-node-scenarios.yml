@@ -43,6 +43,7 @@ jobs:
       - name: Scenario 2, scenario 3, platform steering and write-load legs
         working-directory: plugins/free/ci
         run: |
+          set -o pipefail
           go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario(2|3)|TestPlatformSteering|TestWriteLoad' ./test/sim \
             -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario3 TestPlatformSteering TestWriteLoad
 
@@ -58,5 +59,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: node-scenario-perf
-          path: ${{ runner.temp }}/node-perf.json
+          path: |
+            ${{ runner.temp }}/node-perf.json
+            ${{ runner.temp }}/node-legs.json
           if-no-files-found: ignore

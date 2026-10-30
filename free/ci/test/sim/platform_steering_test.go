@@ -60,22 +60,22 @@ func matrixConfig(platforms ...any) model.PipelineConfig {
 func TestPlatformSteering(t *testing.T) {
 	pass := passRunner("steered job")
 	f := newFixtureWith(t, []nodeSpec{
-		{id: "n-amd64", host: "10.0.1.1", shape: shapePlatform("linux", "amd64")},
-		{id: "n-arm64", host: "10.0.1.2", shape: shapePlatform("linux", "arm64")},
-	}, map[string]func(context.Context, *node, session.JobRun) (session.JobResult, error){"n-amd64": pass, "n-arm64": pass})
-	amd, arm := f.nodes[0], f.nodes[1]
+		{id: "n-s390x", host: "10.0.1.1", shape: shapePlatform("linux", "s390x")},
+		{id: "n-ppc64le", host: "10.0.1.2", shape: shapePlatform("linux", "ppc64le")},
+	}, map[string]func(context.Context, *node, session.JobRun) (session.JobResult, error){"n-s390x": pass, "n-ppc64le": pass})
+	amd, arm := f.nodes[0], f.nodes[1] // s390x and ppc64le: platforms no CI host has, so the host default never matches them
 	ctx := context.Background()
 
-	t.Run("a matrix of amd64 and arm64 uses both nodes from one host", func(t *testing.T) {
-		ch, out := f.startConfig(ctx, matrixConfig("linux/amd64", "linux/arm64"), []string{"linux/amd64", "linux/arm64"})
+	t.Run("a matrix of two platforms uses a node of each from one host", func(t *testing.T) {
+		ch, out := f.startConfig(ctx, matrixConfig("linux/s390x", "linux/ppc64le"), []string{"linux/s390x", "linux/ppc64le"})
 		res := wait(t, ch, "the run")
 		if res.Exit != 0 || res.Summary.Result != "pass" {
 			t.Fatalf("exit %d result %s\n%s", res.Exit, res.Summary.Result, out)
 		}
 		if len(amd.ran()) != 1 || len(arm.ran()) != 1 {
-			t.Fatalf("amd64 node ran %v, arm64 node ran %v; each matrix entry must run once on the node of its platform", amd.ran(), arm.ran())
+			t.Fatalf("s390x node ran %v, ppc64le node ran %v; each matrix entry must run once on the node of its platform", amd.ran(), arm.ran())
 		}
-		for entry, other := range map[string]string{"unit@linux/amd64": "n-arm64", "unit@linux/arm64": "n-amd64"} {
+		for entry, other := range map[string]string{"unit@linux/s390x": "n-ppc64le", "unit@linux/ppc64le": "n-s390x"} {
 			lines := explainJob(t, f, res.RunID, entry)
 			if !strings.Contains(lines, other) || !strings.Contains(lines, string(model.PlatformMismatch)) {
 				t.Errorf("explain %s does not list %s with %s:\n%s", entry, other, model.PlatformMismatch, lines)
@@ -109,7 +109,7 @@ func TestPlatformSteering(t *testing.T) {
 			t.Fatalf("a job with no platform ran on a node that is not %s\n%s", host, out)
 		}
 		if len(amd.ran()) != 1 || len(arm.ran()) != 1 {
-			t.Fatalf("a node of another platform took the job: amd64 %v arm64 %v", amd.ran(), arm.ran())
+			t.Fatalf("a node of another platform took the job: s390x %v ppc64le %v", amd.ran(), arm.ran())
 		}
 	})
 }
