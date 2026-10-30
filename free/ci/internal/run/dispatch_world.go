@@ -16,6 +16,7 @@ package run
 import (
 	"context"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/fairq"
@@ -44,17 +45,33 @@ func attemptBand(declared, trigger string) string {
 	return b.String()
 }
 
+// wantPlatform is the platform an attempt asks the scheduler for: the one its job or matrix entry names
+// explicitly (AttemptSpec.Platform), else the invoking host's own. An explicit platform steers placement
+// to a node of that platform; with none the host's platform stays the default. A job nobody can take
+// (no online node of that platform) is unplaceable with platform.mismatch on every alternative, which
+// `ci explain` shows; it never runs on the wrong architecture.
+func wantPlatform(explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	return platform()
+}
+
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob), then sets what
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
 // demand. The job's own labels, tools, isolation floor and accelerators are dropped: the local
 // declaration carries no measured facts for them until P7-TRUST-08, and the exec-time isolation
 // hook is the gate for them.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
+	want := wantPlatform(s.Platform)
 	c := planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()}, DefaultPlatform: platform(), Foreground: s.Foreground}
 	if p := rd.sess.Plan; p != nil && len(p.Support) > 0 {
 		c.Support = p.Support
 	}
-	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
+	if !slices.Contains(c.Support, want) { // an explicit platform outside the host-only default support is still the job's own ask
+		c.Support = append(slices.Clone(c.Support), want)
+	}
+	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Platform: s.Platform, Job: *s.Job})
 	j.Key, j.Attempt, j.Trust = id, s.N, model.TrustClass(rd.row.SourceTrust)
 	if rd.sess.AdmitTrust != "" { // the row records the requested class; placement uses the class the run was admitted at
 		j.Trust = rd.sess.AdmitTrust
@@ -63,7 +80,7 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 	j.Pipeline.Band = attemptBand(s.Band, rd.row.Trigger)
 	j.Accelerators = nil
 	j.Pipeline.Record = rd.sess.Record
-	req := model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	req := model.PlacementRequirements{Platform: want, CPU: int64(cpu), MemMB: int64(mem)}
 	if s.Job.RemoteOnly { // the only jobs that go to a node with requirements: the world can check them against the node's facts
 		req.Labels, req.Tools, req.IsolationMin, req.Network = j.Requirements.Labels, j.Requirements.Tools, j.Requirements.IsolationMin, j.Requirements.Network
 		if s.Job.Requirements != nil {

@@ -33,6 +33,9 @@ type AttemptSpec struct {
 	N              int
 	Foreground     bool
 	Band, Previous string
+	// Platform is the os/arch the job asks for: the matrix entry the planner expanded it from, empty
+	// when the job names none. Empty means the invoking host's own platform (P7-NODE-17).
+	Platform string
 }
 
 // Admitted is an attempt that holds a lease.
