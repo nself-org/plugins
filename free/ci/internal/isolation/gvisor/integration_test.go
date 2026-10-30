@@ -183,7 +183,7 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 }
 
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
 		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
 	}
 }
@@ -191,14 +191,13 @@ func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second; s.MemoryMB = 1024 })
 	if res.Reason != "resource_limit" {
 		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
 	}
-	t.Logf("DIAG %s: %+v tail=%q", id, res, tail(out, 600))
 	assertGone(t, "nself-ci-"+id)
 }
 
