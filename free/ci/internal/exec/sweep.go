@@ -53,7 +53,7 @@ func (e *Executor) sweep(ctx context.Context, current, home string) error {
 	if err := e.sweepProcesses(ctx, home, current); err != nil {
 		return err
 	}
-	return e.sweepContainers(ctx, current)
+	return e.sweepContainers(ctx, current, home)
 }
 
 // sweepOnStart is the sweep a job start runs: the process sweep every time, the
@@ -69,7 +69,7 @@ func (e *Executor) sweepOnStart(ctx context.Context, current, home string) error
 	if !sweepDue(current, now) {
 		return nil
 	}
-	if err := e.sweepContainers(ctx, current); err != nil {
+	if err := e.sweepContainers(ctx, current, home); err != nil {
 		// a sweep that failed or was cancelled did not clean up: the next job
 		// start must try again instead of trusting the window
 		sweepRelease(current, now)
@@ -114,14 +114,23 @@ func sweepRelease(current string, claimed time.Time) {
 // either, and an agent crash leaves the container behind in the one that started it (D-0965).
 var sweepRuntimes = []string{"docker", "podman"}
 
-// sweepContainers removes the labelled containers of stale coordinators from every installed runtime. A runtime
+// sweepContainers removes the labelled containers of stale coordinators from every installed runtime that
+// home started a container with (runtime_marker.go; every runtime until one full sweep completed). A runtime
 // that fails does not stop the others from being swept; the first failure is returned.
-func (e *Executor) sweepContainers(ctx context.Context, current string) error {
+func (e *Executor) sweepContainers(ctx context.Context, current, home string) error {
 	var first error
+	all := true
 	for _, binary := range sweepRuntimes {
+		if sweepSkips(home, binary) {
+			all = false
+			continue
+		}
 		if err := e.sweepRuntime(ctx, current, binary); err != nil && first == nil {
 			first = err
 		}
+	}
+	if first == nil && all {
+		markSweptAll(home)
 	}
 	return first
 }

@@ -94,6 +94,9 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)
 	runtime := containerRuntime()
+	if err := markRuntimeUsed(s.Home, runtime); err != nil { // the orphan sweep lists only marked runtimes
+		return -1, err
+	}
 	stop := containerStopper(runtime, name, e.Grace)
 	code, err := e.runCommandIn(ctx, s.Stdin, append([]string{runtime}, args...), workspace, cliEnv, s.Output, stop, nil, "")
 	if err != nil {

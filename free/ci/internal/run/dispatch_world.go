@@ -25,6 +25,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -72,10 +73,7 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 		c.Support = append(slices.Clone(c.Support), want)
 	}
 	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Platform: s.Platform, Job: *s.Job})
-	j.Key, j.Attempt, j.Trust = id, s.N, model.TrustClass(rd.row.SourceTrust)
-	if rd.sess.AdmitTrust != "" { // the row records the requested class; placement uses the class the run was admitted at
-		j.Trust = rd.sess.AdmitTrust
-	}
+	j.Key, j.Attempt, j.Trust = id, s.N, rd.jobTrust()
 	j.User, j.Team = rd.sess.User, rd.sess.Team
 	j.Pipeline.Band = attemptBand(s.Band, rd.row.Trigger)
 	j.Accelerators = nil
@@ -125,6 +123,15 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	return p, nil
 }
 
+// jobTrust is the class every job of the run is placed at: the class the run was admitted at, else the
+// class the row records.
+func (rd *runDispatch) jobTrust() model.TrustClass {
+	if rd.sess.AdmitTrust != "" { // the row records the requested class; placement uses the class the run was admitted at
+		return rd.sess.AdmitTrust
+	}
+	return model.TrustClass(rd.row.SourceTrust)
+}
+
 // world builds the placement world of the run: this machine as "local" (probe
 // facts, the PERSONAL own node declaration, docker and tools as the run's plan
 // measured them, else docker unknown) and every registered node.
@@ -134,6 +141,9 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	if pl := rd.sess.Plan; pl != nil && pl.World.Measured { // the plan's measured facts, so `ci plan` and the run agree on this machine (D-1104)
 		in.Docker, in.Tools, in.DockerUnknown = pl.World.Docker, pl.World.Tools, false
 	}
+	// what no job of this run can use is not produced (P7-CI-46): every job carries jobTrust, and a run
+	// without a provider repo drops every hosted runner below (dropProviderRunners)
+	ctx = world.WithRunUse(ctx, world.RunUse{NoHosted: rd.sess.ProviderRepo == "", NoNetworkProof: !trust.NetworkProofMatters(rd.jobTrust())})
 	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now}, in, p)
 	if err != nil {
 		return sched.World{}, "", err

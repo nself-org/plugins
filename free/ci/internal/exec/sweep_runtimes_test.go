@@ -61,7 +61,7 @@ func TestSweepReachesEveryRuntime(t *testing.T) {
 				fakeSweepRuntime(t, dir, binary, r.listing, r.psCode)
 			}
 			e := &Executor{Isolation: BaselineIsolator{}, Stale: sweepStale{"dead": true, "alive": false}}
-			err := e.sweepContainers(context.Background(), "now")
+			err := e.sweepContainers(context.Background(), "now", "")
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, want error %v", err, tc.wantErr)
 			}

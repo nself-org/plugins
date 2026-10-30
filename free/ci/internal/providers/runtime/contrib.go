@@ -20,6 +20,8 @@ package runtime
 //          Skipped() is the explanation source for a provider that is absent from the world: a runner
 //          that does not exist has no placement reason to carry the code, so `ci providers show` and
 //          `ci doctor --providers` (P7-HOST-12) and `plan --explain` read the E700 line from here.
+//          A world built for a run that can place no hosted runner (world.RunUse.NoHosted) gets no
+//          hosted runner and runs no credential lookup (`gh auth token`) and no Describe.
 
 import (
 	"context"
@@ -155,6 +157,13 @@ func (c *Contributor) Skipped() []Skip {
 func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 	// compat.V15(P7-HOST-16): no hosted runners in the world -> hosted runners from registered providers
 	if !compat.V15() {
+		return nil
+	}
+	if world.RunUseFrom(ctx).NoHosted { // the run can place no hosted runner: no credential lookup, no Describe (P7-CI-46)
+		w.Hosted = nil
+		c.mu.Lock()
+		c.skipped = nil
+		c.mu.Unlock()
 		return nil
 	}
 	c.mu.Lock()

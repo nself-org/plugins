@@ -32,6 +32,32 @@ func PipelineFrom(ctx context.Context) (sched.Pipeline, bool) {
 	return p, ok
 }
 
+type runUseKey struct{}
+
+// RunUse says which world facts no job of the run being placed can read (P7-CI-46). A contributor whose
+// fact the run cannot use skips the work that produces it and leaves the fact absent, which every reader
+// already treats as "not proven" or "no runner". The zero value, and a context without WithRunUse, means
+// the run may use every fact.
+type RunUse struct {
+	// NoHosted: no hosted runner can be placed for the run (a one-shot run without a provider repo drops
+	// every hosted runner), so the providers contributor resolves no credential and describes nothing.
+	NoHosted bool
+	// NoNetworkProof: no job of the run is of a class whose admission reads the network proof
+	// (trust.NetworkProofMatters), so the netscope contributor starts no probe.
+	NoNetworkProof bool
+}
+
+// WithRunUse returns ctx carrying u for the contributors of a world build.
+func WithRunUse(ctx context.Context, u RunUse) context.Context {
+	return context.WithValue(ctx, runUseKey{}, u)
+}
+
+// RunUseFrom returns the RunUse of ctx; the zero value when none was set.
+func RunUseFrom(ctx context.Context) RunUse {
+	u, _ := ctx.Value(runUseKey{}).(RunUse)
+	return u
+}
+
 var contributions = struct {
 	sync.RWMutex
 	byField map[string]Contributor

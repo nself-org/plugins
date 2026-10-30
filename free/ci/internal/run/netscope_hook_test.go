@@ -95,3 +95,21 @@ func TestContributorPublishesTheProofForTheLocalRunnerOnly(t *testing.T) {
 		t.Fatalf("%+v", w.Network)
 	}
 }
+
+// A run with no job whose admission reads the proof neither starts the probe nor publishes a proven scope
+// (P7-CI-46); the same world without the hint still gets the proof.
+func TestContributorSkipsTheProofWhenNoJobCanUseIt(t *testing.T) {
+	old := localProof
+	t.Cleanup(func() { localProof = old })
+	asked := 0
+	localProof = &scopeProof{proven: "docker", binary: func(context.Context) string { asked++; return "docker" }, scopes: []model.NetworkScope{"restricted"}, at: time.Now()}
+	local := sched.Runner{ID: "local"}
+	local.Capability.Identity = model.CapabilityIdentity{ID: "local", Provider: "local", Transport: "local", Labels: []string{world.LocalLabel}}
+	w := sched.World{Runners: []sched.Runner{local}}
+	if err := contributeNetwork(world.WithRunUse(context.Background(), world.RunUse{NoNetworkProof: true}), &w); err != nil || len(w.Network) != 0 || asked != 0 {
+		t.Fatalf("network %+v, err %v, runtime probes %d: want no proof and no probe", w.Network, err, asked)
+	}
+	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network["local"].Enforced) != 1 {
+		t.Fatalf("without the hint the proof is published: %+v %v", w.Network, err)
+	}
+}
