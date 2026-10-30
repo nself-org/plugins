@@ -166,6 +166,13 @@ jobs:
           fi
           bash free/ci/internal/invariants/testdata/mutate.sh free/ci test/security/testdata/regressions 'Test' -tags security ./test/security/...
 
+      # D-1508: the cache, artifact and release security matrix (free/ci/test/cachesec, build tag cachesec) on a hosted
+      # Linux runner. The drill fails on a case whose observed outcome differs from its expected one and on any skip.
+      - name: Cache security matrix
+        run: |
+          set -euo pipefail
+          bash scripts/drill/cache-security/run 2>&1 | tee "$RUNNER_TEMP/cachesec.txt"
+
       - name: Isolation levels drill
         run: |
           set -euo pipefail

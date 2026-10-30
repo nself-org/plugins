@@ -89,6 +89,27 @@ jobs:
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
 
+      # P7-CACHE-12: the cache engine's own cold/warm cycles (specs.Begin, Finalize) on seeded Go, pnpm and Rust trees,
+      # plus the throughput of the ssh and agent carriers in both directions. Every number is measured; nothing is simulated.
+      - name: Cache cold and warm (cachebench)
+        working-directory: free/ci
+        env:
+          NSELF_V15: '1'
+          NSELF_CACHE_BENCH_RUNS: '20'
+          NSELF_CACHE_BENCH_OUT: ${{ runner.temp }}/cache-carriers.json
+        run: |
+          set -euo pipefail
+          export NSELF_REVISION="$(git rev-parse --short=12 HEAD)"
+          go test -mod=vendor -tags integration -count=1 -run '^TestRemoteCarrierThroughput$' ./internal/cache/remote/
+          for i in 1 2 3; do
+            go run -mod=vendor ./bench/cache/cmd/cachebench -runs 20 -carriers "$NSELF_CACHE_BENCH_OUT" -json > "$RUNNER_TEMP/cache-bench-$i.json"
+          done
+          cp "$RUNNER_TEMP/cache-bench-1.json" "$RUNNER_TEMP/cache-bench.json"
+          for i in 1 2 3; do
+            echo "repetition $i"
+            python3 -c 'import json,sys; [print("%-34s p50 %10.3f p95 %10.3f n %d" % (m["name"],m["p50"],m["p95"],m["n"])) for m in json.load(open(sys.argv[1]))["metrics"]]' "$RUNNER_TEMP/cache-bench-$i.json"
+          done
+
       - name: Scheduling cost (schedbench)
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/schedbench -runs 20 -warmup 2 -out "$RUNNER_TEMP/sched-bench.json"
@@ -144,6 +165,8 @@ jobs:
           name: ci-bench-${{ matrix.name }}
           path: |
             ${{ runner.temp }}/ci-bench.json
+            ${{ runner.temp }}/cache-bench-*.json
+            ${{ runner.temp }}/cache-carriers.json
             ${{ runner.temp }}/ci-bench-services.json
             ${{ runner.temp }}/sched-bench.json
           if-no-files-found: ignore
