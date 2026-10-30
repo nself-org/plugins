@@ -91,6 +91,9 @@ func (s *Session) beat(extra []protocol.LeaseState) {
 	for _, l := range s.active {
 		states = append(states, protocol.LeaseState{LeaseID: l.lease.LeaseID, Epoch: l.lease.Epoch, State: l.state()})
 	}
+	if s.cfg.Fenced != nil {
+		states = append(states, s.cfg.Fenced()...)
+	}
 	used, err := s.cfg.Slots.Used()
 	if err != nil {
 		used = len(s.active)

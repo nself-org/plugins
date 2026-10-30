@@ -165,19 +165,22 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 	logf := func(format string, a ...any) {
 		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent pull: "+format+"\n", a...)
 	}
+	sweepOrphanJobs(ctx, f.coordinator, logf)
 	resolver := pullResolver(state, f, cred.Enrollment.NodeID, age.Path)
 	for ctx.Err() == nil {
 		car := agent.NewCarrier(agent.CarrierConfig{
 			Client: agent.Options{BaseURL: baseURL, TLS: tlsc, OnSkew: func(d time.Duration) { noteSkew(state, d) }},
 			Logf:   logf,
 		})
-		watch := &drainWatch{Frames: agent.WithNodeSecrets(newFenceCarrier(car, state), resolver, logf)}
+		fence := newFenceCarrier(car, state)
+		watch := &drainWatch{Frames: agent.WithNodeSecrets(fence, resolver, logf)}
 		s, err := session.New(session.Config{
 			Carrier: watch, Key: key, Slots: table, StateDir: state,
 			Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
 			Runner:      leaseRunner{coordinator: f.coordinator},
 			Coordinator: session.Coordinator{ID: f.coordinator, RootFingerprint: cred.Enrollment.RootFingerprint},
 			Status:      hostStatus,
+			Fenced:      fence.fenced,
 		})
 		if err != nil {
 			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)

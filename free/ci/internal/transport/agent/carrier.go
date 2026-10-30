@@ -54,13 +54,14 @@ type outFrame struct {
 
 // Carrier is session.Carrier over the pull connection.
 type Carrier struct {
-	cfg    CarrierConfig
-	cl     *client
-	cancel context.CancelFunc
-	inbox  chan protocol.Message
-	done   chan struct{}
-	wake   chan struct{} // new frame, token change or close: the uploader looks again
-	space  chan struct{} // frames were trimmed: a blocked Send looks again
+	agentTTL time.Duration // from the last welcome (0 until one arrived)
+	cfg      CarrierConfig
+	cl       *client
+	cancel   context.CancelFunc
+	inbox    chan protocol.Message
+	done     chan struct{}
+	wake     chan struct{} // new frame, token change or close: the uploader looks again
+	space    chan struct{} // frames were trimmed: a blocked Send looks again
 
 	mu        sync.Mutex
 	closed    bool

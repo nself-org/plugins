@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/lease"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -35,6 +36,7 @@ type world struct {
 	down    bool // the coordinator process is not running
 	store   *store.Store
 	engine  *lease.Engine
+	nodes   *registry.Registry // the node registry the lease engine's breaker moves to maintenance
 	effects string
 	audits  []store.AuditRow
 }
@@ -48,6 +50,7 @@ func newWorld(t *testing.T) *world {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	w.store = s
+	w.nodes = registry.New(s)
 	s.SetAuditSealer(func(_ []byte, row store.AuditRow) (store.AuditChain, error) {
 		w.mu.Lock()
 		w.audits = append(w.audits, row)
@@ -73,7 +76,7 @@ func (w *world) retryReasons(attemptID string) []string {
 
 // coordinator builds a fresh lease engine over the same store: a restarted coordinator process.
 func (w *world) coordinator() *lease.Engine {
-	return lease.New(w.store, nil, lease.Config{Clock: w.clock, Heartbeat: heartbeat, TTL: coordTTL})
+	return lease.New(w.store, w.nodes, lease.Config{Clock: w.clock, Heartbeat: heartbeat, TTL: coordTTL})
 }
 
 func (w *world) clock() time.Time {

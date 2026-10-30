@@ -6,6 +6,7 @@ package main
 // TestMain), killed with SIGKILL while its job runs.
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -50,6 +51,60 @@ func specFile(t *testing.T, attempt string, run ...string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// TestAgentStartKillsTheJobOfAKilledAgent is the same orphan, swept by the start of the next pull agent
+// (sweepOrphanJobs) before any job runs: a node whose retry went elsewhere must not finish the old attempt.
+func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	pidFile := filepath.Join(t.TempDir(), "job.pid")
+	spec := specFile(t, "orphan-2", "sh", "-c", "echo $$ > "+pidFile+"; exec sleep 300")
+	child := exec.Command(os.Args[0], "exec", "--spec", spec, "--evidence", filepath.Join(t.TempDir(), "ev.json"))
+	child.Env = append(os.Environ(), "NSELF_AGENT_TEST_CHILD=1")
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var jobPID int
+	t.Cleanup(func() {
+		_ = child.Process.Kill()
+		_, _ = child.Process.Wait()
+		if jobPID > 0 {
+			_ = syscall.Kill(-jobPID, syscall.SIGKILL)
+		}
+	})
+	waitFor(t, "the job to start", 10*time.Second, func() bool {
+		raw, err := os.ReadFile(pidFile)
+		if err != nil {
+			return false
+		}
+		jobPID, _ = strconv.Atoi(strings.TrimSpace(string(raw)))
+		return jobPID > 0
+	})
+	if err := child.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = child.Process.Wait()
+	if !pidAlive(jobPID) {
+		t.Fatal("fixture: the job died with its agent; nothing to sweep")
+	}
+	sweepOrphanJobs(context.Background(), "local", t.Logf)
+	waitFor(t, "the orphaned job to be killed at agent start", 5*time.Second, func() bool { return !pidAlive(jobPID) })
+}
+
+// TestAgentStartSweepSurvivesAnUnusableWorkBase reports the problem and returns: the agent still starts.
+func TestAgentStartSweepSurvivesAnUnusableWorkBase(t *testing.T) {
+	skipUnixOnly(t)
+	file := filepath.Join(t.TempDir(), "plain-file")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NSELF_CI_AGENT_WORK", filepath.Join(file, "work")) // below a regular file: cannot be created
+	var logged []string
+	sweepOrphanJobs(context.Background(), "local", func(f string, a ...any) { logged = append(logged, f) })
+	if len(logged) == 0 {
+		t.Fatal("an unusable work base was not reported")
+	}
 }
 
 // TestNextStartKillsTheJobOfAKilledAgent starts an agent whose job outlives it

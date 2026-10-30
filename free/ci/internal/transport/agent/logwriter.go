@@ -142,7 +142,7 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	}
 	var enc bytes.Buffer
 	je := json.NewEncoder(&enc)
-	je.SetEscapeHTML(false) // '<' stays one byte; only U+2028/2029 and invalid bytes grow (see tailWindow)
+	je.SetEscapeHTML(false) // '<' stays one byte; controls, U+2028/2029 and invalid bytes grow (see tailWindow)
 	if err := je.Encode(logLine{LineSeq: l.LineSeq, Stream: l.Stream, Text: l.Text}); err != nil {
 		return false, err
 	}

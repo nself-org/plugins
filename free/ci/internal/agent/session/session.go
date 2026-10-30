@@ -81,7 +81,11 @@ type Config struct {
 	// Upgrade runs the coordinator's `upgrade` message on this node (download, verify, swap). It returns the E666 reason key when the
 	// agent refuses (ceiling, downgrade, running_job) and an error for any other failure. Nil: the message is ignored, as before.
 	Upgrade func(ctx context.Context, u protocol.Upgrade) (reason string, err error)
-	Resume  *Resume
+	// Fenced returns the leases this agent fenced itself in an earlier session (state self_fenced, with their
+	// epochs). Every heartbeat reports them until the callback stops returning them, so the coordinator can
+	// fail those leases at once instead of waiting for them to expire (Epic D6). nil reports none.
+	Fenced func() []protocol.LeaseState
+	Resume *Resume
 }
 
 // RejectError is the coordinator's reject of hello.

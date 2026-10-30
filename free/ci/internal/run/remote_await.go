@@ -198,6 +198,11 @@ func (rs *runState) remoteLost(ctx context.Context, pj plan.PlannedJob, job mode
 	if state == "cancelled" {
 		return rs.stopped(o, pj.ID) // a cancel intent won
 	}
+	if state == "needs-operator" { // the lease engine's sweep: a release or at-most-once attempt, or an exhausted retry budget
+		o = failed(o, cause)
+		o.Tail = t.String()
+		return o
+	}
 	if state == "leased" || state == "running" { // the dispatcher could not mark it lost: a cancel intent may have won
 		class := model.FailureClass("infra")
 		if _, refused := providerRefusal(cause); refused {
