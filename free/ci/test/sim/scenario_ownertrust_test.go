@@ -150,6 +150,12 @@ func TestScenario3OwnerTrust(t *testing.T) {
 		}
 	}
 	if res.Exit != 0 || res.Summary.Result != "pass" {
+		diag := func(name string, args ...string) {
+			o, e := exec.Command(name, args...).CombinedOutput()
+			t.Logf("diag %s %v: %v\n%s", name, args, e, o)
+		}
+		diag("ssh", "-i", clientKey, "-p", strconv.Itoa(port), "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", me.Username+"@127.0.0.1", "id; docker info --format '{{.ServerVersion}} {{.MemoryLimit}}' 2>&1; ls -R "+me.HomeDir+"/.nself | head -40; tail -n 30 "+me.HomeDir+"/.nself/ci-agent*/*.log "+me.HomeDir+"/.nself/ci-agent/*.log 2>&1")
+		diag("docker", "ps", "-a", "--format", "{{.ID}} {{.Image}} {{.Status}} {{.Names}}")
 		t.Fatalf("exit %d result %s: the owner-trust job did not run to completion", res.Exit, res.Summary.Result)
 	}
 	for _, want := range []string{"uid=65532", "dockerenv=yes", "CapEff:0000000000000000"} {
