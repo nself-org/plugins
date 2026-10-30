@@ -184,9 +184,9 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	_, res := runJob(t, p, "sandboxed-container", image, "t05-fork", `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	out, res := runJob(t, p, "sandboxed-container", image, "t05-fork", `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	if res.Reason != "resource_limit" {
-		t.Fatalf("fork bomb not classified: %+v", res)
+		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)

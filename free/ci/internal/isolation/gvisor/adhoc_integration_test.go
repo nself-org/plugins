@@ -32,15 +32,16 @@ func runCmd(t *testing.T, dir string, env []string, name string, args ...string)
 	defer cancel()
 	cmd := osexec.CommandContext(ctx, name, args...)
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
-	// SIGQUIT makes a Go binary print every goroutine's stack, which is the evidence a hang needs.
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGQUIT) }
+	// SIGABRT makes a Go binary print every goroutine's stack, which is the evidence a hang needs. SIGQUIT
+	// would not: nself-ci traps it (cmd/v15.go) as a cancel request, so #561's dump stayed empty.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGABRT) }
 	cmd.WaitDelay = 15 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	code := 0
 	if ctx.Err() != nil {
-		t.Fatalf("%s %v did not finish within %s (hang, not a skip): sent SIGQUIT\nstdout: %s\nstderr (goroutine dump): %s\nprocesses and containers at the time:\n%s",
+		t.Fatalf("%s %v did not finish within %s (hang, not a skip): sent SIGABRT\nstdout: %s\nstderr (goroutine dump): %s\nprocesses and containers at the time:\n%s",
 			name, args, runBudget, stdout.String(), tail(stderr.String(), 12000), hangContext())
 	}
 	if ee, ok := err.(*osexec.ExitError); ok {
