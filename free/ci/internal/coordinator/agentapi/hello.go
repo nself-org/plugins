@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
@@ -54,7 +55,7 @@ func (s *Server) serveHello(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	reply, _ := protocol.AcceptHello(*hello, pinned, s.cfg.Versions, s.cfg.MinAgentVersion, "", int(s.cfg.Heartbeat.Milliseconds()), int(s.cfg.agentTTL().Milliseconds()))
+	reply, _ := protocol.AcceptHello(*hello, hello.AgeRecipient, s.cfg.Versions, s.cfg.MinAgentVersion, "", int(s.cfg.Heartbeat.Milliseconds()), int(s.cfg.agentTTL().Milliseconds()))
 	if rej, ok := reply.(protocol.Reject); ok {
 		s.writeHelloReject(w, rej)
 		return
@@ -62,6 +63,23 @@ func (s *Server) serveHello(w http.ResponseWriter, r *http.Request) {
 	if rej := s.checkNodeKey(r, q.node, hello.NodeKey); rej != nil {
 		s.writeHelloReject(w, *rej)
 		return
+	}
+	if s.cfg.CheckAge != nil && hello.AgeRecipient != nil {
+		if err := s.cfg.CheckAge(q.ctx, q.node, *hello.AgeRecipient); err != nil {
+			var changed *registry.Error
+			if errors.As(err, &changed) && changed.Code == "E660" {
+				s.writeHelloReject(w, protocol.Reject{Code: "E660", Reason: "age_recipient_changed"})
+			} else {
+				refuse(w, http.StatusServiceUnavailable, protocol.CodeInvalid, "store", "recipient pin unavailable")
+			}
+			return
+		}
+	}
+	if pinned != nil {
+		if rej := protocol.CheckAgeRecipient(*hello, pinned); rej != nil {
+			s.writeHelloReject(w, *rej)
+			return
+		}
 	}
 	sess := s.startSession(q.node)
 	welcome := reply.(protocol.Welcome)

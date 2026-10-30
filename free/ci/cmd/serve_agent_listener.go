@@ -173,6 +173,10 @@ func startAgentListener(ctx context.Context, addr string, _ *coordinator.Coordin
 	leaf := &agentapi.LeafSource{CA: ca, ID: "local", DNS: dns, IPs: ips}
 	cfg := agentapi.Config{
 		CA: ca, Guard: pki.NewGuard(src.Store), Cert: leaf.Get, Store: src.Store,
+		PinnedAge: registry.New(src.Store).AgeRecipient,
+		CheckAge: func(ctx context.Context, node, recipient string) error {
+			return registry.New(src.Store).CheckAgeRecipient(ctx, node, recipient, "agent")
+		},
 		Leases: lease.New(src.Store, registry.New(src.Store), lease.Config{}), Sink: agentSink(src.Store), Logf: agentLogf,
 		OnAck: func(nodeID, leaseID string) {
 			if fn := agentOnAck; fn != nil {

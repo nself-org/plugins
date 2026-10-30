@@ -71,14 +71,14 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestScenario6PreserveHostedQuotaMovesWorkOffHosted` | 3 | Scenario 6, hybrid |
 | `TestScenario6ResultIsDeterministic` | 3 | Scenario 6, hybrid |
 
+- **Coordinator wait for a missing platform (item 2).** `TestScenario4MissingPlatformWaitsOnACoordinator` registers coordinator facts and builds the world from stored nodes.
+  It proves a serving coordinator waits with `platform.none_available`; the foreground E618 half is also proven end to end.
+
 ## Known limits (what this suite does not prove, and why)
 
 These are production gaps found while writing the suite. They are outside this Ticket's write scope; each has a debt row in hq
 (`quality/debt.yaml`, filed by P7-SCHED-15) and the matrix does not claim them.
 
-- **Coordinator wait for a missing platform (item 2).** `TestScenario4MissingPlatformWaitsOnACoordinator` sets `World.OpenRegistry`
-  by hand: no production code sets it, so on a real coordinator a missing platform ends `unplaceable`, not `waiting` with
-  `platform.none_available`. The suite proves the scheduler contract, not the coordinator wiring. The foreground E618 half is proven end to end.
 - **Spend approval wiring (item 5).** `economics.NotePending` has no production caller, so a held run records no estimate and
   `ApproveSpend` has nothing to approve; `TestEconomicsApprovalPausesUntilAnAdminApproves` calls `NotePending` itself. The pause, the
   approval, the world contributor that reads approvals and the admission are real.

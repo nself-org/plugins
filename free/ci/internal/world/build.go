@@ -63,6 +63,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 			facts = CoordinatorFacts{Serving: true, Mode: "team"}
 		}
 	}
+	w.OpenRegistry = facts.Serving
 	var mode trust.CoordinatorMode
 	if facts.Serving {
 		mode = trust.DecodeCoordinatorMode(facts.Mode)

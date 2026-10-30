@@ -154,13 +154,13 @@ func (p *Profile) planNetwork(s *exec.JobSpec, binary string) (isolation.Network
 	return plan, nil
 }
 
-// Teardown removes the attempt's container if it is still there.
+// Teardown removes the attempt's job, helper, proxy and network, including after a coordinator dies.
 func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
 	facts, av := p.probe(ctx)
 	if !av.Available() {
 		return isolation.Unavailable(av.Reason, "cannot remove the container of attempt %s", a.ID)
 	}
-	return exec.RuntimeRemove(ctx, facts.Binary, "nself-ci-"+a.ID)
+	return exec.RuntimeRemoveAttempt(ctx, facts.Binary, a.ID)
 }
 
 // List returns the names of containers (running or not) carrying label, for SCHED-09.
