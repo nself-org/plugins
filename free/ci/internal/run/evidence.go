@@ -106,6 +106,11 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 			Substantive: o.Substantive, AllowFailure: o.AllowFailure, Result: checkResult(o), Reason: o.Reason, FailureClass: o.FailureClass}
 		if o.State == StateFailed || o.Code != "" {
 			c.Excerpt = diagnose.Excerpt(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
+			if c.Excerpt == "" && o.Detail != "" {
+				// The job printed nothing: it never started, or the executor failed around it. The error text
+				// is then the only cause there is, so it is the excerpt (an infra.executor check was empty).
+				c.Excerpt = diagnose.Excerpt(o.Detail, maxExcerpt)
+			}
 			attachDiagnosis(&c, o)
 		}
 		c.Flaky = o.Flaky

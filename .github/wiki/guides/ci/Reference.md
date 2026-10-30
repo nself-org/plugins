@@ -32,7 +32,7 @@ For the flags of one command, run `nself ci <command> --help`.
 | `nself ci evidence` | v1.5 | read | Show the evidence document of a revision |
 | `nself ci evidence verify` | v1.5 | read | Verify the evidence of a revision against the policy |
 | `nself ci explain` | v1.5 | read | Explain why a job was or was not planned |
-| `nself ci forgejo` | v1.4, v1.5 | read | Show Forgejo server + runner health (ops profile) |
+| `nself ci forgejo` | v1.4, v1.5 | read | Show Forgejo server health (ops profile) |
 | `nself ci logs` | v1.5 | read | Print the logs of a run attempt (-f follows) |
 | `nself ci netproxy` | v1.5 (hidden) | remote | Internal egress proxy used by restricted jobs |
 | `nself ci nodes add` | v1.5 | remote | Add and provision a CI node |
