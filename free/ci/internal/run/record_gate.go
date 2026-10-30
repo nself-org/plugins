@@ -80,7 +80,11 @@ func (g RecordGate) Gate(ctx context.Context, r PublishRequest, status report.St
 	return nil
 }
 
-type recordHooks struct{ sessions sync.Map }
+type recordHooks struct {
+	sessions sync.Map
+	// refused holds the run ids whose refusal evidence was stored (E809), until finish reads them.
+	refused sync.Map
+}
 
 func init() {
 	h := &recordHooks{}
@@ -209,9 +213,19 @@ func (h *recordHooks) AfterRun(ctx context.Context, r RunInfo) error {
 			if e != nil {
 				return fmt.Errorf("%w; record refusal evidence could not be stored", err)
 			}
+			h.refused.Store(r.RunID, true)
 		}
 	}
 	return err
+}
+
+// EvidenceErrors is the refusal AfterRun stored on the run's evidence, so the
+// document the run returns carries what the stored one does (EvidenceAnnotator).
+func (h *recordHooks) EvidenceErrors(runID string) []model.EvidenceError {
+	if _, ok := h.refused.LoadAndDelete(runID); !ok {
+		return nil
+	}
+	return []model.EvidenceError{{Code: record.Code, Detail: record.Reason}}
 }
 
 type recordCleanup struct{ h *recordHooks }

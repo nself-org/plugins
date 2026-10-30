@@ -174,3 +174,32 @@ func TestRecordRefusalPersistsEvidence(t *testing.T) {
 		t.Fatal("refusal reason missing", got.Errors)
 	}
 }
+
+func TestRecordRefusalAnnotatesRunEvidence(t *testing.T) {
+	t.Setenv("NSELF_V15", "1")
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	if err = st.CreatePipeline(ctx, store.PipelineRow{ID: "dev", Project: "project", Revision: "sha", Status: "passed"}); err != nil {
+		t.Fatal(err)
+	}
+	h := &recordHooks{}
+	hooks := []AfterRunHook{h}
+	if got := annotations(hooks, "dev"); len(got) != 0 {
+		t.Fatal("annotated before any refusal", got)
+	}
+	h.sessions.Store("dev", &Session{Store: st, RunID: "dev", Record: false})
+	if err = h.AfterRun(ctx, RunInfo{RunID: "dev", Revision: "sha", Evidence: model.Evidence{InputDigests: model.InputDigests{Config: "cfg"}, Result: "pass"}}); err == nil {
+		t.Fatal("a dev run was not refused")
+	}
+	got := annotations(hooks, "dev")
+	if len(got) != 1 || got[0].Code != record.Code || got[0].Detail != record.Reason {
+		t.Fatal("the run's evidence misses the stored refusal", got)
+	}
+	if again := annotations(hooks, "dev"); len(again) != 0 {
+		t.Fatal("refusal reported twice", again)
+	}
+}
