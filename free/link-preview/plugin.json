@@ -59,7 +59,7 @@
     "compose": "docker-compose.plugin.yml",
     "healthcheck": "/health",
     "kind": "compose",
-    "port": 3736
+    "port": 3718
   },
   "status": "stable",
   "tables": [

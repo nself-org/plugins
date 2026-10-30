@@ -25,7 +25,7 @@ func main() {
 
 	port := os.Getenv("HIPAA_PLUGIN_PORT")
 	if port == "" {
-		port = "3212"
+		port = "3214"
 	}
 	host := os.Getenv("HIPAA_PLUGIN_HOST")
 	if host == "" {
