@@ -264,3 +264,17 @@ func TestIntegrationPlainExit2StaysCode(t *testing.T) {
 		t.Fatalf("exit 2 must stay a code failure: %+v", res)
 	}
 }
+
+// A script that lives long enough for the sampler to find its cgroup and then exits 2 leaves the kernel's
+// counter at 0, so the counter alone cannot turn a job's own failure into a resource_limit.
+func TestIntegrationPidsEventsStaysZeroForALongLivedExit2(t *testing.T) {
+	p, image := prerequisites(t)
+	out, res := runJob(t, p, "sandboxed-container", image, "t05-exit2-long", `sleep 2; exit 2`, nil)
+	t.Logf("long exit 2 readings: %q", tail(out, 600))
+	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
+		t.Fatalf("exit 2 must stay a code failure: %+v", res)
+	}
+	if !strings.Contains(out, "pids.events: max=0 after") {
+		t.Fatalf("the kernel counter was not read for a container that lived 2s: %q", tail(out, 600))
+	}
+}
