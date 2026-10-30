@@ -13,6 +13,8 @@ import "github.com/nself-org/plugins/free/ci/internal/redact"
 type Match = redact.Match
 
 // ValueScanner reports occurrences of registered secret values in a blob.
+// Scan must be safe for concurrent use: the cache save scans windows of one
+// stream on several goroutines (D-1515).
 type ValueScanner interface {
 	Scan(blob []byte) []Match
 }

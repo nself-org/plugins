@@ -6,36 +6,88 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
+	"slices"
+	"sync"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 var ErrSecretContent = errors.New("content holds a registered secret")
 var ErrScanBudget = errors.New("compressed content exceeds scan budget")
 
-// CleanCandidates checks raw, NUL-stripped and both alignments of UTF-16 text.
+// CleanCandidates checks raw, NUL-stripped and both alignments of UTF-16 text
+// (little and big endian). The derived texts are built in pooled scratch
+// buffers, one pass each, so scanning a window does not allocate per call.
 func CleanCandidates(s ValueScanner, b []byte) bool {
 	if !Clean(s, b) {
 		return false
 	}
-	if bytes.IndexByte(b, 0) >= 0 && !Clean(s, bytes.ReplaceAll(b, []byte{0}, nil)) {
-		return false
+	sc := scratchPool.Get().(*scratch)
+	defer scratchPool.Put(sc)
+	if bytes.IndexByte(b, 0) >= 0 {
+		sc.buf = stripNUL(sc.buf[:0], b)
+		if !Clean(s, sc.buf) {
+			return false
+		}
 	}
 	for _, big := range []bool{false, true} {
 		for offset := 0; offset < 2; offset++ {
-			units := make([]uint16, 0, len(b)/2)
-			for i := offset; i+1 < len(b); i += 2 {
-				a, c := b[i], b[i+1]
-				if big {
-					a, c = c, a
-				}
-				units = append(units, uint16(a)|uint16(c)<<8)
-			}
-			if !Clean(s, []byte(string(utf16.Decode(units)))) {
+			sc.buf = appendUTF16(sc.buf[:0], b, offset, big)
+			if !Clean(s, sc.buf) {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+type scratch struct{ buf []byte }
+
+var scratchPool = sync.Pool{New: func() any { return new(scratch) }}
+
+// stripNUL appends b without its NUL bytes to dst.
+func stripNUL(dst, b []byte) []byte {
+	for len(b) > 0 {
+		i := bytes.IndexByte(b, 0)
+		if i < 0 {
+			return append(dst, b...)
+		}
+		dst = append(dst, b[:i]...)
+		b = b[i+1:]
+	}
+	return dst
+}
+
+// appendUTF16 appends the UTF-8 form of b read as UTF-16 code units from
+// offset, byte pairs in the given order. It yields exactly the bytes of
+// []byte(string(utf16.Decode(units))): a surrogate pair is one rune and an
+// unpaired surrogate is U+FFFD.
+func appendUTF16(dst, b []byte, offset int, big bool) []byte {
+	dst = slices.Grow(dst, 3*(len(b)/2)+utf8.UTFMax)
+	unit := func(i int) uint16 {
+		if big {
+			return uint16(b[i+1]) | uint16(b[i])<<8
+		}
+		return uint16(b[i]) | uint16(b[i+1])<<8
+	}
+	for i := offset; i+1 < len(b); i += 2 {
+		r := rune(unit(i))
+		switch {
+		case r < 0x80:
+			dst = append(dst, byte(r))
+		case r < 0x800:
+			dst = append(dst, 0xC0|byte(r>>6), 0x80|byte(r)&0x3F)
+		case r < 0xD800 || r >= 0xE000:
+			dst = append(dst, 0xE0|byte(r>>12), 0x80|byte(r>>6)&0x3F, 0x80|byte(r)&0x3F)
+		case r < 0xDC00 && i+3 < len(b) && unit(i+2) >= 0xDC00 && unit(i+2) < 0xE000:
+			r = utf16.DecodeRune(r, rune(unit(i+2)))
+			dst = append(dst, 0xF0|byte(r>>18), 0x80|byte(r>>12)&0x3F, 0x80|byte(r>>6)&0x3F, 0x80|byte(r)&0x3F)
+			i += 2
+		default:
+			dst = append(dst, 0xEF, 0xBF, 0xBD) // U+FFFD
+		}
+	}
+	return dst
 }
 
 // Compressed reports gzip or ZIP magic without trusting a file extension.

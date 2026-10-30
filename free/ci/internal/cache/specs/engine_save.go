@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -40,17 +41,59 @@ type Staged struct {
 func (e *Engine) Stage(ctx context.Context, r SaveRequest) (*Staged, error) {
 	realm := cas.CacheRealm(string(r.Namespace.Canonical()))
 	maxBytes, _ := e.Entries.Caps()
+	names := r.Dirs.names()
+	// Phase 1: the dirs are independent streams, so they pack, scan, hash and sync
+	// side by side (at most four, as a restore does) into temporary files. Each may
+	// use the whole byte cap; the sum is checked once every dir is in. Nothing is
+	// visible in the store yet, so a refusal in any dir leaves nothing behind.
+	prep := make([]*cas.Prepared, len(names))
+	stats := make([]PackStats, len(names))
+	errs := make([]error, len(names))
+	slots := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for i, name := range names {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			prep[i], stats[i], errs[i] = e.prepareDir(ctx, r.Base, realm, r.Dirs[name], maxBytes, r.Spec.InflateScan)
+		})
+	}
+	wg.Wait()
+	discard := func() {
+		for _, p := range prep {
+			if p != nil {
+				p.Discard()
+			}
+		}
+	}
+	for _, err := range errs { // the first error in dir order wins
+		if err != nil {
+			discard()
+			return nil, e.refuse(ctx, r, err)
+		}
+	}
+	// Phase 2, in dir order: publish, then check a restore would accept the blob.
 	st := &Staged{req: r}
 	var files int
-	for _, name := range r.Dirs.names() {
-		digest, size, ps, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-st.total, r.Spec.InflateScan)
+	var sum int64
+	for i := range prep {
+		if sum += prep[i].Size(); sum > maxBytes {
+			discard()
+			return nil, e.refuse(ctx, r, errSizeCap)
+		}
+	}
+	for i, name := range names {
+		digest, size, err := prep[i].Publish()
+		prep[i] = nil
 		if err != nil {
+			discard()
 			return nil, e.refuse(ctx, r, err)
 		}
 		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
+			discard()
 			return nil, e.refuse(ctx, r, restoreCheckError(name, err))
 		}
-		files += ps.Files
+		files += stats[i].Files
 		st.total += size
 		st.blobs = append(st.blobs, entries.Blob{Path: name, SHA256: digest, Size: size})
 	}
@@ -142,6 +185,16 @@ func (c *capWriter) Write(p []byte) (int, error) {
 // copy beats an inflate (D-1008). Compress only when a blob leaves the host.
 // Every save also scans gzip and ZIP payloads inside the files.
 func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, inflate bool) (string, int64, PackStats, error) {
+	p, st, err := e.prepareDir(ctx, base, realm, rel, budget, inflate)
+	if err != nil {
+		return "", 0, st, err
+	}
+	digest, size, err := p.Publish()
+	return digest, size, st, err
+}
+
+// prepareDir is putDir up to, not including, the publish.
+func (e *Engine) prepareDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, inflate bool) (*cas.Prepared, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
 	done := make(chan struct{})
@@ -155,8 +208,8 @@ func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel
 			err = sw.Close()
 		}
 	}()
-	digest, size, err := e.Blobs.Put(ctx, realm, pr)
+	p, err := e.Blobs.Prepare(ctx, realm, pr)
 	_ = pr.CloseWithError(err)
 	<-done
-	return digest, size, st, err
+	return p, st, err
 }
