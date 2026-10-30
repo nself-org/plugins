@@ -66,7 +66,7 @@ func startHostSSHD(t *testing.T) (port int, clientKey, hostKey string) {
 	cfg := strings.Join([]string{
 		"Port " + strconv.Itoa(port), "ListenAddress 127.0.0.1", "HostKey " + filepath.Join(dir, "host"),
 		"PidFile " + filepath.Join(dir, "sshd.pid"), "AuthorizedKeysFile " + filepath.Join(dir, "authorized_keys"),
-		"PasswordAuthentication no", "KbdInteractiveAuthentication no", "PubkeyAuthentication yes", "UsePAM no",
+		"PasswordAuthentication no", "KbdInteractiveAuthentication no", "PubkeyAuthentication yes", "UsePAM yes",
 		"StrictModes no", "AllowUsers " + me.Username, "PermitRootLogin no", ""}, "\n")
 	if err = os.WriteFile(filepath.Join(dir, "sshd_config"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
@@ -74,6 +74,10 @@ func startHostSSHD(t *testing.T) (port int, clientKey, hostKey string) {
 	must("sudo", "-n", "mkdir", "-p", "/run/sshd")
 	must("sudo", "-n", "/usr/sbin/sshd", "-f", filepath.Join(dir, "sshd_config"), "-E", filepath.Join(dir, "sshd.log"))
 	t.Cleanup(func() {
+		if t.Failed() {
+			log, _ := os.ReadFile(filepath.Join(dir, "sshd.log"))
+			t.Logf("sshd log:\n%s", log)
+		}
 		if pid, err := os.ReadFile(filepath.Join(dir, "sshd.pid")); err == nil {
 			_ = exec.Command("sudo", "-n", "kill", strings.TrimSpace(string(pid))).Run()
 		}
