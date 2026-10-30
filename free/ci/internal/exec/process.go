@@ -13,10 +13,14 @@ import (
 // runProcess returns the exit status and, when a signal ended the job, its name.
 func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, env []string) (int, string, error) {
 	defer removeProcessMarker(s.Home, s.AttemptID)
-	workdir := workspace
+	resolvedRoot, err := filepath.EvalSymlinks(workspace)
+	if err != nil {
+		return -1, "", err
+	}
+	workdir := resolvedRoot
 	if s.Job.Workdir != "" && s.Job.Workdir != "." {
 		workdir = filepath.Join(workspace, s.Job.Workdir)
-		rel, err := filepath.Rel(workspace, workdir)
+		rel, err := filepath.Rel(resolvedRoot, workdir)
 		if err != nil || rel == ".." || len(rel) > 3 && rel[:3] == "../" {
 			return -1, "", coded("E612", "workdir escapes workspace")
 		}
@@ -24,9 +28,10 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 		if err != nil {
 			return -1, "", err
 		}
-		if resolved != workdir {
+		if resolved != filepath.Join(resolvedRoot, rel) {
 			return -1, "", coded("E612", "workdir symlink is forbidden")
 		}
+		workdir = resolved
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
 	return e.runCommandSig(ctx, s.Stdin, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {

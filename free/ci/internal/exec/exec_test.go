@@ -110,6 +110,35 @@ func TestAbsoluteWorkdirRejected(t *testing.T) {
 	}
 }
 
+func TestWorkdirUnderSymlinkedWorkspaceParent(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	var output []byte
+	result := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{
+		AttemptID:     "sym-parent",
+		CoordinatorID: "coord",
+		Home:          link,
+		Job:           model.Job{},
+		Command:       []string{"sh", "-c", "pwd"},
+		Output:        func(p []byte) { output = append(output, p...) },
+	})
+	if result.Err != nil {
+		t.Fatalf("job under symlinked home rejected: %v", result.Err)
+	}
+	// The executor resolves the symlinked Home and creates workspaces under the real path.
+	want := filepath.Join(real, "work", "sym-parent")
+	if !strings.Contains(string(output), want) {
+		t.Fatalf("unexpected pwd: %q", output)
+	}
+}
+
 func TestSharedRedactorWaitRespectsCancellation(t *testing.T) {
 	e := &Executor{Isolation: BaselineIsolator{}, Redactor: &splitRedactor{}}
 	home := t.TempDir()
