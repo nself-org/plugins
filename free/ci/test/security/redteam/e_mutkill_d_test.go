@@ -117,8 +117,8 @@ func dLocalhostServer(t *testing.T, h http.HandlerFunc) (*httptest.Server, *dCou
 	return srv, cl, cfg, port
 }
 
-// D13b/D14b/D15b: the private-base allowance is for the first hop of an API call to the base host and
-// nothing else. Counted at TCP accept, on a base that is a NAME (so the host rules apply and the
+// D13b/D14b/D15b: the private-base allowance is for the first hop of an API call or a download to the
+// base's own authority and nothing else. Counted at TCP accept, on a base that is a NAME (so the host rules apply and the
 // allowance is exercised), with AllowPrivateBase on.
 func TestD13_PrivateBaseAllowanceIsFirstHopOnly(t *testing.T) {
 	_, canaryConns, _, canaryPort := dLocalhostServer(t, nil)
@@ -142,13 +142,34 @@ func TestD13_PrivateBaseAllowanceIsFirstHopOnly(t *testing.T) {
 	if n := canaryConns.n.Load(); n != 0 {
 		t.Errorf("a redirect dialed the private address (%d connection(s))", n)
 	}
-	// download from the base host: a download carries no allowance
+	// D-1344: a download from the base's own authority (same host and port) is a first hop of the same
+	// kind as an API call, so with the operator's opt-in it may reach the private base. Nothing else
+	// inherits the allowance: not the same host name on another port, not a redirect, not a client
+	// without the opt-in.
 	before := forgeConns.n.Load()
 	var sink bytes.Buffer
-	if _, err := c.Download(context.Background(), "https://localhost:"+forgePort+"/artifact", 1024, &sink); err == nil {
-		t.Error("a download from the private base host succeeded")
+	if _, err := c.Download(context.Background(), "https://localhost:"+forgePort+"/artifact", 1024, &sink); err != nil || forgeConns.n.Load() != before+1 {
+		t.Errorf("a download from the opted-in private base's own authority must work: err=%v conns=%d", err, forgeConns.n.Load()-before)
+	}
+	if _, err := c.Download(context.Background(), "https://localhost:"+canaryPort+"/artifact", 1024, &sink); err == nil {
+		t.Error("a download from the base host name on another port succeeded")
+	}
+	if n := canaryConns.n.Load(); n != 0 {
+		t.Errorf("a download dialed the private address on another port (%d connection(s))", n)
+	}
+	redirectTo = "https://localhost:" + canaryPort + "/steal"
+	if _, err := c.Download(context.Background(), "https://localhost:"+forgePort+"/start", 1024, &sink); err == nil {
+		t.Error("a download redirected to another port of the private base host succeeded")
+	}
+	if n := canaryConns.n.Load(); n != 0 {
+		t.Errorf("a download redirect dialed the private address (%d connection(s))", n)
+	}
+	closed := &rest.Client{BaseURL: "https://localhost:" + forgePort, Provider: "github", TLSConfig: cfg, RedirectHosts: []string{"localhost"}}
+	before = forgeConns.n.Load()
+	if _, err := closed.Download(context.Background(), "https://localhost:"+forgePort+"/artifact", 1024, &sink); err == nil {
+		t.Error("a download from a private base without the opt-in succeeded")
 	}
 	if n := forgeConns.n.Load(); n != before {
-		t.Errorf("a download dialed the private base (%d new connection(s))", n-before)
+		t.Errorf("a download without the opt-in dialed the private base (%d new connection(s))", n-before)
 	}
 }

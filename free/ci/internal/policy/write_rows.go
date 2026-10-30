@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -234,6 +235,13 @@ func (w *Writer) loosens(keys *Keyset, spec KeySpec, old, next json.RawMessage) 
 		if old, err = json.Marshal(spec.Default); err != nil {
 			return true
 		}
+	}
+	// A TightenAny key (every spend key) has no stricter direction: Merge accepts any value, so a
+	// merge check could never refuse it. For these keys any change from the stored value loosens,
+	// because a machine-invoked caller must not turn paid placement on or raise a budget (TM-37, TM-38).
+	if spec.Kind == trust.TightenAny {
+		var a, b any
+		return json.Unmarshal(old, &a) != nil || json.Unmarshal(next, &b) != nil || !reflect.DeepEqual(a, b)
 	}
 	_, _, err = reg.Merge("", trust.Scope{Kind: SourceUser, Values: map[string]json.RawMessage{spec.Key: old}},
 		trust.Scope{Kind: SourceUser, Values: map[string]json.RawMessage{spec.Key: next}})

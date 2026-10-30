@@ -392,9 +392,14 @@ func TestPolicyMachineInvokedCap(t *testing.T) {
 		t.Fatalf("a refused pin wrote %v", pin)
 	}
 	r.machine = true
-	// A key outside trust.* is not restricted, and with NSELF_INVOKED_BY unset the operator's writes work as before.
-	if code := r.do("set", "--scope", "project", schedpolicy.KeyPaidEnabled, "true"); code != 0 {
-		t.Fatalf("a non-trust key stays writable, exit %d: %s", code, r.errb.String())
+	// A spend key loosens policy the same way a trust key does: a machine-invoked caller cannot turn paid placement on.
+	refused("enabling paid placement", r.do("set", "--json", "--scope", "user", schedpolicy.KeyPaidEnabled, "true"))
+	if r.stored("user", schedpolicy.KeyPaidEnabled) != "" {
+		t.Fatalf("a refused spend write changed a row")
+	}
+	// A key that is neither a trust key nor a spend key is not restricted, and with NSELF_INVOKED_BY unset the operator's writes work as before.
+	if code := r.do("set", "--scope", "project", schedpolicy.KeyPreset, "balanced"); code != 0 {
+		t.Fatalf("a placement key stays writable, exit %d: %s", code, r.errb.String())
 	}
 	r.machine = false
 	if code := r.do("set", "--scope", "user", capKey, "owner"); code != 0 || r.stored("user", capKey) != `"owner"` {
