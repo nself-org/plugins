@@ -257,6 +257,6 @@ func assertGone(t *testing.T, name string) {
 
 // runscLogDigest lists the newest runsc debug logs and their fatal-looking lines (diagnostic).
 func runscLogDigest() string {
-	b, _ := osexec.Command("sudo", "sh", "-c", `cd /var/log/runsc && ls -lt | head -12; for f in $(ls -t | head -6); do echo "== $f"; grep -i -E "fatal|panic|runtime:|thread|pids|resource temp|cgroup|exit|killed|oom" "$f" | tail -12 | cut -c1-300; done`).CombinedOutput()
+	b, _ := osexec.Command("sudo", "sh", "-c", `cd /var/log/runsc && f=$(ls -S *boot.txt | head -1); echo "== $f"; wc -l $f; tail -25 $f | cut -c1-400; echo "-- grep"; grep -n -i -E "fatal|panic|runtime:|failed to create|pids|resource temp|EAGAIN|killed|exiting|exit status" $f | head -30 | cut -c1-400`).CombinedOutput()
 	return string(b)
 }
