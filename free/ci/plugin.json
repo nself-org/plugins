@@ -20,6 +20,112 @@
     "confirm": {
       "flags": []
     },
+    "flags": [
+      {
+        "name": "base",
+        "type": "string"
+      },
+      {
+        "name": "config",
+        "type": "string"
+      },
+      {
+        "default": "0",
+        "name": "confirm-flaky",
+        "type": "int"
+      },
+      {
+        "name": "container",
+        "type": "bool"
+      },
+      {
+        "name": "coordinator",
+        "type": "string"
+      },
+      {
+        "name": "detach",
+        "type": "bool"
+      },
+      {
+        "name": "force",
+        "type": "bool"
+      },
+      {
+        "name": "image",
+        "type": "string"
+      },
+      {
+        "name": "isolation",
+        "type": "string"
+      },
+      {
+        "name": "job",
+        "type": "string"
+      },
+      {
+        "cli_only": true,
+        "name": "json",
+        "type": "bool"
+      },
+      {
+        "name": "max-queue",
+        "type": "string"
+      },
+      {
+        "name": "network",
+        "type": "string"
+      },
+      {
+        "name": "no-status",
+        "type": "bool"
+      },
+      {
+        "name": "pipeline",
+        "type": "string"
+      },
+      {
+        "name": "post-status",
+        "type": "bool"
+      },
+      {
+        "name": "prefer",
+        "type": "string"
+      },
+      {
+        "name": "repo",
+        "type": "string"
+      },
+      {
+        "name": "runner",
+        "type": "string"
+      },
+      {
+        "name": "service",
+        "type": "stringSlice"
+      },
+      {
+        "cli_only": true,
+        "name": "stream",
+        "type": "bool"
+      },
+      {
+        "default": "0s",
+        "name": "timeout",
+        "type": "duration"
+      },
+      {
+        "name": "trigger",
+        "type": "string"
+      },
+      {
+        "name": "trust",
+        "type": "string"
+      },
+      {
+        "name": "where",
+        "type": "string"
+      }
+    ],
     "json": "envelope",
     "output": "document",
     "side_effect": "remote",

@@ -106,3 +106,45 @@ func TestCheckDetectsDrift(t *testing.T) {
 		t.Fatalf("check after write exit %d", code)
 	}
 }
+
+// The root's flags reach the manifest (so the MCP tool of `nself ci` takes --detach); the root args do not.
+func TestRenderEmitsRootFlags(t *testing.T) {
+	spec := strings.Replace(okSpec, "  confirm: {flags: []}\n",
+		"  confirm: {flags: []}\n  args: [{name: command, variadic: true}]\n  flags:\n    - {name: detach, type: bool, usage: background}\n    - {name: json, type: bool, cli_only: true}\n", 1)
+	s, err := Parse([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmds, err := Commands(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flags, _ := cmds["flags"].([]any)
+	if len(flags) != 2 || flags[0].(map[string]any)["name"] != "detach" || flags[1].(map[string]any)["cli_only"] != true {
+		t.Fatalf("root flags: %v", cmds["flags"])
+	}
+	if _, has := cmds["args"]; has {
+		t.Error("manifest v2 roots declare no args")
+	}
+}
+
+func TestCommittedManifestHasDetachRootFlag(t *testing.T) {
+	raw, err := os.ReadFile("../../plugin.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Commands struct {
+			Flags []struct{ Name, Type string } `json:"flags"`
+		} `json:"commands"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range m.Commands.Flags {
+		if f.Name == "detach" && f.Type == "bool" {
+			return
+		}
+	}
+	t.Fatalf("plugin.json commands.flags lacks detach: %v", m.Commands.Flags)
+}
