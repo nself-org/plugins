@@ -130,6 +130,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		cliStdin, extra = s.Stdin, []*os.File{pr}
 	}
 	began := time.Now()
+	var watch *pidsWatch
+	if _, ok := s.Plan.(SandboxFailureReader); ok { // a sandbox runtime may leave no word of its own: the kernel's counter is read too
+		watch = startPidsWatch(cmd.Binary, run.Name)
+	}
 	code, _, err := e.runCommandFiles(ctx, cliStdin, extra, append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
 	if err != nil {
 		stop()
@@ -146,14 +150,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err == nil && code == 125 && !facts.jobRan() { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
+	pids := watch.stop()
 	reason := resourceReason(ctx, code, tail.String(), facts)
-	if reason == "" && err == nil && ctx.Err() == nil {
-		if line := sandboxFailure(s.Plan, run, began, code, tail.String()); line != "" { // the job could not say: its sandbox died from the process limit
-			reason = "resource_limit"
-			if s.Output != nil {
-				s.Output([]byte("nself-ci: the sandbox died from the container's process limit: " + line + "\n"))
-			}
-		}
+	if reason == "" && err == nil && ctx.Err() == nil && silentFailure(code, tail.String()) {
+		reason = e.silentReason(s, run, began, code, tail.String(), pids)
 	}
 	return code, reason, err
 }

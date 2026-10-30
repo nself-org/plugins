@@ -168,11 +168,19 @@ type planner struct {
 	logPath string
 }
 
-var _ exec.SandboxFailureReader = (*planner)(nil)
+var (
+	_ exec.SandboxFailureReader = (*planner)(nil)
+	_ exec.SandboxNoter         = (*planner)(nil)
+)
 
 // SandboxFailure reads runsc's debug log for the death of this attempt's sandbox (see sandbox_log.go).
 func (pl *planner) SandboxFailure(run exec.ContainerRun, began time.Time) string {
 	return sandboxDeath(pl.logPath, run.Workspace, began)
+}
+
+// SandboxNote says what the runsc log held when it showed no death, for the failure text of a miss.
+func (pl *planner) SandboxNote(run exec.ContainerRun, began time.Time) string {
+	return bootLogNote(pl.logPath, run.Workspace, began)
 }
 
 func (pl *planner) Plan(r exec.ContainerRun) (exec.ContainerCommand, error) {

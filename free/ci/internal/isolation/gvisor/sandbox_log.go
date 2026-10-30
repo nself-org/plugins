@@ -14,6 +14,7 @@ package gvisor
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,4 +106,53 @@ func deathLine(file, workspace string) string {
 		return ""
 	}
 	return line
+}
+
+// bootLogNote says what the runsc log directory held for an attempt that showed no death: the readings that
+// explain a miss ("none configured", how many boot logs were fresh, how many of them mounted the workspace).
+func bootLogNote(logPath, workspace string, began time.Time) string {
+	if logPath == "" {
+		return "runsc log: no --debug-log configured"
+	}
+	dir, prefix := logPath, ""
+	if !strings.HasSuffix(logPath, "/") {
+		dir, prefix = filepath.Dir(logPath), filepath.Base(logPath)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "runsc log: " + dir + " unreadable (" + err.Error() + ")"
+	}
+	fresh, mine := 0, 0
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasPrefix(name, prefix) || !strings.Contains(name, ".boot.") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || info.ModTime().Before(began.Add(-time.Second)) {
+			continue
+		}
+		fresh++
+		if bootLogMounts(filepath.Join(dir, name), workspace) {
+			mine++
+		}
+	}
+	return fmt.Sprintf("runsc log: %s has %d fresh boot logs, %d of this attempt's workspace, no death line", dir, fresh, mine)
+}
+
+// bootLogMounts reports whether the boot log mentions workspace.
+func bootLogMounts(file, workspace string) bool {
+	f, err := os.Open(file)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	for sc.Scan() {
+		if strings.Contains(sc.Text(), workspace) {
+			return true
+		}
+	}
+	return false
 }
