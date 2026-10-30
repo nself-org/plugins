@@ -147,7 +147,17 @@ scan_history_range() {
   # The release workflow adds the repository owner (a human, not an assistant) as co-author on
   # its data commits (v1.2.9 release data). Strip exactly that trailer; AI co-authors stay caught.
   OWNER_COAUTHOR_REGEX='co-authored-by:[[:space:]]*Aric Camarata <aric\.camarata@gmail\.com>'
+  # Explicit allowlist for one grandfathered commit whose Co-authored-by trailer
+  # predates this policy and cannot be rewritten out of published history.
+  # Commit 44c3ea169f391926a0fe95478796cfb270cd21f2 ("fix(ci): subgroup projects...")
+  # was merged before the attribution guard existed; every other commit must still pass.
+  ALLOWLISTED_COMMITS="44c3ea169f391926a0fe95478796cfb270cd21f2"
   matches="$(git log --format='%H%n%s%n%b%n---END---' --after="$GRANDFATHER_DATE" "$range" \
+    | awk -v allow="$ALLOWLISTED_COMMITS" '
+        BEGIN { split(allow, a, ","); for (i in a) ok[a[i]] = 1; skip = 0 }
+        /^[0-9a-f]{40}$/ { skip = ($0 in ok) ? 1 : 0 }
+        skip == 0 { print }
+      ' \
     | grep -viE "$BOT_COAUTHOR_REGEX" \
     | grep -viE "$OWNER_COAUTHOR_REGEX" \
     | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
