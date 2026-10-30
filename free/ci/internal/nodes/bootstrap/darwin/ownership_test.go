@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -149,18 +150,40 @@ find() { echo x >> ` + calls + `; case "$*" in *"-uid +449"*|*'-uid 450'*|*'-uid
 	}
 }
 
+// bsdStat returns a shell prefix that makes `stat -f %u` (the BSD form the macOS bootstrap scripts use) work on
+// the host. On macOS it is empty. Elsewhere `stat -f` means filesystem status, so a wrapper first on PATH maps the
+// one form the scan uses onto the GNU `stat -c %u` and leaves every other call alone: the find, range and output
+// logic under test still runs for real.
+func bsdStat(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		return ""
+	}
+	real, err := exec.LookPath("stat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	shim := "#!/bin/sh\nif [ \"$1\" = -f ] && [ \"$2\" = %u ]; then shift 2; exec '" + real + "' -c %u \"$@\"; fi\nexec '" + real + "' \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "stat"), []byte(shim), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return "PATH='" + bin + "':\"$PATH\"; export PATH\n"
+}
+
 func TestHeldIDsScanReportsOwnersInRange(t *testing.T) {
 	dir := t.TempDir()
+	prefix := bsdStat(t)
 	if err := os.WriteFile(filepath.Join(dir, "owned"), nil, 0600); err != nil {
 		t.Fatal(err)
 	}
 	uid := os.Getuid()
-	script := boundedScan("'"+dir+"'", heldIDsMatch(uid, uid), heldIDsAction, 30)
+	script := prefix + boundedScan("'"+dir+"'", heldIDsMatch(uid, uid), heldIDsAction, 30)
 	out, err := exec.Command("sh", "-c", script).Output()
 	if got := strings.Fields(string(out)); err != nil || len(got) == 0 || got[0] != fmt.Sprint(uid) {
 		t.Fatalf("held ids = %q, %v; want %d", out, err, uid)
 	}
-	script = boundedScan("'"+dir+"'", heldIDsMatch(uid+1, uid+5), heldIDsAction, 30)
+	script = prefix + boundedScan("'"+dir+"'", heldIDsMatch(uid+1, uid+5), heldIDsAction, 30)
 	if out, err := exec.Command("sh", "-c", script).Output(); err != nil || strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("out-of-range owners = %q, %v; want none", out, err)
 	}

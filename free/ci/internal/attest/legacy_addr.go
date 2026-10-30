@@ -34,9 +34,13 @@ func parseLegacyIPv4(s string) (netip.Addr, bool) {
 	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)}), true
 }
 
+// scrubLegacyIPv4 redacts the inet short, hex and octal spellings of private or
+// known addresses. The all-zero spelling ("0", "00", "0x0") is left alone: it
+// names no host, and a lone "0" is an ordinary count in log text ("0/1 checks
+// passed", "1:0:0"), so redacting it would mangle the line and leak nothing.
 func (p Profile) scrubLegacyIPv4(s string) string {
 	return legacyIPv4.ReplaceAllStringFunc(s, func(m string) string {
-		if a, ok := parseLegacyIPv4(m); ok && (privateAddr(a) || p.knownAddr(a)) {
+		if a, ok := parseLegacyIPv4(m); ok && !a.IsUnspecified() && (privateAddr(a) || p.knownAddr(a)) {
 			return redactedIP
 		}
 		return m
