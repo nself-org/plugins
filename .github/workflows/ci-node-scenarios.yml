@@ -11,11 +11,12 @@ permissions:
 jobs:
   scenarios:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 80
     env:
       INTEGRATION: "1"
       NSELF_V15: "1"
       CGO_ENABLED: "0"
+      NSELF_SIM_HOST_NODE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -34,18 +35,23 @@ jobs:
           go-version-file: plugins/free/ci/go.mod
           cache-dependency-path: plugins/free/ci/go.sum
 
+      - name: Set up qemu-user for the arm64 node
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
       - name: Load the netem kernel module
         run: |
           sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)" || true
           sudo modprobe sch_netem
           lsmod | grep sch_netem
 
-      - name: Scenario 2, scenario 3, platform steering and write-load legs
+      - name: Scenario 2 (with the qemu arm64 node), scenario 3 (with the owner-trust job), platform steering and write-load legs
         working-directory: plugins/free/ci
         run: |
           set -o pipefail
-          go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario(2|3)|TestPlatformSteering|TestWriteLoad' ./test/sim \
-            -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario3 TestPlatformSteering TestWriteLoad
+          go test -json -mod=vendor -tags integration -count=1 -timeout 70m -run 'TestScenario(2|3)|TestScenario2Arm64|TestScenario3OwnerTrust|TestPlatformSteering|TestWriteLoad' ./test/sim \
+            -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario2Arm64 TestScenario3 TestScenario3OwnerTrust TestPlatformSteering TestWriteLoad
 
       - name: Set up Go for the cli checkout
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
