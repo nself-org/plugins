@@ -35,4 +35,5 @@ services:
       start_period: 5s
       retries: 3
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
