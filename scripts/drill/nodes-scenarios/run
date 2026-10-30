@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Drill wrapper for the node scenario legs (P7-NODE-17): scenario 2 (personal LAN) and the TEAM store write-load leg,
+# through the bare foreground run on the sim fixtures, emitting perfbench/v1 JSON. Discovered by the drills pipeline (CI D17).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+OUT="${PERF_JSON:-${TMPDIR:-/tmp}/node-perf.json}"
+
+export INTEGRATION=1 NSELF_V15=1 CGO_ENABLED=0
+echo "[drill] node scenario legs -> ${OUT}" >&2
+cd "$REPO_ROOT/free/ci"
+go test -mod=vendor -tags integration -count=1 -timeout 60m -run 'TestScenario2|TestWriteLoad' ./test/sim -args -perf-json "$OUT"
+test -s "$OUT" || { echo "[drill] no perf json produced at ${OUT}" >&2; exit 1; }

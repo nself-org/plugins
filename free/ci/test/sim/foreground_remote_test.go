@@ -180,6 +180,19 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 // newFixture builds the repository, registers the nodes and configures ssh.Default.
 func newFixture(t *testing.T, runners map[string]func(ctx context.Context, n *node, j session.JobRun) (session.JobResult, error)) *fixture {
 	t.Helper()
+	return newFixtureWith(t, []nodeSpec{{id: "n1", host: "10.0.0.5"}, {id: "n2", host: "10.0.0.6"}}, runners)
+}
+
+// nodeSpec is one registered node of a fixture. shape edits the capability document before it is stored
+// (platform, discovery and deploy-host facts, the ssh port and user).
+type nodeSpec struct {
+	id, host string
+	shape    func(*model.Capability)
+}
+
+// newFixtureWith builds the repository, registers the given nodes and configures ssh.Default.
+func newFixtureWith(t *testing.T, specs []nodeSpec, runners map[string]func(ctx context.Context, n *node, j session.JobRun) (session.JobResult, error)) *fixture {
+	t.Helper()
 	t.Setenv("NSELF_V15", "1")
 	f := &fixture{t: t, repo: t.TempDir(), home: t.TempDir()}
 	gitIn(t, f.repo, "init", "-q")
@@ -195,8 +208,9 @@ func newFixture(t *testing.T, runners map[string]func(ctx context.Context, n *no
 		t.Fatal(err)
 	}
 	pin := remote.PinnedHostKeys{Path: filepath.Join(f.home, "known_hosts")}
-	for i, id := range []string{"n1", "n2"} {
-		n := &node{id: id, host: fmt.Sprintf("10.0.0.%d", 5+i), state: t.TempDir(), started: make(chan string, 8), runner: runners[id]}
+	for _, sp := range specs {
+		id := sp.id
+		n := &node{id: id, host: sp.host, state: t.TempDir(), started: make(chan string, 8), runner: runners[id]}
 		f.nodes = append(f.nodes, n)
 		if err := pin.Add("nself-ci-"+id, n.host+" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDummyKeyForTestsOnlyDummyKeyForTestsOnly000"); err != nil {
 			t.Fatal(err)
@@ -208,6 +222,9 @@ func newFixture(t *testing.T, runners map[string]func(ctx context.Context, n *no
 		lan, owned, uid := "lan", "owned", true
 		c.Identity.ID, c.Identity.Name, c.Identity.Provider, c.Identity.Transport = id, id, "ssh", "ssh"
 		c.Identity.SSH = &model.CapabilitySSH{Hostname: n.host, Port: 22, User: "ci"}
+		if sp.shape != nil {
+			sp.shape(&c)
+		}
 		c.SecretsEligible = true
 		c.Location.Kind.Value, c.Economics.Class.Value = &lan, &owned
 		c.Separation.UIDSeparation = model.Fact[bool]{Value: &uid, Source: "self", ObservedAt: time.Now(), Confidence: "known"}

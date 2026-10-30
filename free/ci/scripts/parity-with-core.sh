@@ -91,8 +91,13 @@ norm() { # normalise volatile text; reads stdin
     -e "s#$WORK#<W>#g" \
     -e 's/\([0-9][0-9a-zµ.]*\)/(T)/g' \
     -e 's/[0-9]{1,2}:[0-9]{2}(AM|PM)/TIME/g' \
-    -e 's/in [0-9.]+(µs|ms|s)/in DUR/g'
+    -e 's/in [0-9.]+(µs|ms|s)/in DUR/g' \
+    -e 's#[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}#<TS>#g'
 }
+# core_framing drops the two stderr lines that core `nself` prints itself before it hands over to the
+# nself-ci binary (its env-cascade INFO log line and the plugin-install notice). Leg 1 compares core with the
+# bare binary, so those lines can only be on the core side; leg 2 runs the same cli on both sides and keeps them.
+core_framing() { grep -vE 'INFO ENV resolved for \.env cascade|^\[nself-ci\] gate not installed; installing the signed ci plugin' || true; }
 CASES=0; FAILS=0
 # capture <name> <dir> <env-PATH-prefix> <cwd> cmd args...: stdout, stderr, rc into dir
 capture() {
@@ -110,8 +115,11 @@ compare() {
   local id; id=$(printf '%s' "$leg-$label" | tr -c 'A-Za-z0-9\n' '_')
   CASES=$((CASES + 1))
   run_spec "$aspec" "$WORK/o/$id/a"; run_spec "$bspec" "$WORK/o/$id/b"
-  local bad=0
-  for ext in out.n err.n rc docker.n; do
+  local bad=0 side
+  for side in a b; do
+    if [ "$leg" = leg1 ]; then core_framing < "$WORK/o/$id/$side/x.err.n" > "$WORK/o/$id/$side/x.err.f"; else cp "$WORK/o/$id/$side/x.err.n" "$WORK/o/$id/$side/x.err.f"; fi
+  done
+  for ext in out.n err.f rc docker.n; do
     if ! cmp -s "$WORK/o/$id/a/x.$ext" "$WORK/o/$id/b/x.$ext"; then
       bad=1; echo "DIFF $leg $label ($ext):"; diff -u "$WORK/o/$id/a/x.$ext" "$WORK/o/$id/b/x.$ext" | head -40 || true
     fi

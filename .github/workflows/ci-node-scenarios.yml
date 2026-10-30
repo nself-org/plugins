@@ -1,0 +1,56 @@
+name: ci-node-scenarios
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      INTEGRATION: "1"
+      NSELF_V15: "1"
+      CGO_ENABLED: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: plugins
+
+      - name: Checkout cli (perfbench)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/cli
+          path: cli
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: plugins/free/ci/go.mod
+          cache-dependency-path: plugins/free/ci/go.sum
+
+      - name: Scenario 2 and write-load legs
+        working-directory: plugins/free/ci
+        run: |
+          go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario2|TestWriteLoad' ./test/sim \
+            -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestWriteLoad
+
+      - name: Check the perf budget
+        working-directory: cli
+        run: |
+          go run -mod=vendor ./tools/perfbench check \
+            -budget "$GITHUB_WORKSPACE/plugins/free/ci/test/sim/perf-budget.json" \
+            -in "$RUNNER_TEMP/node-perf.json"
+
+      - name: Upload perf document
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-scenario-perf
+          path: ${{ runner.temp }}/node-perf.json
+          if-no-files-found: ignore
