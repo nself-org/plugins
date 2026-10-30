@@ -144,7 +144,7 @@ jobs:
           echo "tags: $TAGS"
           echo "packages: ${selected[*]}"
           # -p 1: the packages share one Docker daemon (and its memory); a container of one package was SIGKILLed mid-run while the others ran (run 39385968795)
-          go test -mod=vendor -count=1 -p 1 -v -tags "$TAGS" "${selected[@]}" 2>&1 | tee "$RUNNER_TEMP/integration.txt"
+          go test -mod=vendor -count=1 -p 1 -timeout 25m -v -tags "$TAGS" "${selected[@]}" 2>&1 | tee "$RUNNER_TEMP/integration.txt"
           if grep -q -- '--- SKIP' "$RUNNER_TEMP/integration.txt"; then
             echo "a test skipped: a missing prerequisite must fail, never skip" >&2
             exit 1

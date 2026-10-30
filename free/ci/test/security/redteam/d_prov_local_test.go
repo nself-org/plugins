@@ -106,9 +106,6 @@ func (x *dFx) fetchStranger() string {
 // D01: the operator replays the stranger's single commit (rebase onto newer main). The tree content
 // is still the stranger's, so the class must stay below owner.
 func TestD01_RebaseOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	x.advanceMain()
@@ -121,9 +118,6 @@ func TestD01_RebaseOfStrangerCommitStaysForeign(t *testing.T) {
 
 // D02: the operator amends the stranger's single commit (a message tidy-up). Same content, new SHA.
 func TestD02_AmendOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	dGit(t, x.op, "checkout", "-q", "-b", "pr", x.fetchStranger())
 	dGit(t, x.op, "commit", "-q", "--amend", "-m", "tidy message")
@@ -134,9 +128,6 @@ func TestD02_AmendOfStrangerCommitStaysForeign(t *testing.T) {
 
 // D03: the operator cherry-picks the stranger's commit onto a branch of main.
 func TestD03_CherryPickOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	x.advanceMain()
@@ -150,9 +141,6 @@ func TestD03_CherryPickOfStrangerCommitStaysForeign(t *testing.T) {
 // D04: fetch refspec maps pull requests to refs/remotes/origin/gh-pr/<n>/head, a glob in the middle
 // of the destination. A stranger's PR must not read as a branch of the origin remote.
 func TestD04_PullRefspecWithMidPathGlobIsNotAnOriginBranch(t *testing.T) {
-	if !openFinding(t, "D04") {
-		return
-	}
 	x := newDFx(t)
 	dGit(t, x.stranger, "push", "-q", "origin", "pr:refs/pull/7/head")
 	dGit(t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/gh-pr/*/head")
@@ -180,9 +168,6 @@ func TestD05_RefsNamedLikeOwnerRefs(t *testing.T) {
 // D06: .git/info/grafts claims the stranger commit is the parent of origin/main, so it would look
 // reachable from the default branch.
 func TestD06_GraftsFileCannotMakeStrangerReachable(t *testing.T) {
-	if !openFinding(t, "D06") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	tip := dGit(t, x.op, "rev-parse", "origin/main")

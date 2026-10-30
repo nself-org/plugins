@@ -232,3 +232,35 @@ func TestWorktreeAddRunsNoHooksOfTheRevision(t *testing.T) {
 		t.Fatal("the revision's post-checkout hook ran")
 	}
 }
+
+// The detector fixtures' lockfiles enter the input digests. The proof lives here, not in internal/gates:
+// this package reaches internal/run, which imports internal/gates, so a gates test cannot import it.
+func TestInputsOfFixtureLockfiles(t *testing.T) {
+	detectData := filepath.Join("..", "detect", "testdata")
+	for _, c := range []struct {
+		dir  string
+		want []string
+	}{
+		{filepath.Join("python", "uv"), []string{"uv.lock"}},
+		{filepath.Join("python", "poetry"), []string{"poetry.lock"}},
+		{filepath.Join("python", "pip"), []string{"requirements.txt", "requirements-dev.txt"}},
+		{filepath.Join("swift", "swiftpm"), []string{"Package.resolved"}},
+	} {
+		d, err := InputsOf(os.DirFS(filepath.Join(detectData, c.dir)))
+		if err != nil {
+			t.Fatalf("%s: %v", c.dir, err)
+		}
+		have := map[string]bool{}
+		for _, l := range d.Lockfiles {
+			have[l.Path] = true
+		}
+		if len(have) != len(c.want) {
+			t.Errorf("%s: lockfiles %+v, want exactly %v", c.dir, d.Lockfiles, c.want)
+		}
+		for _, w := range c.want {
+			if !have[w] {
+				t.Errorf("%s: %s missing from input digests %+v", c.dir, w, d.Lockfiles)
+			}
+		}
+	}
+}

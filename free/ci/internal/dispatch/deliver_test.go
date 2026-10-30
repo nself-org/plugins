@@ -238,7 +238,8 @@ func TestDispatchLeaseWithoutSecretRefsForAnIneligibleNode(t *testing.T) {
 	if _, err := d.Submit(context.Background(), secretJob(t, id)); err != nil {
 		t.Fatal(err)
 	}
-	if got := wait(t, remote.got).lease; len(got.Secrets) != 0 || got.Trust != "" {
+	// The lease still carries the class the job was placed at: the node checks the network scope by it (D-1331).
+	if got := wait(t, remote.got).lease; len(got.Secrets) != 0 || got.Trust != secretJob(t, id).Sched.Trust {
 		t.Fatalf("an ineligible node got secrets %+v trust %q", got.Secrets, got.Trust)
 	}
 }

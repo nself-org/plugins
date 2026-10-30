@@ -28,6 +28,18 @@ func Effective(class model.TrustClass, declared model.NetworkScope) (model.Netwo
 	return declared, nil
 }
 
+// RunScope returns the scope an attempt of class runs under on a path that hands the executor its scope (a
+// remote lease, the agent's exec spec): the same refusal Effective makes for a declared scope, and none (the
+// narrowest scope, what the executor runs an empty scope as) for an undeclared one, so the class default never
+// widens a job that declared nothing. The coordinator calls it before it delivers a lease and the agent again
+// before it runs one (D-1331).
+func RunScope(class model.TrustClass, declared model.NetworkScope) (model.NetworkScope, error) {
+	if declared == "" {
+		return "none", nil
+	}
+	return Effective(class, declared)
+}
+
 // Enforceable lists the scopes this package can ever enforce on a runner: lan and privileged are raw network
 // access and need no enforcement, so they are not in the list.
 func Enforceable() []model.NetworkScope {

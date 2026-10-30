@@ -44,6 +44,8 @@ const (
 	ReasonLocalInProgress  = "local.operation_in_progress"
 	ReasonLocalIncomplete  = "local.facts_incomplete"
 	ReasonLocalOverride    = "local.trust_owner_override"
+	ReasonLocalReplayed    = "local.rewrite_not_made_here"
+	ReasonLocalGrafted     = "local.history_grafted"
 )
 
 // Result is a classification: the class, why, and the side facts the callers need.
@@ -64,6 +66,8 @@ const (
 	MissingRemoteRefs = "remote_refs"
 	MissingCommits    = "commits"
 	MissingReflog     = "reflog"
+	MissingPatches    = "patches"
+	MissingHistory    = "history" // a grafts file may rewrite the parents git reports
 )
 
 // GitFacts are the git facts of the checkout a local run is bound to.
@@ -92,6 +96,11 @@ type GitFacts struct {
 	// ReflogCreated maps a commit to the subject of its OLDEST reflog entry in any log (OldestEntries),
 	// the way it first reached this repository, for example "commit: fix" or "branch: Created from FETCH_HEAD".
 	ReflogCreated map[string]string
+	// ReplayedPatch marks the commits of OffDefault whose oldest entry is a rewrite (Rewrite: a rebase step,
+	// an amend, a cherry-pick) and whose change has no source made here: no commit made here (or on the
+	// default branch) carries its patch, and (an amend) the commit it amended was not made here. Such a
+	// commit replays someone else's change, or one nothing here can account for (D-1322).
+	ReplayedPatch map[string]bool
 	// Missing lists the facts that could not be gathered (the Missing* keys).
 	Missing []string
 }
