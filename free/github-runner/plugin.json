@@ -83,7 +83,7 @@
     "compose": "docker-compose.plugin.yml",
     "healthcheck": "/health",
     "kind": "compose",
-    "port": 3054
+    "port": 3053
   },
   "status": "stable",
   "tags": [
