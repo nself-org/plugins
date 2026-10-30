@@ -192,6 +192,7 @@ func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
 	start := time.Now()
 	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	t.Logf("%s evidence: %q", id, tail(out, 600)) // the kernel counter or the runtime record that classified it
 	if res.Reason != "resource_limit" {
 		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
@@ -257,8 +258,23 @@ func assertGone(t *testing.T, name string) {
 // A script that only runs `exit 2` is the job's own failure: the sandbox did not die, so it stays class code.
 func TestIntegrationPlainExit2StaysCode(t *testing.T) {
 	p, image := prerequisites(t)
-	_, res := runJob(t, p, "sandboxed-container", image, "t05-exit2", `exit 2`, nil)
+	out, res := runJob(t, p, "sandboxed-container", image, "t05-exit2", `exit 2`, nil)
+	t.Logf("exit 2 readings: %q", tail(out, 600)) // what the classifier read and found nothing in
 	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
 		t.Fatalf("exit 2 must stay a code failure: %+v", res)
+	}
+}
+
+// A script that lives long enough for the sampler to find its cgroup and then exits 2 leaves the kernel's
+// counter at 0, so the counter alone cannot turn a job's own failure into a resource_limit.
+func TestIntegrationPidsEventsStaysZeroForALongLivedExit2(t *testing.T) {
+	p, image := prerequisites(t)
+	out, res := runJob(t, p, "sandboxed-container", image, "t05-exit2-long", `sleep 2; exit 2`, nil)
+	t.Logf("long exit 2 readings: %q", tail(out, 600))
+	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
+		t.Fatalf("exit 2 must stay a code failure: %+v", res)
+	}
+	if !strings.Contains(out, "pids.events: max=0 after") {
+		t.Fatalf("the kernel counter was not read for a container that lived 2s: %q", tail(out, 600))
 	}
 }

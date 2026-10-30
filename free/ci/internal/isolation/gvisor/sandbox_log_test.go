@@ -63,3 +63,19 @@ func TestDebugLogOf(t *testing.T) {
 		}
 	}
 }
+
+func TestBootLogNoteCountsWhatWasRead(t *testing.T) {
+	dir := t.TempDir() + "/"
+	began := time.Now().Add(-time.Minute)
+	writeLog(t, dir, "runsc.log.20261030-000002.000001.boot.txt", `I1 vfs.go] Mounted "/work/t05-exit2" to "/repo" type: bind`, exitedLine)
+	writeLog(t, dir, "runsc.log.20261030-000003.000001.boot.txt", mountLine)
+	if got := bootLogNote(dir, "/work/t05-exit2", began); !strings.Contains(got, "2 fresh boot logs, 1 of this attempt's workspace") {
+		t.Errorf("%q", got)
+	}
+	if got := bootLogNote("", "/w", began); !strings.Contains(got, "no --debug-log") {
+		t.Errorf("%q", got)
+	}
+	if got := bootLogNote(dir+"missing/", "/w", began); !strings.Contains(got, "unreadable") {
+		t.Errorf("%q", got)
+	}
+}
