@@ -22,7 +22,9 @@ _spec.loader.exec_module(gen)
 
 
 def ci_manifest(names):
-    return {"commands": {"command": "ci", "subcommands": [{"name": n} for n in names]}}
+    subs = [{"name": n, "json": "none"} if n == "serve" else {"name": n} for n in names]
+    return {"commands": {"command": "ci", "json": "envelope", "output": "document", "side_effect": "read",
+                         "subcommands": subs}}
 
 
 class WikiPagesCase(unittest.TestCase):
@@ -230,6 +232,68 @@ class CeilingTests(WikiPagesCase):
     def test_only_the_first_token_counts(self):
         self.write_manifest([f"nodes sub{i}" for i in range(20)])
         self.assertIn("ci: 1 first-level subcommands", self.check()[1])
+
+
+class MachineSurfaceTests(WikiPagesCase):
+    def vectors(self):
+        with open(os.path.join(FIXTURES, "surface-vectors.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_naming_vectors(self):
+        for v in self.vectors()["names"]:
+            self.assertEqual(gen.tool_name(v["path"]), v["tool"])
+            self.assertEqual(gen.route_path(v["path"]), v["route"])
+
+    def test_exposure_vectors(self):
+        for v in self.vectors()["exposure"]:
+            self.assertEqual(gen.exposure(v["cmd"]), (v["exposure"], v["reason"], v["confirmation"]), v["name"])
+
+    def test_region_follows_catalog_region_with_a_row_per_command(self):
+        self.generate_all()
+        text = self.page("CI.md")
+        self.assertIn(gen.MS_BEGIN, text)
+        self.assertLess(text.index(gen.END), text.index(gen.MS_BEGIN))
+        self.assertIn("| `nself ci nodes provision` | `nself_ci_nodes_provision` | `/v1/commands/ci/nodes/provision` |", text)
+        self.assertIn("| `nself ci serve` | - | - | read | document | CLI only (json none) | none |", text)
+
+    def test_bare_hub_command_has_its_own_row(self):
+        """`nself ci` (tool nself_ci) is a command too: a manifest with subcommands still gets the hub's own row."""
+        self.generate_all()
+        text = self.page("CI.md")
+        self.assertIn("| `nself ci` | `nself_ci` | `/v1/commands/ci` | read | document | MCP and HTTP | none |", text)
+        rows = [r for r in text.splitlines() if r.startswith("| `nself ci")]
+        self.assertEqual(rows[0].split("|")[1].strip(), "`nself ci`", "the bare command sorts before its subcommands")
+
+    def test_bare_hub_row_carries_its_confirmation(self):
+        manifest = ci_manifest(["run"])
+        manifest["commands"].update({"side_effect": "remote", "confirm": {"flags": []}})
+        rows = dict(gen.machine_rows(manifest))
+        self.assertEqual(sorted(rows), ["ci", "ci run"])
+        self.assertEqual(gen.exposure(rows["ci"]), ("MCP and HTTP", "", "nonce"))
+
+    def test_stream_read_row_is_http_only(self):
+        path = os.path.join(self.root, "free", "ci", "plugin.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"commands": {"command": "ci", "json": "envelope", "output": "stream", "side_effect": "read",
+                                    "subcommands": [{"name": "run"}]}}, fh)
+        self.generate_all()
+        self.assertIn("| `nself ci run` | - | `/v1/commands/ci/run` | read | stream | HTTP NDJSON only (stream) | none |",
+                      self.page("CI.md"))
+
+    def test_plugin_without_commands_has_no_region_and_bytes_outside_are_kept(self):
+        self.generate_all()
+        self.assertNotIn(gen.MS_BEGIN, self.page("Jobs.md"))
+        extended = self.page("CI.md") + "\nAuthored tail.\n"
+        self.assertEqual(gen.apply_machine(extended, None).count(gen.MS_BEGIN), 0)
+        self.assertTrue(gen.apply_machine(extended, None).endswith("\nAuthored tail.\n"))
+        self.assertEqual(gen.apply_machine(gen.apply_machine(extended, None), None), gen.apply_machine(extended, None))
+
+    def test_manifest_change_makes_check_fail_naming_the_page(self):
+        self.generate_all()
+        self.write_manifest(["run", "serve", "nodes provision", "nodes verify", "extra"])
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 1)
+        self.assertIn("CI.md: stale region", out)
 
 
 if __name__ == "__main__":

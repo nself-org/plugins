@@ -166,6 +166,7 @@ layers:
     - internal/where
     - internal/evidence/projection
     - internal/providers/github/checks
+    - internal/preflight
   composition:
     - cmd
     - cmd/agent
@@ -188,3 +189,5 @@ layers:
     - test/macos
     - tools/provgen
     - tools/manifestgen
+    - tools/doccmds
+    - tools/refgen

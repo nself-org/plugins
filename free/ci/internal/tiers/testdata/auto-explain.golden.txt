@@ -1,0 +1,30 @@
+job fresh  waiting  band normal  source plan
+  needs  platform linux/amd64  cpu 1  mem_mb 128  isolation_min none  network none  secret classes none  tools none
+  reason  tier.waiting  held for v-vps (tier vps, bias 60001, capacity.busy): 30000 ms left of step_sec 30 s, then l-lan (tier lan)
+  alt     h-hosted  ineligible  privacy.hosted_not_authorized,cost.unknown_rate,paid.disabled,budget.unset,budget.exceeded
+  alt     l-lan  eligible  score 157500
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=2000(estimated) transfer=4000(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=120000(estimated)
+  alt     v-vps  ineligible  capacity.busy
+  alt     x-local  eligible  score 211502
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=0(estimated) transfer=0(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=180002(estimated)
+job older  waiting  band normal  source plan
+  needs  platform linux/amd64  cpu 1  mem_mb 128  isolation_min none  network none  secret classes none  tools none
+  reason  tier.waiting  held for v-vps (tier vps, bias 60001, capacity.busy): 10000 ms left of step_sec 30 s, then l-lan (tier lan)
+  alt     h-hosted  ineligible  privacy.hosted_not_authorized,cost.unknown_rate,paid.disabled,budget.unset,budget.exceeded
+  alt     l-lan  eligible  score 157500
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=2000(estimated) transfer=4000(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=120000(estimated)
+  alt     v-vps  ineligible  capacity.busy
+  alt     x-local  eligible  score 211502
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=0(estimated) transfer=0(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=180002(estimated)
+job stale  placed  band normal  source plan
+  needs  platform linux/amd64  cpu 1  mem_mb 128  isolation_min none  network none  secret classes none  tools none
+  chosen  l-lan  provider operator  lan  owned  score 157500  cost 0 micro [known]  tier lan  bias 120000
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=2000(estimated) transfer=4000(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=120000(estimated)
+  alt     h-hosted  ineligible  privacy.hosted_not_authorized,cost.unknown_rate,paid.disabled,budget.unset,budget.exceeded
+  alt     l-lan  chosen
+  alt     v-vps  ineligible  capacity.busy
+  alt     x-local  eligible  score 211502
+    wait=0(estimated) runtime=unknown(stand-in 30000) cold_start=0(estimated) transfer=0(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=1500(estimated) tier_rank=180002(estimated)
+waiting: tier.waiting (held for v-vps (tier vps, bias 60001, capacity.busy): 30000 ms left of step_sec 30 s, then l-lan (tier lan))
+waiting: tier.waiting (held for v-vps (tier vps, bias 60001, capacity.busy): 10000 ms left of step_sec 30 s, then l-lan (tier lan))
+l-lan (lan, owned) cost 0 micro [known]

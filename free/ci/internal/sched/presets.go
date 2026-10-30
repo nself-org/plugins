@@ -1,5 +1,6 @@
 package sched
 
+// Preset is one named scoring profile: component weights, the ms per cost micro and a bias per cost class.
 type Preset struct {
 	Weights        [9]int64
 	MsPerCostMicro int64
@@ -13,6 +14,8 @@ var presetTable = map[string]Preset{
 	"preserve-hosted-quota": {[9]int64{1000, 1000, 1000, 1000, 1000, 1000, 1000, 4000, 1000}, 1, [5]int64{0, 0, 60000, 120000, 120000}},
 	"fastest":               {[9]int64{1000, 1000, 1000, 1000, 1000, 250, 0, 0, 1000}, 0, [5]int64{}},
 	"cheapest":              {[9]int64{250, 250, 250, 250, 250, 250, 4000, 2000, 250}, 10, [5]int64{}},
+	// auto scores like balanced; its order comes from the tier_rank Bias (internal/tiers), not a class bias.
+	AutoPreset: {[9]int64{1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000}, 1, [5]int64{}},
 }
 
 // Presets returns independent preset values.

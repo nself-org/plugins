@@ -2,7 +2,7 @@
 """Render the pull-agent reference from its Go flags and reason constants.
 
 Inputs: pull.go and non-test transport/agent Go sources in this checkout.
-Outputs: Reference.md, or a nonzero --check result when it is stale or absent.
+Outputs: Agent-Reference.md, or a nonzero --check result when it is stale or absent.
 Constraints: offline, stdlib only; fail if source declarations cannot be read.
 """
 
@@ -12,7 +12,7 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / ".github/wiki/guides/ci/Reference.md"
+PAGE = ROOT / ".github/wiki/guides/ci/Agent-Reference.md"
 
 
 def render():
@@ -37,10 +37,11 @@ def render():
     if not flags or not tokens or not transport:
         raise ValueError("cannot read pull flags or agent reason constants")
     lines = [
-        "# CI reference", "",
+        "# CI agent reference", "",
         "<!-- Source: scripts/generate-ci-agent-reference.py; do not edit this page directly. -->", "",
         "This page covers the pull agent and its refusal and transport reasons. "
-        "It is a focused reference pending the full CI reference generator.", "",
+        "Commands, flags and codes of `nself ci` are on "
+        "[[CI reference|guides/ci/Reference]].", "",
         "Regenerate with `python3 scripts/generate-ci-agent-reference.py`; "
         "validate with `python3 scripts/generate-ci-agent-reference.py --check`.", "",
         "## `nself-ci-agent pull`", "",

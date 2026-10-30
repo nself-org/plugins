@@ -95,6 +95,9 @@ func runV15(args []string) int {
 			continue
 		}
 		if entry, ok := v15Subcommands[strings.Join(args[:n], " ")]; ok {
+			if wantsHelp(args[n:]) { // before the --coordinator client and the handler: help starts nothing
+				return answerHelp(strings.Join(args[:n], " "), args[n:])
+			}
 			if code, done := nodesRemoteDispatch(strings.Join(args[:n], " "), args[n:]); done { // `nodes <sub> --coordinator <url>` (P7-NODE-26)
 				return code
 			}
@@ -158,6 +161,9 @@ func parseBare(args []string) (RunOptions, error) {
 			return RunOptions{}, err
 		}
 		return RunOptions{}, errFlagParse
+	}
+	if bare.help { // help prints and exits: the option hooks open the store and run git (P7-CI-46)
+		return RunOptions{}, nil
 	}
 	if dashes && len(argv) == 0 {
 		return RunOptions{}, adhoc.UsageError("`nself ci --` needs a command after the dashes")
@@ -260,11 +266,14 @@ func runBare(args []string) int {
 		}
 		return code
 	}
+	outside := make(chan bool, 1) // two git reads, independent of the plan: they run beside it (P7-CI-46)
+	go func() { outside <- configOutside(ctx, o.Root) }()
 	p, digest, subst, err := preparePlan(ctx, o)
 	if err != nil {
 		return exitForError(err)
 	}
-	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: configOutside(ctx, o.Root), Substantive: subst, Out: os.Stdout}
+	attachPlacement(ctx, o)
+	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: <-outside, Substantive: subst, Out: os.Stdout}
 	res, err := c.Run(ctx)
 	if err != nil {
 		return exitForError(err)

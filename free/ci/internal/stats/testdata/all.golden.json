@@ -1,0 +1,139 @@
+{
+  "contract": "ci.stats",
+  "version": 1,
+  "generated_at": "2026-10-26T12:00:00Z",
+  "since_ms": 86400000,
+  "project": null,
+  "queue": {
+    "background": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 549,
+        "p95": 965,
+        "n": 100
+      }
+    },
+    "interactive": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 526,
+        "p95": 952,
+        "n": 100
+      }
+    },
+    "normal": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 535,
+        "p95": 943,
+        "n": 300
+      }
+    }
+  },
+  "runners": {
+    "eph1": {
+      "attempts": 167,
+      "busy_ms": 567472,
+      "slots": null,
+      "available_ms": null,
+      "utilisation_permille": null
+    },
+    "linux1": {
+      "attempts": 166,
+      "busy_ms": 568379,
+      "slots": 2,
+      "available_ms": 172800000,
+      "utilisation_permille": 3
+    },
+    "mac1": {
+      "attempts": 167,
+      "busy_ms": 565899,
+      "slots": 4,
+      "available_ms": 345600000,
+      "utilisation_permille": 2
+    }
+  },
+  "attempts": {
+    "finished": 500,
+    "pass_permille": 764,
+    "fail_permille": 236,
+    "flaky_permille": 125,
+    "infra_retry_permille": 100
+  },
+  "jobs": {
+    "job0": {
+      "p50": 3332,
+      "p95": 5716,
+      "n": 125
+    },
+    "job1": {
+      "p50": 3349,
+      "p95": 5717,
+      "n": 125
+    },
+    "job2": {
+      "p50": 3366,
+      "p95": 5734,
+      "n": 125
+    },
+    "job3": {
+      "p50": 3367,
+      "p95": 5751,
+      "n": 125
+    }
+  },
+  "cache": {
+    "hits": 66,
+    "misses": 34,
+    "hit_permille": 660,
+    "bytes_restored": 66000,
+    "bytes_saved": 250000
+  },
+  "storage": {
+    "cas_bytes": 12288,
+    "artifact_bytes": 2048
+  },
+  "provisioning_ms": {
+    "p50": 21000,
+    "p95": 24000,
+    "n": 2
+  },
+  "spend": {
+    "computed": {
+      "attempts": 1,
+      "micro": 2000
+    },
+    "estimated": {
+      "attempts": 1,
+      "micro": 3000
+    },
+    "known": {
+      "attempts": 1,
+      "micro": 1000
+    },
+    "unknown": {
+      "attempts": 1,
+      "micro": 4000
+    }
+  },
+  "leases": {
+    "active": 1,
+    "stale": 1,
+    "self_fenced": 0
+  },
+  "nodes": {
+    "by_state": {
+      "offline": 1,
+      "online": 2
+    },
+    "offline_over_24h": 1
+  },
+  "outbox": {
+    "pending": 1,
+    "oldest_age_ms": 7200000
+  },
+  "store": null,
+  "reasons": {
+    "runners.eph1.utilisation_permille": "slots_unknown"
+  }
+}

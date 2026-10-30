@@ -69,7 +69,9 @@ type Driver struct {
 	finished  map[string]bool             // lease ids whose Run returned, bounded
 	order     []string
 	lastPrune time.Time
-	pending   map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
+	// Push queues a frame on a node's control stream (agentapi.Server.Push); nil disables the cache restore push.
+	Push    func(ctx context.Context, node string, m protocol.Message) error
+	pending map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
 }
 
 func (d *Driver) hasRoute(leaseID string) bool {
@@ -100,6 +102,7 @@ func (d *Driver) Admit(ctx context.Context, c agentapi.Call) error {
 		if !d.hasRoute(c.LeaseID) { // no run waits for this lease: do not renew it, tell the agent to stop it
 			return lost("no run is waiting for lease %s on this coordinator", c.LeaseID)
 		}
+		d.noteRunning(c.LeaseID)
 		if err := d.syncLogs(); err != nil {
 			d.logf("agent transport: syncing the lease logs: %v", err)
 			return err
@@ -166,10 +169,12 @@ type route struct {
 	once               sync.Once
 	lw                 *LogWriter
 	blobs              *blobSet
-	resultMu           sync.Mutex // serializes result commits and spend retries
-	resultDone         bool       // guarded by Driver.mu
-	fwd, prevFwd       uint64     // highest log line_seq the run's sink accepted (and the one before)
-	err                error      // why the lease failed (a corrupt blob); read after done is closed
+	resultMu           sync.Mutex           // serializes result commits and spend retries
+	resultDone         bool                 // guarded by Driver.mu
+	fwd, prevFwd       uint64               // highest log line_seq the run's sink accepted (and the one before)
+	offsets            chan protocol.Offset // the node's offset answers to a restore push (restore.go)
+	arm                func()               // starts the restore push; nil when the sink restores nothing
+	err                error                // why the lease failed (a corrupt blob); read after done is closed
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }
@@ -252,6 +257,8 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 	lease.Token = tok
 	d.prune(ctx, c.gate, time.Now())
 	rt := &route{node: nodeID, leaseID: lease.LeaseID, jti: jti, sink: sink, done: make(chan struct{})}
+	stopRestore := d.armRestore(ctx, rt, lease, sink)
+	defer stopRestore()
 	if err = d.enqueue(rt, lease); err != nil {
 		return err
 	}

@@ -32,6 +32,8 @@ type evidenceInput struct {
 	Selection                                                    model.Selection
 	Trigger                                                      model.Trigger
 	Jobs                                                         []JobOutcome
+	Attempts                                                     []model.AttemptEvidence // runner and timings per attempt (P7-AUTO-21)
+	Errors                                                       []model.EvidenceError
 	Start, End                                                   time.Time
 }
 
@@ -104,6 +106,11 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 			Substantive: o.Substantive, AllowFailure: o.AllowFailure, Result: checkResult(o), Reason: o.Reason, FailureClass: o.FailureClass}
 		if o.State == StateFailed || o.Code != "" {
 			c.Excerpt = diagnose.Excerpt(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
+			if c.Excerpt == "" && o.Detail != "" {
+				// The job printed nothing: it never started, or the executor failed around it. The error text
+				// is then the only cause there is, so it is the excerpt (an infra.executor check was empty).
+				c.Excerpt = diagnose.Excerpt(o.Detail, maxExcerpt)
+			}
 			attachDiagnosis(&c, o)
 		}
 		c.Flaky = o.Flaky
@@ -125,6 +132,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		e.Retries = append(e.Retries, o.Retries...)
 	}
 	e.Counts.Total = len(e.Checks)
+	e.Attempts, e.Errors = sortedAttempts(in.Attempts), sortedErrors(in.Errors)
 	e.Result = runResult(e.Checks)
 	if in.Cancelled {
 		e.Result = "cancelled"
@@ -179,4 +187,39 @@ func attachDiagnosis(c *model.Check, o JobOutcome) {
 		ref := o.LogRef
 		c.LogRef = &ref
 	}
+}
+
+// sortedAttempts copies the attempt records in a stable order (job, attempt);
+// none yields nil so the additive key is absent, as in an older document.
+func sortedAttempts(in []model.AttemptEvidence) []model.AttemptEvidence {
+	if len(in) == 0 {
+		return nil
+	}
+	out := append([]model.AttemptEvidence(nil), in...)
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].JobID != out[j].JobID {
+			return out[i].JobID < out[j].JobID
+		}
+		return out[i].Attempt < out[j].Attempt
+	})
+	return out
+}
+
+// sortedErrors copies the coded errors in a stable order (job, attempt, code).
+func sortedErrors(in []model.EvidenceError) []model.EvidenceError {
+	if len(in) == 0 {
+		return nil
+	}
+	out := append([]model.EvidenceError(nil), in...)
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.JobID != b.JobID {
+			return a.JobID < b.JobID
+		}
+		if a.Attempt != b.Attempt {
+			return a.Attempt < b.Attempt
+		}
+		return a.Code < b.Code
+	})
+	return out
 }

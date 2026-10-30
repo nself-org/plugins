@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -48,6 +49,8 @@ type Binding struct {
 	Fence, Ready             func(context.Context) error
 	// Unordered preserves the full ref grace for carriers without ordered delivery.
 	Unordered bool
+	// RestoreWait bounds each wait for the node's offset answer (default DefaultRestoreWait).
+	RestoreWait time.Duration
 }
 
 type Lease struct {

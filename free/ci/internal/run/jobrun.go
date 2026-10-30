@@ -51,7 +51,13 @@ func (rs *runState) trans(id string, from, to model.JobState, class model.Failur
 	if state != from {
 		return fail(CodeRun, "attempt %s is %s, not %s", id, state, from)
 	}
-	return rs.sess.Store.Transition(bg, id, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: class})
+	if err = rs.sess.Store.Transition(bg, id, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: class}); err != nil {
+		return err
+	}
+	if to == "passed" || to == "failed" || to == "cancelled" || to == "lost" { // the store freed the host reservation
+		dispatchWake(rs.sess.RunID)
+	}
+	return nil
 }
 
 // settle ends an attempt that is in state `from`. A committed cancel intent

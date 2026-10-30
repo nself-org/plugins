@@ -25,8 +25,12 @@ const (
 	ReasonSizeCap      = "size_cap"
 	ReasonDiskFloor    = "disk_floor"
 	ReasonPathOutside  = "path_outside"
+	// ReasonSecretMatch: a save the value scan refused, or a read-only snapshot
+	// whose writer received secrets (refused to every other reader, TM-12).
+	ReasonSecretMatch = "secret_match"
 	// ReasonBlobInvalid extends the Epic D20 list: a blob is missing, has the wrong
-	// size or was not freshly Put when its entry commits.
+	// size or was not freshly Put when its entry commits, or a restore found it
+	// missing, of the wrong size or failing its digest (TM-15).
 	ReasonBlobInvalid = "blob_invalid"
 )
 
@@ -34,13 +38,19 @@ const (
 type Refused struct {
 	Reason string
 	Err    error // the cause, when there is one (ErrBlobStale, os.ErrNotExist)
+	// Op names the refused operation in the message; empty means "write".
+	Op string
 }
 
 func (e *Refused) Error() string {
-	if e.Err != nil {
-		return CodeCacheRefused + " cache write refused: " + e.Reason + ": " + e.Err.Error()
+	op := e.Op
+	if op == "" {
+		op = "write"
 	}
-	return CodeCacheRefused + " cache write refused: " + e.Reason
+	if e.Err != nil {
+		return CodeCacheRefused + " cache " + op + " refused: " + e.Reason + ": " + e.Err.Error()
+	}
+	return CodeCacheRefused + " cache " + op + " refused: " + e.Reason
 }
 
 // Unwrap exposes the cause.

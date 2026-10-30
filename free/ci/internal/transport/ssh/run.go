@@ -45,6 +45,7 @@ type sess struct {
 	seq    uint64
 
 	frames     chan frame
+	offsets    chan protocol.Offset // the node's offset answers for the restore push (restore.go)
 	stop       chan struct{}
 	readerDone chan struct{}
 	errDone    <-chan struct{}
@@ -85,7 +86,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 	if err != nil {
 		return newErr(CodeTransport, ReasonConnect, "cannot start ssh for node %s: %v", node.Identity.ID, err)
 	}
-	s := &sess{d: d, node: node, lease: lease, sink: sink, conn: conn, frames: make(chan frame, 64),
+	s := &sess{d: d, node: node, lease: lease, sink: sink, conn: conn, frames: make(chan frame, 64), offsets: make(chan protocol.Offset, offsetBuffer),
 		stop: make(chan struct{}), readerDone: make(chan struct{}), origin: time.Now(), blobs: map[string]*blobState{}, committed: map[string]bool{}}
 	s.stderr, s.errDone = drain(conn.Stderr)
 	defer s.close()

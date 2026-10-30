@@ -4,7 +4,7 @@ Thanks for your interest in contributing to the nSelf plugin ecosystem.
 
 ## What This Is
 
-Free MIT plugins for the nSelf CLI. There are 25 free plugins available to everyone.
+Free MIT plugins for the nSelf CLI. The free plugins are available to everyone; the live list is in `registry.json`.
 
 ## Prerequisites
 

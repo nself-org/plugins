@@ -15,6 +15,9 @@
     {"slug": "cron", "tier": "free", "tier_pair": true, "bundles": [], "maturity": "implemented", "version": "1.2.0",
      "commands": null, "docs_url": null, "requires": {"nself": ">=1.0.0"}, "tarball_url": "https://example.test/cron-1.2.0.tar.gz"},
     {"slug": "api", "tier": "free", "tier_pair": false, "bundles": [], "maturity": "planned", "version": "0.1.0",
-     "commands": null, "docs_url": "https://docs.example.test/api", "requires": null, "tarball_url": "https://example.test/api.tar.gz"}
+     "commands": null, "docs_url": "https://docs.example.test/api", "requires": null, "tarball_url": "https://example.test/api.tar.gz"},
+    {"slug": "ci", "tier": "free", "tier_pair": false, "bundles": [], "maturity": "implemented", "version": "1.2.0",
+     "commands": {"command": "ci", "subcommands": ["run", "serve", "nodes provision", "nodes verify"]}, "docs_url": null,
+     "requires": null, "tarball_url": "https://example.test/ci.tar.gz"}
   ]
 }

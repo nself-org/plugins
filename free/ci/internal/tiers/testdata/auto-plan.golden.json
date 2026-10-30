@@ -1,0 +1,649 @@
+{
+  "schema": "ci.placement-plan/v1",
+  "pipeline": {
+    "id": null,
+    "name": "default",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "trigger": "local",
+    "policy_digest": "p000000000000000000000000000000000000000000000000000000000000000",
+    "preset": "auto",
+    "world_digest": "w000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "fast_path": {
+    "taken": false,
+    "reason": "none"
+  },
+  "jobs": [
+    {
+      "id": "fresh",
+      "name": "",
+      "matrix_key": "",
+      "deps": [],
+      "band": "normal",
+      "requirements": {
+        "platform": "linux/amd64",
+        "isolation_min": "",
+        "network": "",
+        "labels": [],
+        "cpu": 1,
+        "mem_mb": 128,
+        "tools": []
+      },
+      "secret_classes": [],
+      "status": "waiting",
+      "reasons": [
+        {
+          "code": "tier.waiting",
+          "detail": "held for v-vps (tier vps, bias 60001, capacity.busy): 30000 ms left of step_sec 30 s, then l-lan (tier lan)"
+        }
+      ],
+      "placement": null,
+      "alternatives": [
+        {
+          "runner_id": "h-hosted",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "privacy.hosted_not_authorized",
+              "detail": "privacy.hosted_not_authorized"
+            },
+            {
+              "code": "cost.unknown_rate",
+              "detail": "missing or nonpositive rate"
+            },
+            {
+              "code": "paid.disabled",
+              "detail": "operator policy"
+            },
+            {
+              "code": "budget.unset",
+              "detail": "day, month or provider budget required"
+            },
+            {
+              "code": "budget.exceeded",
+              "detail": "saturated cost"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "l-lan",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 157500,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 2000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 120000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 4000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        },
+        {
+          "runner_id": "v-vps",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "capacity.busy",
+              "detail": "availability"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "x-local",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 211502,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 180002,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        }
+      ],
+      "expected_wait_ms": null
+    },
+    {
+      "id": "older",
+      "name": "",
+      "matrix_key": "",
+      "deps": [],
+      "band": "normal",
+      "requirements": {
+        "platform": "linux/amd64",
+        "isolation_min": "",
+        "network": "",
+        "labels": [],
+        "cpu": 1,
+        "mem_mb": 128,
+        "tools": []
+      },
+      "secret_classes": [],
+      "status": "waiting",
+      "reasons": [
+        {
+          "code": "tier.waiting",
+          "detail": "held for v-vps (tier vps, bias 60001, capacity.busy): 10000 ms left of step_sec 30 s, then l-lan (tier lan)"
+        }
+      ],
+      "placement": null,
+      "alternatives": [
+        {
+          "runner_id": "h-hosted",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "privacy.hosted_not_authorized",
+              "detail": "privacy.hosted_not_authorized"
+            },
+            {
+              "code": "cost.unknown_rate",
+              "detail": "missing or nonpositive rate"
+            },
+            {
+              "code": "paid.disabled",
+              "detail": "operator policy"
+            },
+            {
+              "code": "budget.unset",
+              "detail": "day, month or provider budget required"
+            },
+            {
+              "code": "budget.exceeded",
+              "detail": "saturated cost"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "l-lan",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 157500,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 2000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 120000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 4000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        },
+        {
+          "runner_id": "v-vps",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "capacity.busy",
+              "detail": "availability"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "x-local",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 211502,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 180002,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        }
+      ],
+      "expected_wait_ms": null
+    },
+    {
+      "id": "stale",
+      "name": "",
+      "matrix_key": "",
+      "deps": [],
+      "band": "normal",
+      "requirements": {
+        "platform": "linux/amd64",
+        "isolation_min": "",
+        "network": "",
+        "labels": [],
+        "cpu": 1,
+        "mem_mb": 128,
+        "tools": []
+      },
+      "secret_classes": [],
+      "status": "placed",
+      "reasons": [],
+      "placement": {
+        "runner_id": "l-lan",
+        "provider": "operator",
+        "location": "lan",
+        "cost_class": "owned",
+        "score": 157500,
+        "components": {
+          "cache": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "unknown"
+          },
+          "cold_start": {
+            "value_ms": 2000,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "contention": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "cost": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "reliability": {
+            "value_ms": 1500,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "runtime": {
+            "value_ms": 30000,
+            "weight_permille": 1000,
+            "confidence": "unknown"
+          },
+          "scarcity": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "tier_rank": {
+            "value_ms": 120000,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "transfer": {
+            "value_ms": 4000,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "wait": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          }
+        },
+        "estimate": {
+          "wait_ms": 0,
+          "runtime_ms": null,
+          "cost_micro": 0,
+          "cost_confidence": "known"
+        }
+      },
+      "alternatives": [
+        {
+          "runner_id": "h-hosted",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "privacy.hosted_not_authorized",
+              "detail": "privacy.hosted_not_authorized"
+            },
+            {
+              "code": "cost.unknown_rate",
+              "detail": "missing or nonpositive rate"
+            },
+            {
+              "code": "paid.disabled",
+              "detail": "operator policy"
+            },
+            {
+              "code": "budget.unset",
+              "detail": "day, month or provider budget required"
+            },
+            {
+              "code": "budget.exceeded",
+              "detail": "saturated cost"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "l-lan",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 157500,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 2000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 120000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 4000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        },
+        {
+          "runner_id": "v-vps",
+          "provider": "operator",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "capacity.busy",
+              "detail": "availability"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "x-local",
+          "provider": "operator",
+          "eligible": true,
+          "reasons": [],
+          "score": 211502,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 1500,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 30000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "tier_rank": {
+              "value_ms": 180002,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        }
+      ],
+      "expected_wait_ms": 0
+    }
+  ],
+  "totals": {
+    "estimated_cost_micro": 0,
+    "cost_confidence": "known",
+    "placed": 1,
+    "waiting": 2,
+    "awaiting_approval": 0,
+    "unplaceable": 0
+  }
+}

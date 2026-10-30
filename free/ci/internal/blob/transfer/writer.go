@@ -69,7 +69,7 @@ func (w *Writer) publish() error {
 		return Failf(ReasonProtocol, "blob %s was aborted", short(w.h.SHA256))
 	}
 	if w.offset != w.h.Size {
-		return Failf(ReasonInterrupted, "blob %s holds %d of %d B", short(w.h.SHA256), w.offset, w.h.Size)
+		return w.r.tell(context.Background(), w.h.SHA256, Failf(ReasonInterrupted, "blob %s holds %d of %d B", short(w.h.SHA256), w.offset, w.h.Size))
 	}
 	if err := w.r.epoch(context.Background(), w.h.SHA256); err != nil {
 		return err
@@ -77,9 +77,9 @@ func (w *Writer) publish() error {
 	if err := w.p.Finalize(); err != nil {
 		if errors.Is(err, cas.ErrPartialConflict) {
 			w.offset = 0 // the partial is gone: a retry starts clean
-			return Failf(ReasonDigest, "blob %s does not match its digest; nothing was published", short(w.h.SHA256))
+			return w.r.tell(context.Background(), w.h.SHA256, Failf(ReasonDigest, "blob %s does not match its digest; nothing was published", short(w.h.SHA256)))
 		}
-		return Failf(ReasonInterrupted, "blob %s could not be published: %v", short(w.h.SHA256), err)
+		return w.r.tell(context.Background(), w.h.SHA256, Failf(ReasonInterrupted, "blob %s could not be published: %v", short(w.h.SHA256), err))
 	}
 	w.done, w.published = true, true
 	return nil

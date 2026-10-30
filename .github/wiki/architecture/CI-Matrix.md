@@ -11,7 +11,7 @@ How free plugins get tested automatically, and what does not.
 
 ## The 59 / 1 split
 
-As of P6, `free/` holds 60 plugin directories. 59 of them have a `go.mod` and
+`free/` holds one directory per free plugin; those with a `go.mod` (the count comes from `scripts/plugin-counts.sh` output, not this page) are
 are built, vetted, and unit-tested by `build-test.yml`'s loop
 (`for d in free/*/; if [ -f "$d/go.mod" ]; then ... fi`). Adding a new Go
 plugin needs no workflow edit — drop a `go.mod` in `free/<name>/` and the
@@ -52,7 +52,7 @@ sibling) to compare the free and pro registries against disk. It has two
 modes, selected automatically by whether the `PLUGINS_PRO_CHECKOUT_TOKEN`
 secret is set:
 
-- **Mode A** (secret present): checks out `nself-org/plugins-pro` and
+- **Mode A** (secret present): checks out `nself-org/bundles` and
   `nself-org/cli` as siblings, then runs the full script — free + pro counts,
   and the pro disk-vs-registry drift check.
 - **Mode B** (secret absent, current default): the pro-repo checkout is

@@ -32,11 +32,14 @@ type Session struct {
 	Exec        *ciexec.Executor
 	RunID       string
 	Revision    string
-	Host        string
-	Home        string
-	Poll        time.Duration
-	Capacity    func() ciexec.Capacity
-	Admission   ciexec.AdmissionPolicy
+	// Checkout is the revision a node checks out: the dirty-tree snapshot of the
+	// offload hook (P7-AUTO-13), or "" for Revision.
+	Checkout  string
+	Host      string
+	Home      string
+	Poll      time.Duration
+	Capacity  func() ciexec.Capacity
+	Admission ciexec.AdmissionPolicy
 	// Plan is the run's plan and Record its Options.Record: the dispatch hook maps both
 	// into the scheduler job (P7-AUTO-28); a Session built without them still places.
 	Plan   *plan.Plan
@@ -149,4 +152,12 @@ func hostName() string {
 		return "localhost"
 	}
 	return safeID(h)
+}
+
+// checkoutRevision is the revision a node checks out (Checkout, else Revision).
+func (s *Session) checkoutRevision() string {
+	if s.Checkout != "" {
+		return s.Checkout
+	}
+	return s.Revision
 }

@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install audit-analytics` |
 | **Requirements** | nSelf >=1.0.9; plugins audit-log |
 

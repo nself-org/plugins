@@ -14,7 +14,7 @@ nself plugin install <name>
 ## Free Plugins (129)
 
 <!-- Count generated from registry.json (`jq '.plugins|length' registry.json`), verified via cli/scripts/plugin-counts.sh — do not hand-type this number. -->
-All 129 plugins are MIT-licensed and listed below (generated from `registry.json` via `cli/scripts/plugin-counts.sh` — see `.claude/docs/sport/F03-PLUGIN-INVENTORY-FREE.md` for narrative detail, currently pending its own regen per P6-E9-W4-S3-T2).
+Every free plugin is MIT-licensed and listed below. The live count and catalogue come from `registry.json` and the public catalogue at nself.org/plugins; this page does not repeat them.
 
 | Plugin | Description | Category |
 | ------ | ----------- | -------- |
@@ -177,15 +177,15 @@ Have a plugin to share? Add it to the `community/` directory and open a PR.
 
 See [Contributing Guide](./.github/wiki/Contributing.md) for guidelines.
 
-## Pro Plugins
+## Licensed plugins (Bundles)
 
-62 production-grade plugins starting at $0.99/month ($9.99/year).
+Production-grade licensed plugins, sold only through Bundles or nSelf+. See nself.org/pricing for current prices.
 
 No other self-hosted backend ships anything close to this. These are not thin wrappers. Each plugin is a complete service with its own database schema, API surface, and production-tested logic built for the nself stack.
 
 [See pricing tiers at nself.org/pricing](https://nself.org/pricing) · [Browse catalog at nself.org/plugins](https://nself.org/plugins)
 
-### What Pro Plugins include
+### What licensed plugins include
 
 #### AI and intelligence
 
@@ -263,7 +263,7 @@ No other self-hosted backend ships anything close to this. These are not thin wr
 - `web3` — NFT support, token-gated access, DAO governance, and decentralized identity.
 - `torrent-manager` — Torrent client integration with Transmission and qBittorrent, multi-source search, VPN enforcement.
 
-### Why Pro Plugins
+### Why licensed plugins
 
 Building this yourself takes months. Some examples:
 
@@ -276,7 +276,7 @@ Building this yourself takes months. Some examples:
 | Live streaming (RTMP/HLS + DVR) | 3-6 weeks | $100-$500+/month |
 | EPG + media metadata enrichment | 2-4 weeks | No managed equivalent |
 
-With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 62 pro plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
+With licensed plugins from Bundles, you self-host everything, not per-seat, not per-request, not per-service. Current tiers and what each one adds are listed at nself.org/pricing.
 
 [See pricing tiers at nself.org/pricing](https://nself.org/pricing)
 

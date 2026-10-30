@@ -17,10 +17,35 @@
   "commands": {
     "binary": "nself-ci",
     "command": "ci",
-    "json": "none",
+    "confirm": {
+      "flags": []
+    },
+    "json": "envelope",
     "output": "document",
     "side_effect": "remote",
     "subcommands": [
+      {
+        "args": [
+          {
+            "name": "subcommand"
+          },
+          {
+            "name": "name"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "artifacts",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List, show, fetch and prune stored run artifacts"
+      },
       {
         "args": [
           {
@@ -77,7 +102,246 @@
         "summary": "Build a signed release artifact locally (Android only)"
       },
       {
+        "args": [
+          {
+            "name": "fingerprint"
+          }
+        ],
         "flags": [
+          {
+            "name": "by",
+            "type": "string"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "config ignore add",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Append a reviewed fingerprint to .gitleaksignore (--reason required)"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "write",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "config migrate",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Migrate .nself/ci.yaml to the current schema (--write applies)"
+      },
+      {
+        "flags": [
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "home",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "no-status",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "config show",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the resolved CI configuration"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "alert",
+            "type": "bool"
+          },
+          {
+            "name": "nodes",
+            "type": "bool"
+          },
+          {
+            "name": "providers",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "selftest",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "doctor",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Check the CI environment, nodes and providers (--selftest [--alert] for an unattended host)"
+      },
+      {
+        "args": [
+          {
+            "name": "revision"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "pipeline",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "evidence",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the evidence document of a revision"
+      },
+      {
+        "args": [
+          {
+            "name": "revision"
+          }
+        ],
+        "flags": [
+          {
+            "name": "at-revision",
+            "type": "string"
+          },
+          {
+            "name": "file",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "default": "required",
+            "name": "policy",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "stream",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "evidence verify",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Verify the evidence of a revision against the policy"
+      },
+      {
+        "args": [
+          {
+            "name": "job"
+          }
+        ],
+        "flags": [
+          {
+            "name": "base",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "max-queue",
+            "type": "string"
+          },
+          {
+            "name": "pipeline",
+            "type": "string"
+          },
+          {
+            "name": "prefer",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "runner",
+            "type": "string"
+          },
+          {
+            "name": "trigger",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "explain",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Explain why a job was or was not planned"
+      },
+      {
+        "flags": [
+          {
+            "name": "runner",
+            "type": "string",
+            "usage": "Runner container name (default: <PROJECT>_forgejo_runner)"
+          },
           {
             "default": "http://localhost:3844",
             "name": "url",
@@ -92,104 +356,455 @@
         "summary": "Show Forgejo server health (ops profile)"
       },
       {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
         "flags": [
           {
-            "default": ":3845",
-            "name": "addr",
-            "type": "string",
-            "usage": "Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry"
+            "default": "0",
+            "name": "attempt",
+            "type": "int"
           },
           {
-            "default": "false",
-            "name": "allow-unsandboxed",
-            "side_effect": "destructive",
-            "type": "bool",
-            "usage": "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse."
+            "cli_only": true,
+            "name": "f",
+            "type": "bool"
           },
           {
-            "default": "[]",
-            "name": "allowed-repos",
-            "type": "stringSlice",
-            "usage": "Comma-separated or repeatable \"owner/repo\" allowlist. Default: empty, which rejects every job (fail-closed, no \"allow all\")."
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
           },
           {
-            "default": "2",
-            "name": "concurrency",
-            "type": "int",
-            "usage": "Max concurrent CI jobs"
+            "name": "run",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "logs",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Print the logs of a run attempt (-f follows)"
+      },
+      {
+        "flags": [
+          {
+            "name": "probe",
+            "type": "bool"
           },
           {
-            "default": "false",
-            "name": "insecure",
-            "type": "bool",
-            "usage": "DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured."
-          },
-          {
-            "name": "secret",
-            "secret": true,
-            "type": "string",
-            "usage": "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)"
-          },
-          {
-            "default": "600",
-            "name": "timeout",
-            "type": "int",
-            "usage": "Per-job timeout in seconds"
-          },
-          {
-            "default": "false",
-            "name": "verbose",
-            "shorthand": "v",
-            "type": "bool",
-            "usage": "Verbose gate output"
-          },
-          {
-            "default": "/tmp/nself-ci-workdirs",
-            "name": "workdir",
-            "type": "string",
-            "usage": "Base directory for ephemeral checkout workdirs"
+            "name": "proxy",
+            "type": "string"
           }
         ],
         "json": "none",
-        "name": "serve",
-        "output": "stream",
-        "side_effect": "write",
-        "summary": "Start the nself-ci webhook listener daemon (port 3845)"
+        "name": "netproxy",
+        "output": "interactive",
+        "side_effect": "remote",
+        "summary": "Internal egress proxy used by restricted jobs",
+        "surface": "cli-only"
       },
       {
         "args": [
           {
-            "name": "search-root"
+            "name": "host"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "accepts",
+            "type": "string"
+          },
+          {
+            "name": "agent-binary",
+            "type": "string"
+          },
+          {
+            "name": "allow-deploy-host",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "name": "host-key",
+            "type": "string"
+          },
+          {
+            "name": "installer",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "default": "operator",
+            "name": "ownership",
+            "type": "string"
+          },
+          {
+            "name": "privacy-zone",
+            "type": "string"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          },
+          {
+            "name": "secret-classes",
+            "type": "string"
+          },
+          {
+            "default": "2",
+            "name": "slots",
+            "type": "int"
+          },
+          {
+            "name": "system",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes add",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Add and provision a CI node"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "default": "5s",
+            "name": "timeout",
+            "type": "duration"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes discover",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Discover nodes on the local network"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes drain",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Stop placing new jobs on a node"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes enable",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Place jobs on a node again"
+      },
+      {
+        "args": [
+          {
+            "name": "project-root"
+          }
+        ],
+        "json": "none",
+        "name": "nodes forget-project",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Forget a project's node records on this host (local, audited)",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          },
+          {
+            "name": "label"
           }
         ],
         "flags": [
           {
-            "name": "env",
-            "type": "string",
-            "usage": "Target environment: local"
+            "name": "coordinator",
+            "type": "string"
           },
           {
-            "name": "gateway",
-            "type": "string",
-            "usage": "Explicit gateway base URL (e.g. http://host:3761)"
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
           },
           {
-            "name": "v",
-            "type": "bool",
-            "usage": "Print each command before running"
+            "name": "remove",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes label",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Set or remove node labels (key=value)"
+      },
+      {
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
           },
           {
-            "default": "300",
-            "name": "timeout",
-            "type": "int",
-            "usage": "Per-step timeout in seconds"
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List nodes"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "flags": [
+          {
+            "name": "agent-url",
+            "type": "string"
+          },
+          {
+            "default": "0s",
+            "name": "cert-ttl",
+            "type": "duration"
+          },
+          {
+            "default": "local",
+            "name": "coordinator-id",
+            "type": "string"
+          },
+          {
+            "name": "data-dir",
+            "type": "string"
+          },
+          {
+            "default": ":3866",
+            "name": "enroll-addr",
+            "type": "string"
+          },
+          {
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "name": "public-url",
+            "type": "string"
           }
         ],
         "json": "none",
-        "name": "run",
-        "output": "document",
+        "name": "nodes pair",
+        "output": "interactive",
         "side_effect": "remote",
-        "summary": "Discover .ci.yaml manifests and run their stages (pipeline)"
+        "summary": "Pair an agent node (foreground enrollment listener)",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes pools explain",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Explain a project's effective pool set and every excluded runner"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes pools list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List runner pools and whether the project may use them"
+      },
+      {
+        "args": [
+          {
+            "name": "pool"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes pools show",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show one runner pool"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          },
+          {
+            "name": "project"
+          }
+        ],
+        "flags": [
+          {
+            "name": "all",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes projects add",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Authorize projects on a node"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "flags": [
+          {
+            "name": "all",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes projects list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List the projects a node is authorized for"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          },
+          {
+            "name": "project"
+          }
+        ],
+        "flags": [
+          {
+            "name": "all",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes projects remove",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Remove project authorizations from a node"
       },
       {
         "flags": [
@@ -234,7 +849,6 @@
           },
           {
             "name": "token",
-            "secret": true,
             "type": "string",
             "usage": "GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged."
           }
@@ -245,6 +859,342 @@
         "side_effect": "remote",
         "summary": "Install runner dependencies, user, sudoers, and N runner instances",
         "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes remove",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Remove a node and its registration"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes revoke",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Revoke a node credential"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "cert",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "name": "host-key",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "key-id",
+            "type": "string"
+          },
+          {
+            "default": "host-key",
+            "name": "mode",
+            "type": "string"
+          },
+          {
+            "name": "node-key",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes rotate",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Rotate a node host key, certificate or node key"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "flags": [
+          {
+            "name": "class",
+            "type": "string"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "nodes secrets grant",
+        "output": "interactive",
+        "side_effect": "remote",
+        "summary": "Grant a node access to a secret class",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "flags": [
+          {
+            "name": "class",
+            "type": "string"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "nodes secrets revoke",
+        "output": "interactive",
+        "side_effect": "remote",
+        "summary": "Revoke a node access to a secret class",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "name": "interactive",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "on-battery",
+            "type": "string"
+          },
+          {
+            "name": "persistence",
+            "type": "string"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          },
+          {
+            "name": "reserve-cpu",
+            "type": "string"
+          },
+          {
+            "name": "reserve-mem",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes set",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Set contention and persistence policy of a node"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes show",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show one node"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "local",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes status",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show readiness, watcher, queue and last results of every node"
+      },
+      {
+        "flags": [
+          {
+            "name": "cmd",
+            "type": "string"
+          },
+          {
+            "name": "dry-run",
+            "type": "bool"
+          },
+          {
+            "name": "from",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes sync",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Import an inventory/v1 file or command output over the node registry"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes test",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Probe a node and report its capabilities"
+      },
+      {
+        "args": [
+          {
+            "name": "node"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "all",
+            "type": "bool"
+          },
+          {
+            "name": "allow-downgrade",
+            "type": "bool"
+          },
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "default": "10m0s",
+            "name": "drain-wait",
+            "type": "duration"
+          },
+          {
+            "default": "1m0s",
+            "name": "hello-wait",
+            "type": "duration"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "nodes upgrade",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Upgrade node agents"
       },
       {
         "flags": [
@@ -271,6 +1221,1189 @@
         "output": "document",
         "side_effect": "read",
         "summary": "Check host(s) against the dependency manifest and report drift",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "base",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "max-queue",
+            "type": "string"
+          },
+          {
+            "name": "pipeline",
+            "type": "string"
+          },
+          {
+            "name": "prefer",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "runner",
+            "type": "string"
+          },
+          {
+            "name": "trigger",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "plan",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Plan a run without executing it"
+      },
+      {
+        "args": [
+          {
+            "name": "sha"
+          }
+        ],
+        "flags": [
+          {
+            "name": "clear",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy pin",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Pin or clear the trusted revision",
+        "surface": "cli-only"
+      },
+      {
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "default": "15368",
+            "name": "app-id",
+            "type": "int"
+          },
+          {
+            "default": "0",
+            "name": "audit",
+            "type": "int"
+          },
+          {
+            "name": "branch",
+            "type": "string"
+          },
+          {
+            "name": "dry-run",
+            "type": "bool"
+          },
+          {
+            "name": "hook",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "restore",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy protect",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Show or apply branch protection that requires the nself-ci check"
+      },
+      {
+        "args": [
+          {
+            "name": "key"
+          },
+          {
+            "name": "value"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "scope",
+            "type": "string"
+          },
+          {
+            "name": "team",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy set",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Set an operator policy key",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "key"
+          }
+        ],
+        "flags": [
+          {
+            "name": "effective",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "team",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy show",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the operator policy"
+      },
+      {
+        "args": [
+          {
+            "name": "key"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "scope",
+            "type": "string"
+          },
+          {
+            "name": "team",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy unset",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Unset an operator policy key",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "policy usage",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show spend and usage against the policy"
+      },
+      {
+        "json": "none",
+        "name": "providers",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Provider command group help",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "provider"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "allow-private",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers authorize",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Authorize a project for hosted runners"
+      },
+      {
+        "flags": [
+          {
+            "name": "agent-source",
+            "type": "string"
+          },
+          {
+            "name": "check",
+            "type": "bool"
+          },
+          {
+            "name": "dir",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "stdout",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers github init",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Render the GitHub dispatch workflow"
+      },
+      {
+        "flags": [
+          {
+            "name": "check",
+            "type": "bool"
+          },
+          {
+            "name": "dir",
+            "type": "string"
+          },
+          {
+            "name": "inputs",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "stdout",
+            "type": "bool"
+          },
+          {
+            "name": "untrusted-dir",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers gitlab init",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Render the GitLab dispatch pipeline"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List providers"
+      },
+      {
+        "args": [
+          {
+            "name": "provider"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers revoke",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Revoke a project authorization for hosted runners"
+      },
+      {
+        "args": [
+          {
+            "name": "provider"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers show",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show one provider"
+      },
+      {
+        "args": [
+          {
+            "name": "provider"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers test",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Probe a provider"
+      },
+      {
+        "args": [
+          {
+            "name": "file"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "providers usage import",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Import provider usage records"
+      },
+      {
+        "args": [
+          {
+            "name": "search-root"
+          }
+        ],
+        "flags": [
+          {
+            "name": "env",
+            "type": "string",
+            "usage": "Target environment: local"
+          },
+          {
+            "name": "gateway",
+            "type": "string",
+            "usage": "Explicit gateway base URL (e.g. http://host:3761)"
+          },
+          {
+            "name": "v",
+            "type": "bool",
+            "usage": "Print each command before running"
+          },
+          {
+            "default": "300",
+            "name": "timeout",
+            "type": "int",
+            "usage": "Per-step timeout in seconds"
+          }
+        ],
+        "json": "none",
+        "name": "run",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Discover .ci.yaml manifests and run their stages (pipeline)"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "flags": [
+          {
+            "name": "flaky",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show a run, or the flaky checks (--flaky)"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "sha",
+            "type": "string"
+          },
+          {
+            "name": "spend",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs approve",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Approve a run that waits for approval"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "json": "envelope",
+        "name": "runs cancel",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Cancel a run"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs decisions",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the scheduling decisions of a run"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "default": "0",
+            "name": "from-seq",
+            "type": "int"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs follow",
+        "output": "stream",
+        "side_effect": "read",
+        "summary": "Follow the events of a run as an NDJSON stream"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "default": "20",
+            "name": "limit",
+            "type": "int"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List recent runs"
+      },
+      {
+        "json": "envelope",
+        "name": "runs outbox",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show queued status and event deliveries"
+      },
+      {
+        "json": "envelope",
+        "name": "runs pending",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List runs waiting for approval"
+      },
+      {
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "apply",
+            "type": "bool"
+          },
+          {
+            "name": "dry-run",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "default": "0",
+            "name": "keep",
+            "type": "int"
+          },
+          {
+            "default": "20",
+            "name": "limit",
+            "type": "int"
+          },
+          {
+            "default": "0",
+            "name": "max-age-days",
+            "type": "int"
+          },
+          {
+            "name": "max-log-bytes",
+            "type": "int"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "tidy",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs prune",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Remove old runs and logs (--dry-run previews; --tidy [--apply] also tidies cache and job roots)"
+      },
+      {
+        "json": "envelope",
+        "name": "runs queue",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the run queue"
+      },
+      {
+        "args": [
+          {
+            "name": "job"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "check",
+            "type": "bool"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "run",
+            "type": "string"
+          },
+          {
+            "name": "shell",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs reproduce",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Reproduce a job at its recorded inputs"
+      },
+      {
+        "args": [
+          {
+            "name": "run-or-sha"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "name": "job",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "where",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs rerun",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Run a recorded revision again on a chosen target"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs resolve",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Resolve a pending run decision"
+      },
+      {
+        "json": "envelope",
+        "name": "runs stats",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show run statistics"
+      },
+      {
+        "args": [
+          {
+            "name": "run"
+          }
+        ],
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "default": "4m0s",
+            "name": "timeout",
+            "type": "duration"
+          }
+        ],
+        "json": "envelope",
+        "name": "runs wait",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Wait for a run to finish and print its result"
+      },
+      {
+        "flags": [
+          {
+            "default": ":3845",
+            "name": "addr",
+            "type": "string",
+            "usage": "Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry"
+          },
+          {
+            "default": "false",
+            "name": "allow-unsandboxed",
+            "side_effect": "destructive",
+            "type": "bool",
+            "usage": "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse."
+          },
+          {
+            "default": "[]",
+            "name": "allowed-repos",
+            "type": "stringSlice",
+            "usage": "Comma-separated or repeatable \"owner/repo\" allowlist. Default: empty, which rejects every job (fail-closed, no \"allow all\")."
+          },
+          {
+            "default": "2",
+            "name": "concurrency",
+            "type": "int",
+            "usage": "Max concurrent CI jobs"
+          },
+          {
+            "default": "false",
+            "name": "insecure",
+            "type": "bool",
+            "usage": "DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured."
+          },
+          {
+            "name": "secret",
+            "type": "string",
+            "usage": "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)"
+          },
+          {
+            "default": "600",
+            "name": "timeout",
+            "type": "int",
+            "usage": "Per-job timeout in seconds"
+          },
+          {
+            "default": "false",
+            "name": "verbose",
+            "shorthand": "v",
+            "type": "bool",
+            "usage": "Verbose gate output"
+          },
+          {
+            "default": "/tmp/nself-ci-workdirs",
+            "name": "workdir",
+            "type": "string",
+            "usage": "Base directory for ephemeral checkout workdirs"
+          }
+        ],
+        "json": "none",
+        "name": "serve",
+        "output": "stream",
+        "side_effect": "write",
+        "summary": "Start the nself-ci webhook listener daemon (port 3845)",
+        "surface": "cli-only"
+      },
+      {
+        "json": "none",
+        "name": "serve admin",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Coordinator admin group help",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "since",
+            "type": "string"
+          },
+          {
+            "name": "verify",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve admin audit",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Read or verify the audit log"
+      },
+      {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "pubkey",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve admin audit checkpoint",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Write a signed audit checkpoint",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "verb"
+          },
+          {
+            "name": "principal"
+          }
+        ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "self",
+            "type": "bool"
+          },
+          {
+            "default": "168h0m0s",
+            "name": "ttl",
+            "type": "duration"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve admin cert",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Issue a user mTLS certificate (printed once)",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "verb"
+          },
+          {
+            "name": "principal"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "stringSlice"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "self",
+            "type": "bool"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve admin roles",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Grant, revoke or list roles",
+        "surface": "cli-only"
+      },
+      {
+        "args": [
+          {
+            "name": "verb"
+          },
+          {
+            "name": "principal"
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "stringSlice"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "self",
+            "type": "bool"
+          },
+          {
+            "default": "0s",
+            "name": "ttl",
+            "type": "duration"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve admin token",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Issue, revoke or list scoped user tokens",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "data-dir",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "out",
+            "type": "string"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve backup",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Back up the coordinator data directory",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "launchd",
+            "type": "bool"
+          },
+          {
+            "name": "systemd",
+            "type": "bool"
+          },
+          {
+            "name": "user",
+            "type": "bool"
+          },
+          {
+            "name": "system",
+            "type": "bool"
+          },
+          {
+            "name": "dry-run",
+            "type": "bool"
+          },
+          {
+            "name": "binary",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "env-file",
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "serve install",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Install the watcher service and hourly selftest",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "data-dir",
+            "type": "string"
+          },
+          {
+            "name": "in",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "kek",
+            "secret": true,
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "serve restore",
+        "output": "interactive",
+        "side_effect": "destructive",
+        "summary": "Restore the coordinator data directory from a backup",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "launchd",
+            "type": "bool"
+          },
+          {
+            "name": "systemd",
+            "type": "bool"
+          },
+          {
+            "name": "user",
+            "type": "bool"
+          },
+          {
+            "name": "system",
+            "type": "bool"
+          },
+          {
+            "name": "dry-run",
+            "type": "bool"
+          },
+          {
+            "name": "binary",
+            "type": "string"
+          },
+          {
+            "name": "repo",
+            "type": "string"
+          },
+          {
+            "name": "env-file",
+            "type": "string"
+          }
+        ],
+        "json": "none",
+        "name": "serve uninstall",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Remove unchanged watcher service files",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "default": "0s",
+            "name": "interval",
+            "type": "duration"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "once",
+            "type": "bool"
+          },
+          {
+            "name": "repos",
+            "type": "stringSlice"
+          }
+        ],
+        "json": "envelope",
+        "name": "serve watch",
+        "output": "stream",
+        "side_effect": "remote",
+        "summary": "Keep commit CI current by polling, without an inbound port",
         "surface": "cli-only"
       }
     ],

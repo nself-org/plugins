@@ -172,7 +172,9 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
 	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
 		Facts: facts, Root: filepath.Join(home, "cache-work", a.AttemptID), Detected: detected, Scope: scope, ExtraKeys: keys, Container: container,
-		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: func(ctx context.Context, argv []string) (string, error) { return h.probe(ctx, a.Job, p.Project, argv) }, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
+		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: func(ctx context.Context, argv []string) (string, error) {
+			return h.probeOnce(ctx, a.RunID, a.Job, p.Project, argv)
+		}, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
 	if container {
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}

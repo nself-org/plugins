@@ -7,12 +7,28 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.7 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install plugin-dev` |
 | **Commands** | `nself plugin-dev`: `debug`, `dev`, `init`, `link`, `new`, `test`, `unlink` |
 | **Requirements** | nSelf >=1.0.0 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself plugin-dev` | `nself_plugin_dev` | `/v1/commands/plugin-dev` | write | document | MCP and HTTP | none |
+| `nself plugin-dev debug` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself plugin-dev dev` | - | - | write | stream | CLI only (surface cli-only) | none |
+| `nself plugin-dev init` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself plugin-dev link` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself plugin-dev new` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself plugin-dev test` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself plugin-dev unlink` | - | - | write | document | CLI only (surface cli-only) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Plugin author tools: scaffold, link, run with hot reload, debug and test a plugin under development.
 

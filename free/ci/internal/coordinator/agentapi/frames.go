@@ -108,6 +108,12 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		act = func() error { return s.cfg.Sink.CacheRef(ctx, *b) }
 	case *protocol.Result:
 		act = func() error { return s.cfg.Sink.Result(ctx, *b) }
+	case *protocol.Offset:
+		oh, isOH := s.cfg.Blobs.(OffsetHandler)
+		if !isOH {
+			return &fatal{protocol.CodeInvalid, "frame_type"}
+		}
+		act = func() error { return oh.Offset(ctx, q.node, m) }
 	case *protocol.Digest, *protocol.Chunk:
 		if s.cfg.Blobs == nil {
 			return &fatal{protocol.CodeInvalid, "frame_type"}

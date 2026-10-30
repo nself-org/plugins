@@ -1,0 +1,128 @@
+{
+  "contract": "ci.stats",
+  "version": 1,
+  "generated_at": "2026-10-26T12:00:00Z",
+  "since_ms": 86400000,
+  "project": "acme/a",
+  "queue": {
+    "background": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 574,
+        "p95": 965,
+        "n": 50
+      }
+    },
+    "interactive": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 526,
+        "p95": 956,
+        "n": 50
+      }
+    },
+    "normal": {
+      "depth": 1,
+      "wait_ms": {
+        "p50": 533,
+        "p95": 953,
+        "n": 150
+      }
+    }
+  },
+  "runners": {
+    "eph1": {
+      "attempts": 83,
+      "busy_ms": 286655,
+      "slots": null,
+      "available_ms": null,
+      "utilisation_permille": null
+    },
+    "linux1": {
+      "attempts": 84,
+      "busy_ms": 281347,
+      "slots": 2,
+      "available_ms": 172800000,
+      "utilisation_permille": 2
+    },
+    "mac1": {
+      "attempts": 83,
+      "busy_ms": 278598,
+      "slots": 4,
+      "available_ms": 345600000,
+      "utilisation_permille": 1
+    }
+  },
+  "attempts": {
+    "finished": 250,
+    "pass_permille": 764,
+    "fail_permille": 236,
+    "flaky_permille": 125,
+    "infra_retry_permille": 100
+  },
+  "jobs": {
+    "job0": {
+      "p50": 3332,
+      "p95": 5716,
+      "n": 125
+    },
+    "job1": {
+      "p50": 3261,
+      "p95": 5717,
+      "n": 50
+    },
+    "job2": {
+      "p50": 3366,
+      "p95": 5734,
+      "n": 75
+    }
+  },
+  "cache": {
+    "hits": 33,
+    "misses": 17,
+    "hit_permille": 660,
+    "bytes_restored": 33000,
+    "bytes_saved": 200000
+  },
+  "storage": {
+    "cas_bytes": 12288,
+    "artifact_bytes": 2048
+  },
+  "provisioning_ms": {
+    "p50": 24000,
+    "p95": 24000,
+    "n": 1
+  },
+  "spend": {
+    "computed": {
+      "attempts": 0,
+      "micro": 0
+    },
+    "estimated": {
+      "attempts": 1,
+      "micro": 3000
+    },
+    "known": {
+      "attempts": 1,
+      "micro": 1000
+    },
+    "unknown": {
+      "attempts": 0,
+      "micro": 0
+    }
+  },
+  "leases": {
+    "active": 0,
+    "stale": 0,
+    "self_fenced": 0
+  },
+  "nodes": null,
+  "outbox": null,
+  "store": null,
+  "reasons": {
+    "nodes": "scoped_to_projects",
+    "outbox": "scoped_to_projects",
+    "runners.eph1.utilisation_permille": "slots_unknown",
+    "store": "scoped_to_projects"
+  }
+}

@@ -8,13 +8,15 @@ package records
 // record whose blob is gone is reported missing (and remembered) and Get
 // refuses it (E712 missing_blob); Get writes only inside a directory that
 // authz.OpenArtifactGetDest pinned, creates every file exclusively and
-// re-verifies size and digest of what it wrote.
+// re-verifies size and digest of what it wrote; with Audit set, every refused
+// Get but "not found" leaves an artifact.get.refused row.
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,6 +30,9 @@ import (
 type Reader struct {
 	Ledger Ledger
 	Blobs  Blobs
+	// Audit, when set, records every refused Get (artifact.get.refused with the
+	// reason key: a destination, path or digest refusal; TM-14, TM-15).
+	Audit AuditSink
 }
 
 // List returns the committed records the viewer may see, newest first.
@@ -81,6 +86,26 @@ func (r Reader) checkBlob(ctx context.Context, rec Record) Record {
 
 // Get writes the record's bytes under dest/<name> and returns the path.
 func (r Reader) Get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (string, Record, error) {
+	p, rec, err := r.get(ctx, v, id, dest, cwd)
+	if err == nil || r.Audit == nil || errors.Is(err, ErrNotFound) {
+		return p, rec, err
+	}
+	reason := ReasonUnreadable
+	var pe *authz.PathError
+	var re *Error
+	switch {
+	case errors.As(err, &pe):
+		reason = string(pe.Reason)
+	case errors.As(err, &re):
+		reason = re.Reason
+	}
+	if aerr := r.Audit(ctx, "artifacts", "artifact.get.refused", id, "reason="+reason); aerr != nil {
+		err = errors.Join(err, fmt.Errorf("artifact get audit: %w", aerr))
+	}
+	return p, rec, err
+}
+
+func (r Reader) get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (string, Record, error) {
 	rec, err := r.visible(ctx, v, id)
 	if err != nil {
 		return "", Record{}, err

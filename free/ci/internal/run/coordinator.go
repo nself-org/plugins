@@ -179,12 +179,15 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	ciexec.WarmRuntimeInfo() // the first job's orphan sweep asks the daemon: let the answer arrive while git and policy run
 	rev := GitRevision(ctx, c.Opts.Root, c.capture())
 	rev.Dirty = rev.Dirty || c.ConfigOutside
-	rev, release, err := c.offload(ctx, h, rev)
+	checkout, release, err := c.offload(ctx, h, rev) // a snapshot is what nodes check out; the run records rev
 	if err != nil {
 		return Result{}, err
 	}
 	defer release()
-	rev.Dirty = rev.Dirty || c.ConfigOutside // a snapshot revision never hides a config that lives outside the tree
+	rev.Dirty = rev.Dirty || checkout != rev.SHA // a run whose nodes test a snapshot is a dev run: never a status of record
+	// the evidence's start reads git only: it runs beside admission, policy and the store (P7-CI-46)
+	begun := make(chan any, 1)
+	go func() { begun <- c.beginEvidence(ctx, h, rev) }()
 	admitted, source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
@@ -208,7 +211,8 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	post := c.prepareStatus(ctx, st, rev)
 	_ = st.Heartbeat(ctx, coord.ID)
 	runID := newRunID()
-	defer dispatchRelease(runID) // also closes the dispatcher of a run that ends before AfterRun (D-1044)
+	defer waitCacheCleanups(runID) // the attempts' cache directories are gone when the run returns
+	defer dispatchRelease(runID)   // also closes the dispatcher of a run that ends before AfterRun (D-1044)
 	sess := newSession()
 	mp := c.Plan.ModelPipeline()
 	rows, err := c.persist(ctx, st, runID, rev, source, pol, sess, mp)
@@ -216,7 +220,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	c.exec = newExecutor(staleChecker{st, bootID()}, h.NewRedactor, h.Isolation)
-	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision = st, coord, c.exec, runID, rev.SHA
+	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision, sess.Checkout = st, coord, c.exec, runID, rev.SHA, checkout
 	sess.Host, sess.Home, sess.Admission = hostName(), c.Opts.Home, c.Admission
 	sess.Admission.Force = sess.Admission.Force || c.Opts.Force
 	sess.Plan, sess.Record = c.Plan, c.Opts.Record
@@ -238,7 +242,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if subst == nil {
 		subst = func(plan.PlannedJob) bool { return true }
 	}
-	rs := &runState{source: model.TrustClass(source), c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(journal(ctx, st, runID, NewRenderer(out, c.Opts)), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
+	rs := &runState{source: model.TrustClass(source), c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(journal(ctx, st, runID, NewRenderer(out, c.Opts)), runID), subset: keep, begin: <-begun,
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	sess.Dirty, sess.ConfigOutside, sess.Subset = rev.Dirty, c.ConfigOutside, keep != nil
 	sess.AdmitTrust = model.TrustClass(admitted)
@@ -250,6 +254,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
+	post.Notes = append(post.Notes, dispatchNotes(runID)...)
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
 		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
 	rs.render.Done(res.Summary)

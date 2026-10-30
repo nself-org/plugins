@@ -158,6 +158,11 @@ func decorateEvidence(s *jsonschema.Schema) {
 	s.Properties["freshness"].Properties["state"].Enum = choices("current", "stale", "unknown")
 	s.Properties["selection"].Properties["mode"].Enum = choices("full", "affected")
 	s.Properties["checks"].Items.Properties["excerpt"].MaxLength = intPtr(4096)
+	kinds := make([]any, len(RunnerKinds))
+	for i, k := range RunnerKinds {
+		kinds[i] = k
+	}
+	s.Properties["attempts"].Items.Properties["runner"].Properties["kind"].Enum = kinds
 	allowedFailure := &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"allow_failure": {Const: anyPtr(true)}}, Required: []string{"allow_failure"}}
 	badCheck := &jsonschema.Schema{
 		Properties: map[string]*jsonschema.Schema{"required": {Const: anyPtr(true)}},

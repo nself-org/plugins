@@ -190,7 +190,8 @@ func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *
 	}
 	facts.Producer = "nself-ci/" + a.JobName
 	reserve := func(total int64) error { return a.Store.ArtifactReserve(ctx, a.AttemptID, epoch, total, pol) }
-	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol, Usage: usage, Reserve: reserve}.CollectRoot(ctx, facts.Project, root, decls)
+	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol, Usage: usage, Reserve: reserve,
+		Audit: a.Store.AppendAudit, Target: a.AttemptID}.CollectRoot(ctx, facts.Project, root, decls)
 	if err != nil {
 		return err
 	}

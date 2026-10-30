@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | deferred ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.12 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install notifications` |
 | **Requirements** | nSelf >=0.9.9 |
 
@@ -2683,4 +2683,5 @@ curl http://localhost:3102/api/stats/delivery
 ---
 
 *Last Updated: January 2026*
+
 *Plugin Version: 1.0.0*

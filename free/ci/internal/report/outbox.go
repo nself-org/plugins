@@ -29,9 +29,21 @@ type Outbox struct {
 // commit (a fork and its upstream) must not order or supersede each other.
 func key(owner, repo string) string { return Context + "@" + owner + "/" + repo }
 
+// keyFor is the store key of one status: the result context keeps the legacy
+// key, every other context (claim, watch, ...) gets its own so it is never
+// collapsed with the result (P7-AUTO-10).
+func keyFor(s Status) string {
+	return s.ContextName() + "@" + s.Owner + "/" + s.Repo
+}
+
 // Reserve takes the seq a run will use for its final status.
 func (o *Outbox) Reserve(ctx context.Context, revision string) (int64, error) {
 	return o.Store.OutboxReserve(ctx, revision, key(o.Owner, o.Repo))
+}
+
+// ReserveContext is Reserve for a status on another context (claim, watch...).
+func (o *Outbox) ReserveContext(ctx context.Context, revision, statusContext string) (int64, error) {
+	return o.Store.OutboxReserve(ctx, revision, keyFor(Status{StatusContext: statusContext, Owner: o.Owner, Repo: o.Repo}))
 }
 
 // Complete stores the status for seq and tries to deliver it. delivered is
@@ -44,7 +56,7 @@ func (o *Outbox) Complete(ctx context.Context, seq int64, s Status) (delivered b
 	if err != nil {
 		return false, err
 	}
-	if err = o.Store.OutboxReady(ctx, s.Revision, key(s.Owner, s.Repo), seq, body); err != nil {
+	if err = o.Store.OutboxReady(ctx, s.Revision, keyFor(s), seq, body); err != nil {
 		return false, err
 	}
 	return o.deliver(ctx, seq, s, true)
@@ -54,7 +66,7 @@ func (o *Outbox) deliver(ctx context.Context, seq int64, s Status, heal bool) (b
 	if o.Reporter == nil {
 		return false, nil
 	}
-	k := key(s.Owner, s.Repo)
+	k := keyFor(s)
 	for waited := 0; waited < 240; waited++ { // an older post in flight: wait up to ~2 minutes
 		res, token, err := o.Store.OutboxClaim(ctx, s.Revision, k, seq)
 		if err != nil {

@@ -168,7 +168,7 @@ func (r *jsonRenderer) Done(s cirun.Summary) {
 			_ = output.WriteError(r.w, "ci", noEvidence(), meta)
 			return
 		}
-		_ = output.WriteData(r.w, "ci", s.Doc, meta)
+		_ = output.WriteData(r.w, "ci", withPlacement(s.Doc, jsonPlacement), meta)
 		return
 	}
 	em := r.sess.emitter(s.RunID)

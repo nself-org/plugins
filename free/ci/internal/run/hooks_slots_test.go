@@ -110,15 +110,20 @@ func passRig(t *testing.T) *rig {
 // TestHookSlotsNoop: with nothing registered, and with slots that do nothing,
 // the run posts the same status and ends with the same verdict.
 func TestHookSlotsNoop(t *testing.T) {
-	// the notify hook (P7-AUTO-18) and the App checks detail publisher (P7-AUTO-22) are the slots the shipped
-	// build fills; both are inert without v1.5 and their operator keys
+	// the notify hook (P7-AUTO-18), the App checks detail publisher (P7-AUTO-22) and the pools.record
+	// publish gate (P7-AUTO-15) are the slots the shipped run package fills; all are inert without v1.5
+	// and their operator keys or pool records
 	_, notifyOK := Registered.Auto.Notify.(*notifyHook)
 	detailOK := len(Registered.Auto.Details) == 1
 	if detailOK {
 		_, detailOK = Registered.Auto.Details[0].(*checksDetail)
 	}
-	if len(Registered.Auto.Gates) != 0 || Registered.Auto.Offload != nil || Registered.Auto.Race != nil || !notifyOK || !detailOK {
-		t.Fatal("the shipped build must register no AUTO slot but the notify hook and the checks detail publisher")
+	gateOK := len(Registered.Auto.Gates) == 1
+	if gateOK {
+		_, gateOK = Registered.Auto.Gates[0].(RecordGate)
+	}
+	if !gateOK || Registered.Auto.Offload != nil || Registered.Auto.Race != nil || !notifyOK || !detailOK {
+		t.Fatal("the shipped build must register no AUTO slot but the notify hook, the checks detail publisher and the record gate")
 	}
 	base := passRig(t)
 	want := base.run(t)
@@ -235,7 +240,8 @@ func TestPublishGateComposes(t *testing.T) {
 }
 
 // TestOffloadAndNotifyFailures: an offload error refuses the run before anything runs; a
-// replaced revision is the one the run binds to; a failing or panicking notify hook is a note.
+// snapshot revision is only what nodes check out (the run records HEAD, dirty and unbound);
+// a failing or panicking notify hook is a note.
 func TestOffloadAndNotifyFailures(t *testing.T) {
 	l := &slotLog{}
 	r := passRig(t)
@@ -253,6 +259,9 @@ func TestOffloadAndNotifyFailures(t *testing.T) {
 	res := r.run(t)
 	if released != 1 || len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, "not posted") {
 		t.Fatalf("a snapshot revision is dev evidence and is released once: released %d status %q", released, res.Summary.Status)
+	}
+	if res.Summary.Doc.Revision != testSHA {
+		t.Fatalf("the run recorded %q: a snapshot is unreachable after release, so the run records HEAD %s", res.Summary.Doc.Revision, testSHA)
 	}
 
 	for name, n := range map[string]fakeNotify{"error": {l: l, err: errors.New("sink down")}, "panic": {l: l, panic: true}} {

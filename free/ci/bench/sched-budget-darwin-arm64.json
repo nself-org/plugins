@@ -1,0 +1,9 @@
+{
+  "_note": "Ceilings for the scheduling cost on darwin/arm64: the highest p95 of three 20-sample baseline runs on mm4 (Apple silicon, 16 GB) plus 25 percent; the millisecond ceilings are never below 5 ms (the P7-CI-46 floor, below it a timing is runner noise). Baselines and update rule: hq plan/p7/evidence/SCHED-perf.md. perfbench check reads the ms ceilings; schedbench -share-check reads the share ceiling.",
+  "schema": "perfbench-budget/v1",
+  "platform": "darwin/arm64",
+  "p95_ms": {
+    "dispatch.admit_ms": 5,
+    "sched.place_ms": 5
+  }
+}

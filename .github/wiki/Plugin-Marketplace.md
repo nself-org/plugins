@@ -1,6 +1,6 @@
 # Plugin Marketplace
 
-The nSelf plugin marketplace is the catalog of free and pro plugins that extend a nSelf backend. It is served by the Cloudflare Worker at `plugins.nself.org` and consumed by three surfaces:
+The nSelf plugin marketplace is the catalog of free and licensed plugins that extend a nSelf backend. It is served by the Cloudflare Worker at `plugins.nself.org` and consumed by three surfaces:
 
 - **Admin UI** — `ɳSelf Admin` runs locally at `http://localhost:3021/plugins/marketplace`
 - **CLI** — `nself plugin marketplace {list,search,info}`
@@ -16,7 +16,7 @@ Base URL: `https://plugins.nself.org`
 |--------|------|---------|
 | GET | `/marketplace` | Categorized plugin list with ratings, bundles, and filters |
 | GET | `/marketplace?tier=free` | Only free plugins |
-| GET | `/marketplace?tier=pro` | Only pro plugins |
+| GET | `/marketplace?tier=pro` | Only licensed plugins |
 | GET | `/marketplace?category=media` | Filter by category |
 | GET | `/marketplace?bundle=nclaw` | Filter by bundle slug |
 | GET | `/marketplace?q=stripe` | Full-text search over name, description, display name, tags |

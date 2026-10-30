@@ -1,0 +1,911 @@
+# GENERATED INPUT BOUNDARY: the one authored declaration of the ci plugin machine surface (P7-CI-62, CI D31).
+# free/ci/plugin.json `commands` is generated from this file by tools/manifestgen (go generate); never edit that block by hand.
+# Keys: one row per key of cmd/subcommands.go (and per `runs <sub>`); cmd/surface_test.go fails on any difference.
+binary: nself-ci
+command: ci
+
+root:
+  summary: "Run the nself-ci gate suite and post a GitHub commit status"
+  side_effect: remote
+  output: document
+  json: envelope
+  confirm: {flags: []}
+  args: [{name: command, variadic: true}]
+  flags:
+    - {name: "base", type: "string"}
+    - {name: "config", type: "string"}
+    - {name: "confirm-flaky", type: "int", default: "0"}
+    - {name: "container", type: "bool"}
+    - {name: "coordinator", type: "string"}
+    - {name: "detach", type: "bool"}
+    - {name: "force", type: "bool"}
+    - {name: "image", type: "string"}
+    - {name: "isolation", type: "string"}
+    - {name: "job", type: "string"}
+    - {name: "json", type: "bool", cli_only: true}
+    - {name: "max-queue", type: "string"}
+    - {name: "network", type: "string"}
+    - {name: "no-status", type: "bool"}
+    - {name: "pipeline", type: "string"}
+    - {name: "post-status", type: "bool"}
+    - {name: "prefer", type: "string"}
+    - {name: "repo", type: "string"}
+    - {name: "runner", type: "string"}
+    - {name: "service", type: "stringSlice"}
+    - {name: "stream", type: "bool", cli_only: true}
+    - {name: "timeout", type: "duration", default: "0s"}
+    - {name: "trigger", type: "string"}
+    - {name: "trust", type: "string"}
+    - {name: "where", type: "string"}
+
+commands:
+  - path: artifacts
+    summary: "List, show, fetch and prune stored run artifacts"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: subcommand}, {name: name}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+  - path: build
+    summary: "Build a signed release artifact locally (Android only)"
+    side_effect: remote
+    output: document
+    json: none
+    args: [{name: android-project-dir}]
+    flags:
+      - {name: "artifact", type: "string", default: "android", usage: "Artifact type to build (only \"android\" is supported)"}
+      - {name: "owner", type: "string", usage: "GitHub owner for --upload (default: from git remote)"}
+      - {name: "repo", type: "string", usage: "GitHub repo for --upload (default: from git remote)"}
+      - {name: "tag", type: "string", usage: "Release tag to upload to (required with --upload)"}
+      - {name: "timeout", type: "int", default: "900", usage: "Build step timeout in seconds (release builds are slow)"}
+      - {name: "upload", type: "bool", default: "false", side_effect: "remote", usage: "Attach the built artifact to a GitHub release via `gh release upload`"}
+      - {name: "verbose", type: "bool", default: "false", shorthand: "v", usage: "Print each command before running"}
+  - path: config ignore add
+    summary: "Append a reviewed fingerprint to .gitleaksignore (--reason required)"
+    side_effect: write
+    output: document
+    json: none
+    args: [{name: fingerprint}]
+    flags:
+      - {name: "by", type: "string"}
+      - {name: "reason", type: "string"}
+      - {name: "repo", type: "string"}
+  - path: config migrate
+    summary: "Migrate .nself/ci.yaml to the current schema (--write applies)"
+    side_effect: write
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+      - {name: "write", type: "bool"}
+  - path: config show
+    summary: "Show the resolved CI configuration"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "config", type: "string"}
+      - {name: "home", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "no-status", type: "bool"}
+      - {name: "repo", type: "string"}
+      - {name: "timeout", type: "string"}
+  - path: doctor
+    summary: "Check the CI environment, nodes and providers (--selftest [--alert] for an unattended host)"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "alert", type: "bool"}
+      - {name: "nodes", type: "bool"}
+      - {name: "providers", type: "bool"}
+      - {name: "repo", type: "string"}
+      - {name: "selftest", type: "bool"}
+  - path: evidence
+    summary: "Show the evidence document of a revision"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: revision}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "pipeline", type: "string"}
+      - {name: "repo", type: "string"}
+  - path: evidence verify
+    summary: "Verify the evidence of a revision against the policy"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: revision}]
+    flags:
+      - {name: "at-revision", type: "string"}
+      - {name: "file", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "policy", type: "string", default: "required"}
+      - {name: "repo", type: "string"}
+      - {name: "stream", type: "bool"}
+  - path: explain
+    summary: "Explain why a job was or was not planned"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: job}]
+    flags:
+      - {name: "base", type: "string"}
+      - {name: "config", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "max-queue", type: "string"}
+      - {name: "pipeline", type: "string"}
+      - {name: "prefer", type: "string"}
+      - {name: "repo", type: "string"}
+      - {name: "runner", type: "string"}
+      - {name: "trigger", type: "string"}
+  - path: forgejo
+    summary: "Show Forgejo server health (ops profile)"
+    side_effect: read
+    output: document
+    json: none
+    flags:
+      - {name: "runner", type: "string", usage: "Runner container name (default: <PROJECT>_forgejo_runner)"}
+      - {name: "url", type: "string", default: "http://localhost:3844", usage: "Forgejo base URL"}
+  - path: logs
+    summary: "Print the logs of a run attempt (-f follows)"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: run}]
+    flags:
+      - {name: "attempt", type: "int", default: "0"}
+      - {name: "f", type: "bool", cli_only: true}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "run", type: "string"}
+  - path: netproxy
+    summary: "Internal egress proxy used by restricted jobs"
+    side_effect: remote
+    output: interactive
+    json: none
+    surface: cli-only
+    flags:
+      - {name: "probe", type: "bool"}
+      - {name: "proxy", type: "string"}
+  - path: nodes add
+    summary: "Add and provision a CI node"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: host}]
+    flags:
+      - {name: "accepts", type: "string"}
+      - {name: "agent-binary", type: "string"}
+      - {name: "allow-deploy-host", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "host-key", type: "string"}
+      - {name: "installer", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "name", type: "string"}
+      - {name: "ownership", type: "string", default: "operator"}
+      - {name: "privacy-zone", type: "string"}
+      - {name: "project", type: "string"}
+      - {name: "secret-classes", type: "string"}
+      - {name: "slots", type: "int", default: "2"}
+      - {name: "system", type: "bool"}
+  - path: nodes discover
+    summary: "Discover nodes on the local network"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "timeout", type: "duration", default: "5s"}
+  - path: nodes drain
+    summary: "Stop placing new jobs on a node"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes enable
+    summary: "Place jobs on a node again"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes forget-project
+    summary: "Forget a project's node records on this host (local, audited)"
+    side_effect: destructive
+    output: document
+    json: none
+    surface: cli-only
+    args: [{name: project-root}]
+  - path: nodes label
+    summary: "Set or remove node labels (key=value)"
+    side_effect: write
+    output: document
+    json: envelope
+    args: [{name: node}, {name: label}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "remove", type: "string"}
+  - path: nodes list
+    summary: "List nodes"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes pair
+    summary: "Pair an agent node (foreground enrollment listener)"
+    side_effect: remote
+    output: interactive
+    json: none
+    surface: cli-only
+    args: [{name: node}]
+    flags:
+      - {name: "agent-url", type: "string"}
+      - {name: "cert-ttl", type: "duration", default: "0s"}
+      - {name: "coordinator-id", type: "string", default: "local"}
+      - {name: "data-dir", type: "string"}
+      - {name: "enroll-addr", type: "string", default: ":3866"}
+      - {name: "label", type: "string"}
+      - {name: "public-url", type: "string"}
+  - path: nodes pools explain
+    summary: "Explain a project's effective pool set and every excluded runner"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+  - path: nodes pools list
+    summary: "List runner pools and whether the project may use them"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+  - path: nodes pools show
+    summary: "Show one runner pool"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: pool}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+  - path: nodes projects add
+    summary: "Authorize projects on a node"
+    side_effect: write
+    output: document
+    json: envelope
+    args: [{name: node}, {name: project}]
+    flags:
+      - {name: "all", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes projects list
+    summary: "List the projects a node is authorized for"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: node}]
+    flags:
+      - {name: "all", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes projects remove
+    summary: "Remove project authorizations from a node"
+    side_effect: write
+    output: document
+    json: envelope
+    args: [{name: node}, {name: project}]
+    flags:
+      - {name: "all", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes provision
+    summary: "Install runner dependencies, user, sudoers, and N runner instances"
+    side_effect: remote
+    output: document
+    json: legacy
+    surface: cli-only
+    flags:
+      - {name: "github-url", type: "string", usage: "Repo or org URL runners register against, e.g. https://github.com/nself-org/cli"}
+      - {name: "host", type: "stringSlice", default: "[]", usage: "SSH target(s) user@host to provision (repeatable). Default: this machine."}
+      - {name: "install-root", type: "string", usage: "Base install directory (default: /opt/actions-runner)"}
+      - {name: "instances", type: "int", default: "1", usage: "Number of runner instances to install on this host"}
+      - {name: "json", type: "bool", default: "false", usage: "V15 only (NSELF_V15=1): print one v1 JSON envelope; in v1.4 the flag is refused as today"}
+      - {name: "labels", type: "stringSlice", default: "[]", usage: "Extra labels appended after self-hosted,Linux,X64"}
+      - {name: "ssh-key", type: "string", usage: "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"}
+      - {name: "token", type: "string", usage: "GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged."}
+  - path: nodes remove
+    summary: "Remove a node and its registration"
+    side_effect: destructive
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes revoke
+    summary: "Revoke a node credential"
+    side_effect: destructive
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes rotate
+    summary: "Rotate a node host key, certificate or node key"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "cert", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "host-key", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "key-id", type: "string"}
+      - {name: "mode", type: "string", default: "host-key"}
+      - {name: "node-key", type: "bool"}
+  - path: nodes secrets grant
+    summary: "Grant a node access to a secret class"
+    side_effect: remote
+    output: interactive
+    json: none
+    surface: cli-only
+    args: [{name: node}]
+    flags:
+      - {name: "class", type: "string"}
+      - {name: "project", type: "string"}
+  - path: nodes secrets revoke
+    summary: "Revoke a node access to a secret class"
+    side_effect: remote
+    output: interactive
+    json: none
+    surface: cli-only
+    args: [{name: node}]
+    flags:
+      - {name: "class", type: "string"}
+      - {name: "project", type: "string"}
+  - path: nodes set
+    summary: "Set contention and persistence policy of a node"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "interactive", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "on-battery", type: "string"}
+      - {name: "persistence", type: "string"}
+      - {name: "project", type: "string"}
+      - {name: "reserve-cpu", type: "string"}
+      - {name: "reserve-mem", type: "string"}
+  - path: nodes show
+    summary: "Show one node"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes status
+    summary: "Show readiness, watcher, queue and last results of every node"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "local", type: "bool"}
+  - path: nodes sync
+    summary: "Import an inventory/v1 file or command output over the node registry"
+    side_effect: write
+    output: document
+    json: envelope
+    flags:
+      - {name: "cmd", type: "string"}
+      - {name: "dry-run", type: "bool"}
+      - {name: "from", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes test
+    summary: "Probe a node and report its capabilities"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: nodes upgrade
+    summary: "Upgrade node agents"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: node}]
+    flags:
+      - {name: "all", type: "bool"}
+      - {name: "allow-downgrade", type: "bool"}
+      - {name: "coordinator", type: "string"}
+      - {name: "drain-wait", type: "duration", default: "10m0s"}
+      - {name: "hello-wait", type: "duration", default: "1m0s"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "version", type: "string"}
+  - path: nodes verify
+    summary: "Check host(s) against the dependency manifest and report drift"
+    side_effect: read
+    output: document
+    json: legacy
+    surface: cli-only
+    flags:
+      - {name: "host", type: "stringSlice", default: "[]", usage: "SSH target(s) user@host to verify (repeatable). Default: this machine."}
+      - {name: "json", type: "bool", default: "false", usage: "Print JSON instead of the text parity matrix: raw []HostReport in v1.4, one v1 envelope in V15 (NSELF_V15=1)"}
+      - {name: "ssh-key", type: "string", usage: "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"}
+  - path: plan
+    summary: "Plan a run without executing it"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "base", type: "string"}
+      - {name: "config", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "max-queue", type: "string"}
+      - {name: "pipeline", type: "string"}
+      - {name: "prefer", type: "string"}
+      - {name: "repo", type: "string"}
+      - {name: "runner", type: "string"}
+      - {name: "trigger", type: "string"}
+  - path: policy pin
+    summary: "Pin or clear the trusted revision"
+    side_effect: write
+    output: document
+    json: envelope
+    surface: cli-only
+    args: [{name: sha}]
+    flags:
+      - {name: "clear", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: policy protect
+    summary: "Show or apply branch protection that requires the nself-ci check"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    flags:
+      - {name: "app-id", type: "int", default: "15368"}
+      - {name: "audit", type: "int", default: "0"}
+      - {name: "branch", type: "string"}
+      - {name: "dry-run", type: "bool"}
+      - {name: "hook", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+      - {name: "restore", type: "string"}
+  - path: policy set
+    summary: "Set an operator policy key"
+    side_effect: write
+    output: document
+    json: envelope
+    surface: cli-only
+    args: [{name: key}, {name: value}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "scope", type: "string"}
+      - {name: "team", type: "string"}
+  - path: policy show
+    summary: "Show the operator policy"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: key}]
+    flags:
+      - {name: "effective", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "team", type: "string"}
+  - path: policy unset
+    summary: "Unset an operator policy key"
+    side_effect: write
+    output: document
+    json: envelope
+    surface: cli-only
+    args: [{name: key}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "scope", type: "string"}
+      - {name: "team", type: "string"}
+  - path: policy usage
+    summary: "Show spend and usage against the policy"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+  - path: providers
+    summary: "Provider command group help"
+    side_effect: read
+    output: document
+    json: none
+    surface: cli-only
+  - path: providers authorize
+    summary: "Authorize a project for hosted runners"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: provider}]
+    flags:
+      - {name: "allow-private", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+  - path: providers github init
+    summary: "Render the GitHub dispatch workflow"
+    side_effect: write
+    output: document
+    json: envelope
+    flags:
+      - {name: "agent-source", type: "string"}
+      - {name: "check", type: "bool"}
+      - {name: "dir", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "stdout", type: "bool"}
+  - path: providers gitlab init
+    summary: "Render the GitLab dispatch pipeline"
+    side_effect: write
+    output: document
+    json: envelope
+    flags:
+      - {name: "check", type: "bool"}
+      - {name: "dir", type: "string"}
+      - {name: "inputs", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "stdout", type: "bool"}
+      - {name: "untrusted-dir", type: "string"}
+  - path: providers list
+    summary: "List providers"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+  - path: providers revoke
+    summary: "Revoke a project authorization for hosted runners"
+    side_effect: destructive
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: provider}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+  - path: providers show
+    summary: "Show one provider"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: provider}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+  - path: providers test
+    summary: "Probe a provider"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: provider}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+  - path: providers usage import
+    summary: "Import provider usage records"
+    side_effect: write
+    output: document
+    json: envelope
+    args: [{name: file}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+  - path: run
+    summary: "Discover .ci.yaml manifests and run their stages (pipeline)"
+    side_effect: remote
+    output: document
+    json: none
+    args: [{name: search-root}]
+    flags:
+      - {name: "env", type: "string", usage: "Target environment: local"}
+      - {name: "gateway", type: "string", usage: "Explicit gateway base URL (e.g. http://host:3761)"}
+      - {name: "v", type: "bool", usage: "Print each command before running"}
+      - {name: "timeout", type: "int", default: "300", usage: "Per-step timeout in seconds"}
+  - path: runs
+    summary: "Show a run, or the flaky checks (--flaky)"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: run}]
+    flags:
+      - {name: "flaky", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: runs approve
+    summary: "Approve a run that waits for approval"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: run}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "sha", type: "string"}
+      - {name: "spend", type: "bool"}
+  - path: runs cancel
+    summary: "Cancel a run"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: run}]
+  - path: runs decisions
+    summary: "Show the scheduling decisions of a run"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: run}]
+  - path: runs follow
+    summary: "Follow the events of a run as an NDJSON stream"
+    side_effect: read
+    output: stream
+    json: envelope
+    args: [{name: run}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "from-seq", type: "int", default: "0"}
+      - {name: "json", type: "bool", cli_only: true}
+  - path: runs list
+    summary: "List recent runs"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "limit", type: "int", default: "20"}
+      - {name: "repo", type: "string"}
+  - path: runs outbox
+    summary: "Show queued status and event deliveries"
+    side_effect: read
+    output: document
+    json: envelope
+  - path: runs pending
+    summary: "List runs waiting for approval"
+    side_effect: read
+    output: document
+    json: envelope
+  - path: runs prune
+    summary: "Remove old runs and logs (--dry-run previews; --tidy [--apply] also tidies cache and job roots)"
+    side_effect: destructive
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    flags:
+      - {name: "apply", type: "bool"}
+      - {name: "dry-run", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "keep", type: "int", default: "0"}
+      - {name: "limit", type: "int", default: "20"}
+      - {name: "max-age-days", type: "int", default: "0"}
+      - {name: "max-log-bytes", type: "int"}
+      - {name: "repo", type: "string"}
+      - {name: "tidy", type: "bool"}
+  - path: runs queue
+    summary: "Show the run queue"
+    side_effect: read
+    output: document
+    json: envelope
+  - path: runs reproduce
+    summary: "Reproduce a job at its recorded inputs"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: job}]
+    flags:
+      - {name: "check", type: "bool"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+      - {name: "run", type: "string"}
+      - {name: "shell", type: "bool"}
+  - path: runs rerun
+    summary: "Run a recorded revision again on a chosen target"
+    side_effect: remote
+    output: document
+    json: envelope
+    confirm: {flags: []}
+    args: [{name: run-or-sha}]
+    flags:
+      - {name: "job", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "repo", type: "string"}
+      - {name: "where", type: "string"}
+  - path: runs resolve
+    summary: "Resolve a pending run decision"
+    side_effect: write
+    output: document
+    json: envelope
+    args: [{name: run}]
+  - path: runs stats
+    summary: "Show run statistics"
+    side_effect: read
+    output: document
+    json: envelope
+  - path: runs wait
+    summary: "Wait for a run to finish and print its result"
+    side_effect: read
+    output: document
+    json: envelope
+    args: [{name: run}]
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "timeout", type: "duration", default: "4m0s"}
+  - path: serve
+    summary: "Start the nself-ci webhook listener daemon (port 3845)"
+    side_effect: write
+    output: stream
+    json: none
+    surface: cli-only
+    flags:
+      - {name: "addr", type: "string", default: ":3845", usage: "Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry"}
+      - {name: "allow-unsandboxed", type: "bool", default: "false", side_effect: "destructive", usage: "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse."}
+      - {name: "allowed-repos", type: "stringSlice", default: "[]", usage: "Comma-separated or repeatable \"owner/repo\" allowlist. Default: empty, which rejects every job (fail-closed, no \"allow all\")."}
+      - {name: "concurrency", type: "int", default: "2", usage: "Max concurrent CI jobs"}
+      - {name: "insecure", type: "bool", default: "false", usage: "DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured."}
+      - {name: "secret", type: "string", usage: "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)"}
+      - {name: "timeout", type: "int", default: "600", usage: "Per-job timeout in seconds"}
+      - {name: "verbose", type: "bool", default: "false", shorthand: "v", usage: "Verbose gate output"}
+      - {name: "workdir", type: "string", default: "/tmp/nself-ci-workdirs", usage: "Base directory for ephemeral checkout workdirs"}
+  - path: serve admin
+    summary: "Coordinator admin group help"
+    side_effect: read
+    output: document
+    json: none
+    surface: cli-only
+  - path: serve admin audit
+    summary: "Read or verify the audit log"
+    side_effect: read
+    output: document
+    json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "since", type: "string"}
+      - {name: "verify", type: "bool"}
+  - path: serve admin audit checkpoint
+    summary: "Write a signed audit checkpoint"
+    side_effect: write
+    output: document
+    json: envelope
+    surface: cli-only
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "pubkey", type: "string"}
+  - path: serve admin cert
+    summary: "Issue a user mTLS certificate (printed once)"
+    side_effect: write
+    output: document
+    json: envelope
+    surface: cli-only
+    args: [{name: verb}, {name: principal}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "self", type: "bool"}
+      - {name: "ttl", type: "duration", default: "168h0m0s"}
+  - path: serve admin roles
+    summary: "Grant, revoke or list roles"
+    side_effect: destructive
+    output: document
+    json: envelope
+    surface: cli-only
+    confirm: {flags: []}
+    args: [{name: verb}, {name: principal}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "stringSlice"}
+      - {name: "role", type: "string"}
+      - {name: "self", type: "bool"}
+  - path: serve admin token
+    summary: "Issue, revoke or list scoped user tokens"
+    side_effect: destructive
+    output: document
+    json: envelope
+    surface: cli-only
+    confirm: {flags: []}
+    args: [{name: verb}, {name: principal}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "stringSlice"}
+      - {name: "role", type: "string"}
+      - {name: "self", type: "bool"}
+      - {name: "ttl", type: "duration", default: "0s"}
+  - path: serve backup
+    summary: "Back up the coordinator data directory"
+    side_effect: read
+    output: document
+    json: envelope
+    surface: cli-only
+    flags:
+      - {name: "data-dir", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "out", type: "string"}
+  - path: serve restore
+    summary: "Restore the coordinator data directory from a backup"
+    side_effect: destructive
+    output: interactive
+    json: none
+    surface: cli-only
+    flags:
+      - {name: "data-dir", type: "string"}
+      - {name: "in", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "kek", type: "string", secret: true}
+  - path: serve install
+    summary: "Install the watcher service and hourly selftest"
+    side_effect: write
+    output: document
+    json: none
+    surface: cli-only
+    flags:
+      - {name: "launchd", type: "bool"}
+      - {name: "systemd", type: "bool"}
+      - {name: "user", type: "bool"}
+      - {name: "system", type: "bool"}
+      - {name: "dry-run", type: "bool"}
+      - {name: "binary", type: "string"}
+      - {name: "repo", type: "string"}
+      - {name: "env-file", type: "string"}
+  - path: serve watch
+    summary: "Keep commit CI current by polling, without an inbound port"
+    side_effect: remote
+    output: stream
+    json: envelope
+    surface: cli-only
+    flags:
+      - {name: "interval", type: "duration", default: "0s"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "once", type: "bool"}
+      - {name: "repos", type: "stringSlice"}
+  - path: serve uninstall
+    summary: "Remove unchanged watcher service files"
+    side_effect: destructive
+    output: document
+    json: none
+    surface: cli-only
+    flags:
+      - {name: "launchd", type: "bool"}
+      - {name: "systemd", type: "bool"}
+      - {name: "user", type: "bool"}
+      - {name: "system", type: "bool"}
+      - {name: "dry-run", type: "bool"}
+      - {name: "binary", type: "string"}
+      - {name: "repo", type: "string"}
+      - {name: "env-file", type: "string"}

@@ -9,7 +9,20 @@ every slug, owns only this region directly under the H1 of
     ...
     <!-- END GENERATED:catalog -->
 
-Authored text outside the region is never touched, with one exception: the old
+Plugins whose manifest has a `commands` block also get a second region directly
+after the catalog region:
+
+    <!-- BEGIN GENERATED:machine-surface -->
+    ...
+    <!-- END GENERATED:machine-surface -->
+
+one row per command path: MCP tool name, HTTP route, side effect, output,
+exposure with its reason, and the confirmation kind. The rules mirror the cli
+(cmdregistry.ToolName/RoutePath; SURF D2/D5/D15 exposure) as data plus
+scripts/testdata/wiki-plugin-pages/surface-vectors.json; the cli is never
+imported. A plugin without commands has no such region.
+
+Authored text outside the regions is never touched, with one exception: the old
 generator's fixed "**Free — MIT licensed.**" phrase is removed. A missing page
 is created as H1 + region. A tier pair (the same slug in the free and licensed
 tiers) shares one page.
@@ -32,9 +45,13 @@ import sys
 
 import yaml
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wiki_plugin_surface import (  # noqa: E402,F401  (helper beside this script; some names are re-exported for the tests)
+    BEGIN, END, MS_BEGIN, MS_END, MS_NOTE, Problem, _sub_names, apply_machine, check_ceilings, exposure,
+    load_manifest, machine_rows, render_machine_surface, route_path, surface_count, tool_name,
+)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BEGIN = "<!-- BEGIN GENERATED:catalog -->"
-END = "<!-- END GENERATED:catalog -->"
 NOTE = "<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->"
 OLD_PHRASE = re.compile(r" ?\*\*Free — MIT licensed\.\*\*")
 MANIFEST_URL = "https://github.com/nself-org/cli/wiki/Plugin-Manifest"
@@ -54,10 +71,6 @@ TOKENS = {
     "wikitree": "WikiTree", "clawde": "ClawDE", "linkedin": "LinkedIn",
     "csam": "CSAM", "rum": "RUM", "slo": "SLO", "saas": "SaaS", "mcp": "MCP",
 }
-
-
-class Problem(Exception):
-    """A problem found by --check (or a page that cannot be edited)."""
 
 
 def load_config(path):
@@ -97,13 +110,6 @@ def _requires(entry):
             val = ", ".join(str(v) for v in val)
         parts.append(f"{'nSelf' if key == 'nself' else key.replace('_', ' ')} {val}")
     return "; ".join(parts)
-
-
-def _sub_names(commands):
-    names = []
-    for sub in (commands or {}).get("subcommands") or []:
-        names.append(sub["name"] if isinstance(sub, dict) else str(sub))
-    return names
 
 
 def _licence(entry, bundles):
@@ -186,28 +192,6 @@ def new_page(slug, region, cfg):
     return f"# {page_title(slug, cfg).replace('-', ' ')} Plugin\n\n{region}\n"
 
 
-def surface_count(root, rule):
-    """First-level subcommand count of a manifest, aliases excluded."""
-    try:
-        with open(os.path.join(root, rule["manifest"]), encoding="utf-8") as fh:
-            manifest = json.load(fh)
-    except (OSError, ValueError) as exc:
-        raise Problem(f"surface ceiling manifest {rule['manifest']}: {exc}")
-    skip = set((rule.get("aliases") or {}).get("names") or [])
-    firsts = {n.split()[0] for n in _sub_names(manifest.get("commands")) if n.split()}
-    return len(firsts - skip)
-
-
-def check_ceilings(root, cfg):
-    problems, notes = [], []
-    for name, rule in sorted(cfg["surface_ceilings"].items()):
-        count = surface_count(root, rule)
-        notes.append(f"{name}: {count} first-level subcommands (ceiling {rule['max']})")
-        if count > rule["max"]:
-            problems.append(f"{name}: {count} first-level subcommands exceeds the ceiling {rule['max']}")
-    return problems, notes
-
-
 def plan(root, cfg, catalog, slugs):
     """Yield (slug, path, wanted_text_or_Problem, current_text_or_None)."""
     groups = group_by_slug(catalog)
@@ -216,15 +200,21 @@ def plan(root, cfg, catalog, slugs):
             raise Problem(f"{slug}: not a catalogue slug")
         path = os.path.join(root, PAGES_DIR, page_title(slug, cfg) + ".md")
         region = render_region(groups[slug], catalog)
+        try:
+            manifest = load_manifest(root, groups[slug])
+        except Problem as exc:
+            yield slug, path, exc, None
+            continue
+        mregion = render_machine_surface(manifest) if manifest else None
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
                 cur = fh.read()
             try:
-                yield slug, path, apply_region(cur, region), cur
+                yield slug, path, apply_machine(apply_region(cur, region), mregion), cur
             except Problem as exc:
                 yield slug, path, exc, cur
         else:
-            yield slug, path, new_page(slug, region, cfg), None
+            yield slug, path, apply_machine(new_page(slug, region, cfg), mregion), None
 
 
 def orphans(root, cfg, catalog):

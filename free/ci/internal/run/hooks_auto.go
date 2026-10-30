@@ -57,8 +57,12 @@ type OffloadRequest struct {
 	Rev  Revision
 }
 
-// OffloadResult replaces the run's revision when Rev.SHA is set (a snapshot
-// commit of a dirty tree). Release runs when the run ends; it may be nil.
+// OffloadResult names, when Rev.SHA is set, the revision a node checks out
+// for this run (a snapshot commit of a dirty tree). The run itself keeps
+// recording the committed revision it started from, dirty and unbound: a
+// reproduction never uses uncommitted changes (P7-CI-41), and the snapshot is
+// unreachable once Release deletes its ref. Release runs when the run ends;
+// it may be nil.
 type OffloadResult struct {
 	Rev     Revision
 	Release func()
@@ -147,10 +151,11 @@ func (h AutoHooks) resolved(r AutoHooks) AutoHooks {
 	return out
 }
 
-// offload runs the offload hook; the returned release is never nil.
-func (c *Coordinator) offload(ctx context.Context, h Hooks, rev Revision) (Revision, func(), error) {
+// offload runs the offload hook and returns the revision nodes check out
+// (rev.SHA when no snapshot was made); the returned release is never nil.
+func (c *Coordinator) offload(ctx context.Context, h Hooks, rev Revision) (string, func(), error) {
 	if h.Auto.Offload == nil {
-		return rev, func() {}, nil
+		return rev.SHA, func() {}, nil
 	}
 	var res OffloadResult
 	err := guard("offload hook", func() (e error) {
@@ -158,15 +163,16 @@ func (c *Coordinator) offload(ctx context.Context, h Hooks, rev Revision) (Revis
 		return
 	})
 	if err != nil {
-		return rev, func() {}, err
+		return rev.SHA, func() {}, err
 	}
+	checkout := rev.SHA
 	if res.Rev.SHA != "" {
-		rev = res.Rev
+		checkout = res.Rev.SHA
 	}
 	if res.Release == nil {
 		res.Release = func() {}
 	}
-	return rev, res.Release, nil
+	return checkout, res.Release, nil
 }
 
 // race calls the race hook, if any.

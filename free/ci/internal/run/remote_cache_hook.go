@@ -264,3 +264,13 @@ func (s cacheLeaseSink) Result(ctx context.Context, r protocol.Result) error {
 	}
 	return s.Sink.Result(ctx, r)
 }
+
+// Restore pushes the lease's planned restore blobs to the node (carrier A). The
+// lease audits its own refusals; a failed push leaves the node a cold miss.
+func (s cacheLeaseSink) Restore(ctx context.Context, link transport.RestoreLink) error {
+	if err := s.l.Restore(ctx, link); err != nil {
+		cacheOn.warn("remote cache restore: " + firstLineOf(err.Error()))
+		return err
+	}
+	return nil
+}

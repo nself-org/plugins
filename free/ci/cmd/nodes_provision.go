@@ -38,6 +38,9 @@ func init() {
 	register("nodes verify", func(args []string) int {
 		return provision.RunVerify(args, provisionDeps())
 	})
+	// parity with core `nself runner provision|verify --help` (P7-CANON-10): captured text, parse errors first
+	coreHelp["nodes provision"] = func(args []string) int { return provision.HelpOnly("provision", args, provisionDeps()) }
+	coreHelp["nodes verify"] = func(args []string) int { return provision.HelpOnly("verify", args, provisionDeps()) }
 }
 
 // provisionDeps is the real wiring; V15 adds the pin and the registry record.

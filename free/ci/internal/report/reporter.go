@@ -48,6 +48,18 @@ type Status struct {
 	State       State  `json:"state"`
 	Description string `json:"description"`
 	TargetURL   string `json:"target_url,omitempty"`
+	// StatusContext is the commit status context; empty means Context
+	// ("nself-ci"). Claim, watch, residual and gate statuses set it so they
+	// never collapse into the result context in the outbox (P7-AUTO-10).
+	StatusContext string `json:"context,omitempty"`
+}
+
+// ContextName is the context the status is posted on.
+func (s Status) ContextName() string {
+	if s.StatusContext == "" {
+		return Context
+	}
+	return s.StatusContext
 }
 
 // Reporter delivers a status to a code host.
@@ -58,6 +70,7 @@ type Reporter interface {
 var (
 	ownerRepo = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$`)
 	shaRe     = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	ctxRe     = regexp.MustCompile(`^nself-ci(/[a-z][a-z-]{0,30})?$`)
 )
 
 // validOwner accepts one to nineteen ownerRepo segments joined by '/' (a user, an organisation, or a
@@ -84,6 +97,8 @@ func (s Status) Validate() error {
 		return errors.New("report: invalid revision")
 	case !s.State.Valid():
 		return errors.New("report: invalid state")
+	case !ctxRe.MatchString(s.ContextName()):
+		return errors.New("report: invalid context")
 	}
 	return nil
 }

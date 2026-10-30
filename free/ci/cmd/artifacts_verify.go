@@ -12,9 +12,10 @@ package main
 // Outputs: a summary or one v1 envelope (--json) whose data always carries
 // `slsa_build_level: "L1"`; exit 0 verified, 11 invalid (the reason key names
 // the check), 1 evidence failing or quarantined.
-// Constraints: V15 only; side-effect class read: it writes nothing (resolving
-// the pin fetches the default branch into the repository's remote-tracking ref,
-// as the policy resolver does for every run). The trust
+// Constraints: V15 only; side-effect class read: it writes nothing but, on a
+// machine with a coordinator store, one release.verify.refused audit row per
+// refusal (resolving the pin fetches the default branch into the repository's
+// remote-tracking ref, as the policy resolver does for every run). The trust
 // roots are the operator files and the protected default branch at the pinned
 // tip; a pin that cannot be resolved fails the verification (signature), it
 // never silently drops the branch's keys and revocations; the working tree and
@@ -46,6 +47,9 @@ var (
 	releaseDirOf func(ctx context.Context, run string) (dir string, ok bool, err error)
 	// releaseQuarantined reports evidence quarantine (P7-TRUST-20 registers it).
 	releaseQuarantined func(ctx context.Context, ev model.Evidence) (bool, error)
+	// releaseVerifyAudit records a refused verification in the coordinator store (registered with
+	// releaseQuarantined); nil records nothing.
+	releaseVerifyAudit func(ctx context.Context, actor, action, target, detail string) error
 )
 
 func init() { registerArtifactsSub("verify", artifactsVerify) }
@@ -66,7 +70,7 @@ func artifactsVerify(args []string) int {
 	asJSON := fs.Lookup("json").Value.String() == "true"
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	opt := verify.Options{Capture: report.Capture, Quarantined: releaseQuarantined}
+	opt := verify.Options{Capture: report.Capture, Quarantined: releaseQuarantined, Audit: releaseVerifyAudit}
 	root, err := evidenceRoot(*repo)
 	if err != nil {
 		return artifactsExit(err, command, asJSON)

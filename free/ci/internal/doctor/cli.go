@@ -1,7 +1,7 @@
 package doctor
 
 // Purpose: the logic of `nself ci doctor [--json] [--nodes] [--providers]
-// [--repo DIR]`, kept here with injectable Deps so cmd/doctor.go stays a shim.
+// [--selftest [--alert]] [--repo DIR]`, kept here with injectable Deps so cmd/doctor.go stays a shim.
 // Inputs:  argv after `doctor`, the output writers, Deps.
 // Outputs: a table, or with --json one v1 envelope (contract:cli.json-
 // envelope) whose data is {checks, summary}; exit 0 clean, 10 when a check
@@ -27,6 +27,7 @@ const command = "ci doctor"
 
 type options struct {
 	json, nodes, providers bool
+	selftest, alert        bool
 	repo                   string
 }
 
@@ -36,6 +37,8 @@ func newFlags() (*flag.FlagSet, *options) {
 	fs.BoolVar(&o.json, "json", false, "print one v1 JSON envelope")
 	fs.BoolVar(&o.nodes, "nodes", false, "include the nodes section")
 	fs.BoolVar(&o.providers, "providers", false, "include the providers section")
+	fs.BoolVar(&o.selftest, "selftest", false, "include the selftest checks of an unattended host (CI-DS…)")
+	fs.BoolVar(&o.alert, "alert", false, "with --selftest, send one notifier message a day per failing set")
 	fs.StringVar(&o.repo, "repo", "", "repository root (env NSELF_CI_REPO; default: current directory)")
 	return fs, o
 }
@@ -55,8 +58,8 @@ func Run(args []string, stdout, stderr io.Writer, d Deps) int {
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
-	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: nself ci doctor [--json] [--nodes] [--providers] [--repo DIR]")
+	if fs.NArg() > 0 || (o.alert && !o.selftest) {
+		_, _ = fmt.Fprintln(stderr, "usage: nself ci doctor [--json] [--nodes] [--providers] [--selftest [--alert]] [--repo DIR]")
 		return 1
 	}
 	root, err := RepoRoot(o.repo, d)
@@ -69,9 +72,16 @@ func Run(args []string, stdout, stderr io.Writer, d Deps) int {
 	ctx := context.Background()
 	checks := RunLocal(ctx, root, d)
 	env := Env{Root: root, Capture: d.Capture, Getenv: d.Getenv}
-	want := map[string]bool{SelectNodes: o.nodes, SelectProviders: o.providers}
+	want := map[string]bool{SelectNodes: o.nodes, SelectProviders: o.providers, SelectSelftest: o.selftest}
 	checks = append(checks, RunSections(ctx, env, want, SectionBudget)...)
 	sortChecks(checks)
+	if o.alert {
+		if sent, err := alert(ctx, env, checks); err != nil {
+			_, _ = fmt.Fprintln(stderr, "doctor: the alert was not sent:", err)
+		} else if sent != "" && !o.json {
+			_, _ = fmt.Fprintln(stderr, "doctor:", sent)
+		}
+	}
 
 	data := reportData{Checks: checks, Summary: Summarise(checks)}
 	code := ExitCode(checks)

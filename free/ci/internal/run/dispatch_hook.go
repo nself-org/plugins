@@ -48,6 +48,9 @@ type runDispatch struct {
 	qp   schedpolicy.QueuePolicy
 
 	sink *remoteSink // what the carriers of this run's remote leases report to
+
+	notesMu sync.Mutex
+	notes   []string // run notes from delivery (offload_hook_hosted.go)
 }
 
 var (
@@ -73,6 +76,14 @@ func dispatchRelease(runID string) {
 		rd := v.(*runDispatch)
 		rd.d.Close()
 		rd.sink.release()
+	}
+}
+
+// dispatchWake lets the run's queued jobs tick now: an attempt ended and its
+// host reservation is free.
+func dispatchWake(runID string) {
+	if v, ok := runDispatchers.Load(runID); ok {
+		v.(*runDispatch).d.Wake()
 	}
 }
 
@@ -105,7 +116,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 			_ = sess.Store.SetPreviousRunner(ctx, id, prev)
 		}
 	}
-	rd.sink.expect(id, sess.Revision) // a remote carrier may report before this call returns
+	rd.sink.expect(id, sess.checkoutRevision()) // a remote carrier may report before this call returns; its evidence names the checkout
 	a, err := rd.d.Submit(ctx, queueJob(sess, s, sj, id,
 		max(dec.Slots*cpu, cpu), max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem)))
 	if err != nil || a.Local {
@@ -120,7 +131,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 // queueJob is the dispatcher's input for one attempt. Only an interactive run
 // (a person at a terminal) keeps the implicit foreground queue cap.
 func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
-	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.checkoutRevision(), Foreground: s.Foreground,
 		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 
@@ -174,7 +185,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
-		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
+		Transport:     transportAdapter{sink: rd.sink, reg: rd.sink, root: rd.row.Project, st: rd.sink.st, hosted: rd.hostedRevision},
 		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
 		return nil, err
@@ -210,6 +221,8 @@ type transportAdapter struct {
 	reg  carriers
 	root string       // the repository whose revision a node receives
 	st   *store.Store // the run's store: the attempt facts the lease's evidence context repeats (nil: none)
+	// hosted maps the revision of a lease to a hosted runner (nil = unchanged): see offload_hook_hosted.go.
+	hosted func(attemptID, revision string) string
 }
 
 func (transportAdapter) Known(kind string) bool {
@@ -230,6 +243,9 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	// refused here too, and the node checks the lease again with the class it carries (D-1331).
 	if _, err := netscope.RunScope(d.Trust, d.Network); err != nil {
 		return err
+	}
+	if d.Hosted && a.hosted != nil {
+		d.Revision = a.hosted(d.AttemptID, d.Revision)
 	}
 	refs, err := leaseSecretRefs(d)
 	if err != nil {

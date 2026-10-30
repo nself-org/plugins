@@ -7,12 +7,104 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.11 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install ci` |
-| **Commands** | `nself ci`: `build`, `forgejo`, `nodes provision`, `nodes verify`, `run`, `serve` |
+| **Commands** | `nself ci`: `artifacts`, `build`, `config ignore add`, `config migrate`, `config show`, `doctor`, `evidence`, `evidence verify`, `explain`, `forgejo`, `logs`, `netproxy`, `nodes add`, `nodes discover`, `nodes drain`, `nodes enable`, `nodes forget-project`, `nodes label`, `nodes list`, `nodes pair`, `nodes pools explain`, `nodes pools list`, `nodes pools show`, `nodes projects add`, `nodes projects list`, `nodes projects remove`, `nodes provision`, `nodes remove`, `nodes revoke`, `nodes rotate`, `nodes secrets grant`, `nodes secrets revoke`, `nodes set`, `nodes show`, `nodes status`, `nodes sync`, `nodes test`, `nodes upgrade`, `nodes verify`, `plan`, `policy pin`, `policy protect`, `policy set`, `policy show`, `policy unset`, `policy usage`, `providers`, `providers authorize`, `providers github init`, `providers gitlab init`, `providers list`, `providers revoke`, `providers show`, `providers test`, `providers usage import`, `run`, `runs`, `runs approve`, `runs cancel`, `runs decisions`, `runs follow`, `runs list`, `runs outbox`, `runs pending`, `runs prune`, `runs queue`, `runs reproduce`, `runs rerun`, `runs resolve`, `runs stats`, `runs wait`, `serve`, `serve admin`, `serve admin audit`, `serve admin audit checkpoint`, `serve admin cert`, `serve admin roles`, `serve admin token`, `serve backup`, `serve install`, `serve restore`, `serve uninstall`, `serve watch` |
 | **Requirements** | nSelf >=1.4.12 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself ci` | `nself_ci` | `/v1/commands/ci` | remote | document | MCP and HTTP | nonce |
+| `nself ci artifacts` | `nself_ci_artifacts` | `/v1/commands/ci/artifacts` | read | document | MCP and HTTP | none |
+| `nself ci build` | - | - | remote | document | CLI only (json none) | none |
+| `nself ci config ignore add` | - | - | write | document | CLI only (json none) | none |
+| `nself ci config migrate` | `nself_ci_config_migrate` | `/v1/commands/ci/config/migrate` | write | document | MCP and HTTP | none |
+| `nself ci config show` | `nself_ci_config_show` | `/v1/commands/ci/config/show` | read | document | MCP and HTTP | none |
+| `nself ci doctor` | `nself_ci_doctor` | `/v1/commands/ci/doctor` | read | document | MCP and HTTP | none |
+| `nself ci evidence` | `nself_ci_evidence` | `/v1/commands/ci/evidence` | read | document | MCP and HTTP | none |
+| `nself ci evidence verify` | `nself_ci_evidence_verify` | `/v1/commands/ci/evidence/verify` | read | document | MCP and HTTP | none |
+| `nself ci explain` | `nself_ci_explain` | `/v1/commands/ci/explain` | read | document | MCP and HTTP | none |
+| `nself ci forgejo` | - | - | read | document | CLI only (json none) | none |
+| `nself ci logs` | `nself_ci_logs` | `/v1/commands/ci/logs` | read | document | MCP and HTTP | none |
+| `nself ci netproxy` | - | - | remote | interactive | CLI only (surface cli-only) | none |
+| `nself ci nodes add` | `nself_ci_nodes_add` | `/v1/commands/ci/nodes/add` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes discover` | `nself_ci_nodes_discover` | `/v1/commands/ci/nodes/discover` | read | document | MCP and HTTP | none |
+| `nself ci nodes drain` | `nself_ci_nodes_drain` | `/v1/commands/ci/nodes/drain` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes enable` | `nself_ci_nodes_enable` | `/v1/commands/ci/nodes/enable` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes forget-project` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself ci nodes label` | `nself_ci_nodes_label` | `/v1/commands/ci/nodes/label` | write | document | MCP and HTTP | none |
+| `nself ci nodes list` | `nself_ci_nodes_list` | `/v1/commands/ci/nodes/list` | read | document | MCP and HTTP | none |
+| `nself ci nodes pair` | - | - | remote | interactive | CLI only (surface cli-only) | none |
+| `nself ci nodes pools explain` | `nself_ci_nodes_pools_explain` | `/v1/commands/ci/nodes/pools/explain` | read | document | MCP and HTTP | none |
+| `nself ci nodes pools list` | `nself_ci_nodes_pools_list` | `/v1/commands/ci/nodes/pools/list` | read | document | MCP and HTTP | none |
+| `nself ci nodes pools show` | `nself_ci_nodes_pools_show` | `/v1/commands/ci/nodes/pools/show` | read | document | MCP and HTTP | none |
+| `nself ci nodes projects add` | `nself_ci_nodes_projects_add` | `/v1/commands/ci/nodes/projects/add` | write | document | MCP and HTTP | none |
+| `nself ci nodes projects list` | `nself_ci_nodes_projects_list` | `/v1/commands/ci/nodes/projects/list` | read | document | MCP and HTTP | none |
+| `nself ci nodes projects remove` | `nself_ci_nodes_projects_remove` | `/v1/commands/ci/nodes/projects/remove` | write | document | MCP and HTTP | none |
+| `nself ci nodes provision` | - | - | remote | document | CLI only (surface cli-only) | none |
+| `nself ci nodes remove` | `nself_ci_nodes_remove` | `/v1/commands/ci/nodes/remove` | destructive | document | MCP and HTTP | nonce |
+| `nself ci nodes revoke` | `nself_ci_nodes_revoke` | `/v1/commands/ci/nodes/revoke` | destructive | document | MCP and HTTP | nonce |
+| `nself ci nodes rotate` | `nself_ci_nodes_rotate` | `/v1/commands/ci/nodes/rotate` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes secrets grant` | - | - | remote | interactive | CLI only (surface cli-only) | none |
+| `nself ci nodes secrets revoke` | - | - | remote | interactive | CLI only (surface cli-only) | none |
+| `nself ci nodes set` | `nself_ci_nodes_set` | `/v1/commands/ci/nodes/set` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes show` | `nself_ci_nodes_show` | `/v1/commands/ci/nodes/show` | read | document | MCP and HTTP | none |
+| `nself ci nodes status` | `nself_ci_nodes_status` | `/v1/commands/ci/nodes/status` | read | document | MCP and HTTP | none |
+| `nself ci nodes sync` | `nself_ci_nodes_sync` | `/v1/commands/ci/nodes/sync` | write | document | MCP and HTTP | none |
+| `nself ci nodes test` | `nself_ci_nodes_test` | `/v1/commands/ci/nodes/test` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes upgrade` | `nself_ci_nodes_upgrade` | `/v1/commands/ci/nodes/upgrade` | remote | document | MCP and HTTP | nonce |
+| `nself ci nodes verify` | - | - | read | document | CLI only (surface cli-only) | none |
+| `nself ci plan` | `nself_ci_plan` | `/v1/commands/ci/plan` | read | document | MCP and HTTP | none |
+| `nself ci policy pin` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci policy protect` | `nself_ci_policy_protect` | `/v1/commands/ci/policy/protect` | remote | document | MCP and HTTP | nonce |
+| `nself ci policy set` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci policy show` | `nself_ci_policy_show` | `/v1/commands/ci/policy/show` | read | document | MCP and HTTP | none |
+| `nself ci policy unset` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci policy usage` | `nself_ci_policy_usage` | `/v1/commands/ci/policy/usage` | read | document | MCP and HTTP | none |
+| `nself ci providers` | - | - | read | document | CLI only (surface cli-only) | none |
+| `nself ci providers authorize` | `nself_ci_providers_authorize` | `/v1/commands/ci/providers/authorize` | remote | document | MCP and HTTP | nonce |
+| `nself ci providers github init` | `nself_ci_providers_github_init` | `/v1/commands/ci/providers/github/init` | write | document | MCP and HTTP | none |
+| `nself ci providers gitlab init` | `nself_ci_providers_gitlab_init` | `/v1/commands/ci/providers/gitlab/init` | write | document | MCP and HTTP | none |
+| `nself ci providers list` | `nself_ci_providers_list` | `/v1/commands/ci/providers/list` | read | document | MCP and HTTP | none |
+| `nself ci providers revoke` | `nself_ci_providers_revoke` | `/v1/commands/ci/providers/revoke` | destructive | document | MCP and HTTP | nonce |
+| `nself ci providers show` | `nself_ci_providers_show` | `/v1/commands/ci/providers/show` | read | document | MCP and HTTP | none |
+| `nself ci providers test` | `nself_ci_providers_test` | `/v1/commands/ci/providers/test` | remote | document | MCP and HTTP | nonce |
+| `nself ci providers usage import` | `nself_ci_providers_usage_import` | `/v1/commands/ci/providers/usage/import` | write | document | MCP and HTTP | none |
+| `nself ci run` | - | - | remote | document | CLI only (json none) | none |
+| `nself ci runs` | `nself_ci_runs` | `/v1/commands/ci/runs` | read | document | MCP and HTTP | none |
+| `nself ci runs approve` | `nself_ci_runs_approve` | `/v1/commands/ci/runs/approve` | remote | document | MCP and HTTP | nonce |
+| `nself ci runs cancel` | `nself_ci_runs_cancel` | `/v1/commands/ci/runs/cancel` | remote | document | MCP and HTTP | nonce |
+| `nself ci runs decisions` | `nself_ci_runs_decisions` | `/v1/commands/ci/runs/decisions` | read | document | MCP and HTTP | none |
+| `nself ci runs follow` | - | `/v1/commands/ci/runs/follow` | read | stream | HTTP NDJSON only (stream) | none |
+| `nself ci runs list` | `nself_ci_runs_list` | `/v1/commands/ci/runs/list` | read | document | MCP and HTTP | none |
+| `nself ci runs outbox` | `nself_ci_runs_outbox` | `/v1/commands/ci/runs/outbox` | read | document | MCP and HTTP | none |
+| `nself ci runs pending` | `nself_ci_runs_pending` | `/v1/commands/ci/runs/pending` | read | document | MCP and HTTP | none |
+| `nself ci runs prune` | `nself_ci_runs_prune` | `/v1/commands/ci/runs/prune` | destructive | document | MCP and HTTP | nonce |
+| `nself ci runs queue` | `nself_ci_runs_queue` | `/v1/commands/ci/runs/queue` | read | document | MCP and HTTP | none |
+| `nself ci runs reproduce` | `nself_ci_runs_reproduce` | `/v1/commands/ci/runs/reproduce` | remote | document | MCP and HTTP | nonce |
+| `nself ci runs rerun` | `nself_ci_runs_rerun` | `/v1/commands/ci/runs/rerun` | remote | document | MCP and HTTP | nonce |
+| `nself ci runs resolve` | `nself_ci_runs_resolve` | `/v1/commands/ci/runs/resolve` | write | document | MCP and HTTP | none |
+| `nself ci runs stats` | `nself_ci_runs_stats` | `/v1/commands/ci/runs/stats` | read | document | MCP and HTTP | none |
+| `nself ci runs wait` | `nself_ci_runs_wait` | `/v1/commands/ci/runs/wait` | read | document | MCP and HTTP | none |
+| `nself ci serve` | - | - | write | stream | CLI only (surface cli-only) | none |
+| `nself ci serve admin` | - | - | read | document | CLI only (surface cli-only) | none |
+| `nself ci serve admin audit` | `nself_ci_serve_admin_audit` | `/v1/commands/ci/serve/admin/audit` | read | document | MCP and HTTP | none |
+| `nself ci serve admin audit checkpoint` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci serve admin cert` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci serve admin roles` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself ci serve admin token` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself ci serve backup` | - | - | read | document | CLI only (surface cli-only) | none |
+| `nself ci serve install` | - | - | write | document | CLI only (surface cli-only) | none |
+| `nself ci serve restore` | - | - | destructive | interactive | CLI only (surface cli-only) | none |
+| `nself ci serve uninstall` | - | - | destructive | document | CLI only (surface cli-only) | none |
+| `nself ci serve watch` | - | - | remote | stream | CLI only (surface cli-only) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Runs the local lint/test/build/gitleaks gate and posts the result as a GitHub commit status.
 

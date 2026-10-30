@@ -9,10 +9,13 @@ package records
 // entry passes authz.ArtifactPath through an Extractor; a declaration that
 // selects nothing, a file over the cap, a registered secret, a low disk and a
 // duplicate record name each fail the whole collection (E712 or E683) before
-// the attempt can pass; blobs are written only after the scan of their bytes.
+// the attempt can pass; blobs are written only after the scan of their bytes;
+// with Audit set, each refusal leaves an artifact.collect.refused row.
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -55,6 +58,25 @@ type Collector struct {
 	Reserve func(total int64) error
 	// MaxRecords bounds the files one attempt may collect (0 = DefaultMaxRecords).
 	MaxRecords int
+	// Audit, when set, records every refused collection (artifact.collect.refused
+	// with its reason key; TM-14, TM-16). Target names the attempt or lease.
+	Audit  AuditSink
+	Target string
+}
+
+// AuditSink writes one audit row (store.AppendAudit).
+type AuditSink func(ctx context.Context, actor, action, target, detail string) error
+
+// audited records a refusal of the collection and returns it; a lost row is joined to it.
+func (c Collector) audited(ctx context.Context, err error) error {
+	var e *Error
+	if err == nil || c.Audit == nil || !errors.As(err, &e) {
+		return err
+	}
+	if aerr := c.Audit(ctx, "artifacts", "artifact.collect.refused", c.Target, "reason="+e.Reason); aerr != nil {
+		return errors.Join(err, fmt.Errorf("artifact collect audit: %w", aerr))
+	}
+	return err
 }
 
 // DefaultMaxRecords is the most files one attempt may collect across all its declarations.
@@ -71,11 +93,11 @@ type planned struct {
 // (opened here; callers that hold a pinned root use CollectRoot).
 func (c Collector) Collect(ctx context.Context, project, base string, decls []Decl) ([]Staged, error) {
 	if info, err := os.Lstat(base); err != nil || !info.IsDir() {
-		return nil, failf(ReasonUnreadable, "job workdir %q is missing, not a directory or a symlink", base)
+		return nil, c.audited(ctx, failf(ReasonUnreadable, "job workdir %q is missing, not a directory or a symlink", base))
 	}
 	root, err := os.OpenRoot(base)
 	if err != nil {
-		return nil, failf(ReasonUnreadable, "job workdir: %v", err)
+		return nil, c.audited(ctx, failf(ReasonUnreadable, "job workdir: %v", err))
 	}
 	defer func() { _ = root.Close() }()
 	return c.CollectRoot(ctx, project, root, decls)
@@ -87,6 +109,11 @@ func (c Collector) Collect(ctx context.Context, project, base string, decls []De
 // refusal leaves nothing behind; the bytes actually streamed are held to the
 // same budget.
 func (c Collector) CollectRoot(ctx context.Context, project string, root *os.Root, decls []Decl) ([]Staged, error) {
+	out, err := c.collect(ctx, project, root, decls)
+	return out, c.audited(ctx, err)
+}
+
+func (c Collector) collect(ctx context.Context, project string, root *os.Root, decls []Decl) ([]Staged, error) {
 	plan, err := c.plan(ctx, root, decls)
 	if err != nil {
 		return nil, err

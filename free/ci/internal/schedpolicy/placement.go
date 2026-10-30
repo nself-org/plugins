@@ -18,6 +18,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	// The `auto` preset's keys (sched.auto.*) and its World.Bias contributor
+	// register from internal/tiers, linked wherever the sched keys are (P7-AUTO-05).
+	_ "github.com/nself-org/plugins/free/ci/internal/tiers"
 )
 
 // Owner is the owner recorded on every key this package registers.

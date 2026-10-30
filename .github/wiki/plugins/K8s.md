@@ -7,12 +7,28 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install k8s` |
 | **Commands** | `nself k8s`: `backup`, `install`, `restore`, `status`, `uninstall`, `upgrade`, `values` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself k8s` | - | - | remote | document | CLI only (json legacy) | none |
+| `nself k8s backup` | - | - | write | document | CLI only (json legacy) | none |
+| `nself k8s install` | - | - | remote | document | CLI only (json legacy) | none |
+| `nself k8s restore` | - | - | destructive | document | CLI only (json legacy) | none |
+| `nself k8s status` | - | - | read | document | CLI only (json legacy) | none |
+| `nself k8s uninstall` | - | - | destructive | document | CLI only (json legacy) | none |
+| `nself k8s upgrade` | - | - | remote | document | CLI only (json legacy) | none |
+| `nself k8s values` | - | - | write | document | CLI only (json legacy) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Installs and upgrades nSelf on any Kubernetes cluster through the official Helm chart.
 

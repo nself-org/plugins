@@ -44,7 +44,7 @@ func (g GH) capture(ctx context.Context, argv ...string) (string, int, error) {
 // Status has one.
 func Args(s Status) []string {
 	args := []string{"gh", "api", "--method", "POST", fmt.Sprintf("repos/%s/%s/statuses/%s", s.Owner, s.Repo, s.Revision),
-		"-f", "state=" + string(s.State), "-f", "context=" + Context, "-f", "description=" + Truncate(s.Description)}
+		"-f", "state=" + string(s.State), "-f", "context=" + s.ContextName(), "-f", "description=" + Truncate(s.Description)}
 	if s.TargetURL != "" {
 		args = append(args, "-f", "target_url="+s.TargetURL)
 	}

@@ -84,6 +84,7 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			_ = base.Close()
 		}
 	}()
+	fetchRestores(ctx, copyStore, l)
 	seen := map[string]bool{}
 	for _, restore := range l.Cache.Restore {
 		sp, ok := specs.Get(restore.Spec)
@@ -110,8 +111,8 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			if !valid {
 				break
 			}
-			// JobHook.Before has no carrier receiver. Until that protocol hook is
-			// available a missing copy is best effort; never read coordinator paths.
+			// fetchRestores filled the read-through copies; a blob still missing
+			// is a cold miss (nil fetch), and coordinator paths are never read.
 			f, err := copyStore.Open(ctx, l.Cache.Namespace, b.SHA256, b.Size, nil)
 			if err != nil {
 				valid = false

@@ -1,0 +1,32 @@
+{
+  "$id": "https://nself.org/schemas/inventory.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "inventory/v1: runner inventory read by `nself ci nodes sync`",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "entries"],
+  "properties": {
+    "schema": { "type": "string", "const": "inventory/v1" },
+    "entries": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+          "ssh": { "type": "string", "pattern": "^([A-Za-z0-9._-]{1,64}@)?[A-Za-z0-9][A-Za-z0-9._-]{0,252}$" },
+          "os": { "type": "string", "enum": ["linux", "darwin", "windows"] },
+          "arch": { "type": "string", "enum": ["amd64", "arm64"] },
+          "rank": { "type": "integer", "minimum": 0, "maximum": 1000 },
+          "local": { "type": "boolean" },
+          "labels": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
+          "pools": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,30}$" } },
+          "skip_repos": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "maxItems": 64 },
+          "public_only": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

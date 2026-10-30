@@ -70,7 +70,11 @@ func cmdList(ctx context.Context, d *Deps) (result, error) {
 	}
 	views := make([]NodeView, 0, len(nodes))
 	for _, n := range nodes {
-		views = append(views, ViewOf(n))
+		v, err := d.withLabels(ctx, ViewOf(n))
+		if err != nil {
+			return result{}, err
+		}
+		views = append(views, v)
 	}
 	return result{map[string]any{"nodes": views}, func(w io.Writer) { renderList(w, views) }}, nil
 }
@@ -80,7 +84,10 @@ func cmdShow(ctx context.Context, d *Deps, id string) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
-	v := ViewOf(n)
+	v, err := d.withLabels(ctx, ViewOf(n))
+	if err != nil {
+		return result{}, err
+	}
 	return result{map[string]any{"node": v}, func(w io.Writer) { renderShow(w, v) }}, nil
 }
 

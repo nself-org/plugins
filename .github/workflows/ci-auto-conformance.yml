@@ -1,0 +1,65 @@
+# AUTO conformance suite, sim legs (P7-AUTO-25).
+#
+# Purpose: run `free/ci/scripts/ci-conformance.sh --sim` on GitHub-hosted ubuntu and check its JSON lines.
+#   Hardware legs never run here; they need real hosts and are run by the OPS Ticket P7-AUTO-30.
+# Inputs:  this checkout. No secrets.
+# Outputs: the ci-conformance/v1 lines as an artifact and in the job summary.
+# Constraints: actions pinned by SHA; public repository, free minutes; read-only token.
+
+name: ci-auto-conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci-auto-conformance.yml"
+      - "free/ci/**"
+      - "scripts/ci/ci-conformance-check.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-auto-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache: false
+
+      - name: Run the sim legs
+        env:
+          NSELF_V15: "1"
+        run: |
+          set -o pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          bash free/ci/scripts/ci-conformance.sh --sim --json | tee "$RUNNER_TEMP/ci-conformance.jsonl" | python3 -B scripts/ci/ci-conformance-check.py
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo '### ci-conformance (sim)'
+            echo '```'
+            cat "$RUNNER_TEMP/ci-conformance.jsonl" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the lines
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ci-conformance-sim
+          path: ${{ runner.temp }}/ci-conformance.jsonl
+          if-no-files-found: ignore

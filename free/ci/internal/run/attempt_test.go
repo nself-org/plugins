@@ -15,13 +15,13 @@ import (
 )
 
 // TestCreateAttemptOnly: no non-test Go file outside internal/store,
-// internal/lease, internal/dispatch and internal/run/attempt.go calls
-// AdmitAndLease or the store's CreateAttempt.
+// internal/lease, internal/dispatch, bench/ (harnesses seed a throwaway store)
+// and internal/run/attempt.go calls AdmitAndLease or the store's CreateAttempt.
 func TestCreateAttemptOnly(t *testing.T) {
 	root := filepath.Join("..", "..")
 	allowed := func(path string) bool {
 		p := filepath.ToSlash(path)
-		for _, d := range []string{"/internal/store/", "/internal/lease/", "/internal/dispatch/"} {
+		for _, d := range []string{"/internal/store/", "/internal/lease/", "/internal/dispatch/", "/bench/"} {
 			if strings.Contains(p, d) {
 				return true
 			}

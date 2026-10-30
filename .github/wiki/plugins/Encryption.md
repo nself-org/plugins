@@ -7,12 +7,21 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install encryption` |
 | **Commands** | `nself encryption` |
 | **Requirements** | nSelf >=1.2.8 |
 
 <!-- END GENERATED:catalog -->
+
+<!-- BEGIN GENERATED:machine-surface -->
+<!-- Generated from plugin.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
+|---|---|---|---|---|---|---|
+| `nself encryption` | - | - | read | document | CLI only (json None) | none |
+
+<!-- END GENERATED:machine-surface -->
 
 > Bring Your Own Key (BYOK) per-tenant envelope encryption for nSelf Cloud: AWS KMS, GCP Cloud KMS, and HashiCorp Vault Transit, with key rotation and an audit trail.
 

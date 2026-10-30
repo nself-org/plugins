@@ -200,6 +200,10 @@ func (l AttestLedger) RevokeNode(ctx context.Context, nodeID, reason string) (at
 
 func affected(ctx context.Context, tx *sql.Tx, keyIDs []string, out *attest.Affected) (err error) {
 	ids, _ := json.Marshal(keyIDs)
+	runs, err := tx.QueryContext(ctx, `SELECT DISTINCT run_id FROM attest_quarantine WHERE key_id IN (SELECT value FROM json_each(?)) ORDER BY run_id`, string(ids))
+	if out.Runs, err = pkiCollect(runs, err, func(r *sql.Rows) (id string, e error) { return id, r.Scan(&id) }); err != nil {
+		return err
+	}
 	gates, err := tx.QueryContext(ctx, `SELECT DISTINCT repo_id,revision,job FROM attest_use WHERE key_id IN (SELECT value FROM json_each(?)) ORDER BY repo_id,revision,job`, string(ids))
 	if out.Gates, err = pkiCollect(gates, err, func(r *sql.Rows) (g attest.GateRef, e error) { return g, r.Scan(&g.RepoID, &g.Revision, &g.Job) }); err != nil {
 		return err

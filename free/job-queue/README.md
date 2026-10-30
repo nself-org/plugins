@@ -1,6 +1,7 @@
 # ɳSelf Job Queue Plugin
 
 **Port:** 8213
+
 **Bundle:** Unbundled (standalone)
 **Custom Service Slot:** CS_10
 **License flag:** `NSELF_JOB_QUEUE=true` (env checked at deploy)

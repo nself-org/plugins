@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install family-ancestry` |
 | **Requirements** | nSelf >=1.0.0 |
 

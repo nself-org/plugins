@@ -1,0 +1,161 @@
+{
+  "projection": "nself-ci/1",
+  "fields": {
+    "attempts": {
+      "value": [
+        {
+          "attempt": {
+            "value": 1
+          },
+          "job_id": {
+            "value": "build"
+          },
+          "queue_ms": {
+            "value": 0
+          },
+          "run_ms": {
+            "value": 1200
+          },
+          "runner_kind": {
+            "value": "local"
+          },
+          "runner_pool": {
+            "value": "personal"
+          },
+          "runner_rank": {
+            "value": 0
+          },
+          "runner_tier": {
+            "value": "owner"
+          },
+          "transfer_ms": {
+            "value": null,
+            "reason": "source key absent: timings.transfer_ms"
+          }
+        },
+        {
+          "attempt": {
+            "value": 1
+          },
+          "job_id": {
+            "value": "test"
+          },
+          "queue_ms": {
+            "value": 40
+          },
+          "run_ms": {
+            "value": 9000
+          },
+          "runner_kind": {
+            "value": "ssh"
+          },
+          "runner_pool": {
+            "value": "lab"
+          },
+          "runner_rank": {
+            "value": 1
+          },
+          "runner_tier": {
+            "value": "owner"
+          },
+          "transfer_ms": {
+            "value": 350
+          }
+        },
+        {
+          "attempt": {
+            "value": 2
+          },
+          "job_id": {
+            "value": "test"
+          },
+          "queue_ms": {
+            "value": 2500
+          },
+          "run_ms": {
+            "value": 8000
+          },
+          "runner_kind": {
+            "value": "hosted"
+          },
+          "runner_pool": {
+            "value": "github"
+          },
+          "runner_rank": {
+            "value": 2
+          },
+          "runner_tier": {
+            "value": "hosted"
+          },
+          "transfer_ms": {
+            "value": 0
+          }
+        }
+      ]
+    },
+    "binding": {
+      "value": "bound"
+    },
+    "checks_error": {
+      "value": 0
+    },
+    "checks_fail": {
+      "value": 0
+    },
+    "checks_pass": {
+      "value": 1
+    },
+    "checks_skip": {
+      "value": 0
+    },
+    "checks_total": {
+      "value": 1
+    },
+    "duration_ms": {
+      "value": null,
+      "reason": "source key is null: timings.duration_ms"
+    },
+    "errors": {
+      "value": [
+        {
+          "attempt": {
+            "value": 1
+          },
+          "code": {
+            "value": "CI-INFRA-OOM"
+          },
+          "detail": {
+            "value": "runner out of memory"
+          },
+          "job_id": {
+            "value": "test"
+          }
+        }
+      ]
+    },
+    "flaky_checks": {
+      "value": []
+    },
+    "freshness": {
+      "value": "current"
+    },
+    "result": {
+      "value": "pass"
+    },
+    "revision": {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "run_id": {
+      "value": "r1"
+    },
+    "runner_id": {
+      "value": "local"
+    },
+    "runner_isolation": {
+      "value": "process"
+    },
+    "source_trust": {
+      "value": "owner"
+    }
+  }
+}

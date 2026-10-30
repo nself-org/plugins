@@ -12,6 +12,7 @@ on:
       - 'free/ci/plugin.json'
       - '.github/wiki/plugins/**'
       - 'scripts/generate-wiki-plugin-page.py'
+      - 'scripts/wiki_plugin_surface.py'
       - 'scripts/test_generate_wiki_plugin_page.py'
       - 'scripts/testdata/wiki-plugin-pages/**'
       - 'scripts/wiki-plugin-pages.yaml'
