@@ -1,0 +1,20 @@
+{
+  "_note": "Regression baselines, not acceptance ceilings: per-path p95 guards derived from recorded runs (the worst p95 over the baseline runs of this platform plus 25 percent, rounded up to a whole millisecond, never below 5 ms). They catch a slowdown of a path against its own recorded past. They do not say the cache meets its ticket: the acceptance ceilings (restore_ms 250, save_ms 220) are in the perf-budget file and the cold-save ceiling miss is tracked as D-1515. Never read a value here as a target and never raise one to hide a regression. The integrity_ms rows are informational and carry no guard. Baselines: hq plan/p7/evidence/CACHE-12-perf.md. Checked by cli tools/perfbench check under the name regression guards.",
+  "schema": "perfbench-budget/v1",
+  "platform": "linux/amd64",
+  "p95_ms": {
+    "cache.go.cold.restore_ms": 5,
+    "cache.go.cold.save_ms": 6516,
+    "cache.go.warm.restore_ms": 83,
+    "cache.pnpm.cold.restore_ms": 5,
+    "cache.pnpm.cold.save_ms": 5580,
+    "cache.pnpm.warm.restore_ms": 117,
+    "cache.rust.cold.restore_ms": 5,
+    "cache.rust.cold.save_ms": 4690,
+    "cache.rust.warm.restore_ms": 79,
+    "transfer.agent.restore_ms": 329,
+    "transfer.agent.upload_ms": 402,
+    "transfer.ssh.restore_ms": 260,
+    "transfer.ssh.upload_ms": 274
+  }
+}

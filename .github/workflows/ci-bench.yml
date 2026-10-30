@@ -166,11 +166,14 @@ jobs:
           - name: linux-amd64
             os: ubuntu-latest
             budget: perf-budget.json
+            guards: perf-regression-guards.json
           - name: macos-arm64
             os: macos-14
             budget: perf-budget-darwin-arm64.json
+            guards: perf-regression-guards-darwin-arm64.json
     env:
       BUDGET: ${{ github.workspace }}/free/ci/bench/cache/${{ matrix.budget }}
+      GUARDS: ${{ github.workspace }}/free/ci/bench/cache/${{ matrix.guards }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -205,11 +208,29 @@ jobs:
           go run -mod=vendor ./bench/cache/cmd/cachebench -runs 20 -carriers "$NSELF_CACHE_BENCH_OUT" -json > "$RUNNER_TEMP/cache-bench.json"
           python3 -c 'import json,sys; [print("%-34s p50 %10.3f p95 %10.3f n %d" % (m["name"],m["p50"],m["p95"],m["n"])) for m in json.load(open(sys.argv[1]))["metrics"]]' "$RUNNER_TEMP/cache-bench.json"
 
-      - name: Absolute p95 budget (cli perfbench check)
+      # The ticket's acceptance ceilings (restore_ms 250, save_ms 220). These are the real budget and they are not
+      # widened to pass: the cold-save ceiling is missed today (D-1515), so this step is red until the save path is fixed.
+      - name: Acceptance ceilings (cli perfbench check)
         working-directory: cli
-        run: go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/cache-bench.json"
+        run: |
+          set -u
+          rc=0
+          go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/cache-bench.json" > "$RUNNER_TEMP/cache-ceiling-out.txt" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/cache-ceiling-out.txt"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::cache acceptance ceiling breached: $(grep -E ' > budget|missing|samples' "$RUNNER_TEMP/cache-ceiling-out.txt" | tr '\n' ';'); the cold-save miss is tracked as D-1515"
+          fi
+          exit "$rc"
 
-      - name: Control - the budget fails a recorded run slowed 2x
+      # Per-path numbers recorded from earlier runs. They catch a slowdown against the path's own past; they are
+      # regression baselines, not acceptance ceilings, and passing them does not mean the ceilings above are met.
+      - name: Regression guards (cli perfbench check)
+        if: ${{ !cancelled() }}
+        working-directory: cli
+        run: go run -mod=vendor ./tools/perfbench check -budget "$GUARDS" -in "$RUNNER_TEMP/cache-bench.json"
+
+      - name: Control - the ceilings and the guards fail a recorded run slowed 2x
+        if: ${{ !cancelled() }}
         working-directory: free/ci
         run: |
           set -u
@@ -218,8 +239,14 @@ jobs:
           rc=0
           (cd ../../cli && go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$RUNNER_TEMP/cache-bench-slow.json") > "$RUNNER_TEMP/cache-slow-out.txt" 2>&1 || rc=$?
           cat "$RUNNER_TEMP/cache-slow-out.txt"
-          if [ "$rc" -ne 1 ] || ! grep -Eq 'cache\.go\.cold\.save_ms p95 .* > budget' "$RUNNER_TEMP/cache-slow-out.txt"; then
-            echo "::error::perfbench check exited $rc on a 2x slowed cache result; want 1 naming cache.go.cold.save_ms"; exit 1
+          if [ "$rc" -ne 1 ] || ! grep -Eq '^save_ms p95 .* > budget' "$RUNNER_TEMP/cache-slow-out.txt"; then
+            echo "::error::perfbench check exited $rc on a 2x slowed cache result; want 1 naming save_ms"; exit 1
+          fi
+          rc=0
+          (cd ../../cli && go run -mod=vendor ./tools/perfbench check -budget "$GUARDS" -in "$RUNNER_TEMP/cache-bench-slow.json") > "$RUNNER_TEMP/cache-slow-guard-out.txt" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/cache-slow-guard-out.txt"
+          if [ "$rc" -ne 1 ] || ! grep -Eq 'cache\.go\.cold\.save_ms p95 .* > budget' "$RUNNER_TEMP/cache-slow-guard-out.txt"; then
+            echo "::error::the regression guards exited $rc on a 2x slowed cache result; want 1 naming cache.go.cold.save_ms"; exit 1
           fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

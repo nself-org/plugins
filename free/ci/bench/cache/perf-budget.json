@@ -1,22 +1,9 @@
 {
-  "_note": "Absolute p95 ceilings in ms for the cache engine: the worst p95 over the recorded baseline runs of this platform plus 25 percent, rounded up to a whole millisecond, never below 5 ms (P7-CACHE-12, same rule as P7-CI-46). restore_ms (warm restore, every fixture) and save_ms (cold save, every fixture) keep their earlier ceilings of 250 and 220 as a floor: a ceiling is never lowered. Baselines and update rule: hq plan/p7/evidence/CACHE-12-perf.md. The integrity_ms rows are informational and carry no ceiling (a standalone hash pass, noisy on a 3 cpu hosted runner; the same rule as the informational P7-CI-46 rows). Checked by cli tools/perfbench check.",
+  "_note": "Acceptance ceilings for the cache engine, from the P7-CACHE-12 ticket: warm restore p95 at most 250 ms (restore_ms, every fixture) and cold save p95 at most 220 ms (save_ms, every fixture). These are the real budget. They are never widened to make a measurement pass and never lowered; a breach is fixed in the code. The cold-save ceiling is missed on every host today (1.4 s to 5.1 s) and the check fails on save_ms until D-1515 is fixed. Measured per-path numbers are not ceilings: they live in the regression-guards file next to this one. Baselines and rules: hq plan/p7/evidence/CACHE-12-perf.md. Checked by cli tools/perfbench check.",
   "schema": "perfbench-budget/v1",
   "platform": "linux/amd64",
   "p95_ms": {
-    "cache.go.cold.restore_ms": 5,
-    "cache.go.cold.save_ms": 6516,
-    "cache.go.warm.restore_ms": 83,
-    "cache.pnpm.cold.restore_ms": 5,
-    "cache.pnpm.cold.save_ms": 5580,
-    "cache.pnpm.warm.restore_ms": 117,
-    "cache.rust.cold.restore_ms": 5,
-    "cache.rust.cold.save_ms": 4690,
-    "cache.rust.warm.restore_ms": 79,
     "restore_ms": 250,
-    "save_ms": 6388,
-    "transfer.agent.restore_ms": 329,
-    "transfer.agent.upload_ms": 402,
-    "transfer.ssh.restore_ms": 260,
-    "transfer.ssh.upload_ms": 274
+    "save_ms": 220
   }
 }
