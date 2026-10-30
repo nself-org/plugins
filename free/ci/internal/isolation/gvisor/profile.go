@@ -48,6 +48,8 @@ type Profile struct {
 	key    string
 	av     isolation.Availability
 	at     time.Time
+	// logPath is the --debug-log value of the runsc runtime entry ("" when the operator set none).
+	logPath string
 }
 
 var _ isolation.Profile = (*Profile)(nil)
@@ -144,7 +146,10 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	if err != nil {
 		return s, err
 	}
-	wrapped.Plan = &planner{inner: wrapped.Plan}
+	p.mu.Lock()
+	logPath := p.logPath
+	p.mu.Unlock()
+	wrapped.Plan = &planner{inner: wrapped.Plan, logPath: logPath}
 	return wrapped, nil
 }
 
@@ -158,7 +163,17 @@ func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
 }
 
 // planner implements exec.ContainerPlanner over the container profile's planner.
-type planner struct{ inner exec.ContainerPlanner }
+type planner struct {
+	inner   exec.ContainerPlanner
+	logPath string
+}
+
+var _ exec.SandboxFailureReader = (*planner)(nil)
+
+// SandboxFailure reads runsc's debug log for the death of this attempt's sandbox (see sandbox_log.go).
+func (pl *planner) SandboxFailure(run exec.ContainerRun, began time.Time) string {
+	return sandboxDeath(pl.logPath, run.Workspace, began)
+}
 
 func (pl *planner) Plan(r exec.ContainerRun) (exec.ContainerCommand, error) {
 	cmd, err := pl.inner.Plan(r)

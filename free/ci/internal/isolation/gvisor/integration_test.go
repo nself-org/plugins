@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -192,9 +191,9 @@ func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second; s.MemoryMB = 1024 })
+	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	if res.Reason != "resource_limit" {
-		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q\nrunsc logs:\n%s", res, tail(out, 1500), runscLogDigest())
+		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
@@ -255,8 +254,11 @@ func assertGone(t *testing.T, name string) {
 	}
 }
 
-// runscLogDigest lists the newest runsc debug logs and their fatal-looking lines (diagnostic).
-func runscLogDigest() string {
-	b, _ := osexec.Command("sudo", "sh", "-c", `cd /var/log/runsc && ls -lt | head -12; for f in $(ls -t | head -6); do echo "== $f"; grep -i -E "fatal|panic|runtime:|thread|pids|resource temp|cgroup|exit|killed|oom" "$f" | tail -12 | cut -c1-300; done`).CombinedOutput()
-	return string(b)
+// A script that only runs `exit 2` is the job's own failure: the sandbox did not die, so it stays class code.
+func TestIntegrationPlainExit2StaysCode(t *testing.T) {
+	p, image := prerequisites(t)
+	_, res := runJob(t, p, "sandboxed-container", image, "t05-exit2", `exit 2`, nil)
+	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
+		t.Fatalf("exit 2 must stay a code failure: %+v", res)
+	}
 }

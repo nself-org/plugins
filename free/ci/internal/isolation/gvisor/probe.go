@@ -120,6 +120,9 @@ func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Avail
 		return in, unavailable(reason, map[string]string{"platform": platform, "detail": why}), false
 	}
 	in.entry, in.platform = entry, platform
+	p.mu.Lock()
+	p.logPath = debugLogOf(entry.Args)
+	p.mu.Unlock()
 	return in, isolation.Availability{}, true
 }
 
