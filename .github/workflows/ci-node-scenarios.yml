@@ -47,6 +47,12 @@ jobs:
           go test -json -mod=vendor -tags integration -count=1 -timeout 45m -run 'TestScenario(2|3)|TestPlatformSteering|TestWriteLoad' ./test/sim \
             -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario3 TestPlatformSteering TestWriteLoad
 
+      - name: Set up Go for the cli checkout
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+
       - name: Check the perf budget
         working-directory: cli
         run: |
