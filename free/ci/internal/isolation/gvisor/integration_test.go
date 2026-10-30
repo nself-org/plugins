@@ -8,6 +8,7 @@ package gvisor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -182,16 +183,22 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 }
 
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
+	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
+		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
+	}
+}
+
+func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	_, res := runJob(t, p, "sandboxed-container", image, "t05-fork", `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	if res.Reason != "resource_limit" {
-		t.Fatalf("fork bomb not classified: %+v", res)
+		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
 	}
-	assertGone(t, "nself-ci-t05-fork")
+	assertGone(t, "nself-ci-"+id)
 }
 
 func TestIntegrationMemoryHogIsKilledAndClassified(t *testing.T) {
@@ -244,5 +251,14 @@ func assertGone(t *testing.T, name string) {
 	out, err := exec.RuntimeQuery(context.Background(), "docker", "ps", "-a", "--filter", "name="+name, "--format", "{{.Names}}")
 	if err != nil || strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("container %s still exists: %q %v", name, out, err)
+	}
+}
+
+// A script that only runs `exit 2` is the job's own failure: the sandbox did not die, so it stays class code.
+func TestIntegrationPlainExit2StaysCode(t *testing.T) {
+	p, image := prerequisites(t)
+	_, res := runJob(t, p, "sandboxed-container", image, "t05-exit2", `exit 2`, nil)
+	if res.ExitCode != 2 || res.Reason != "" || res.Attempt.FailureClass != "code" {
+		t.Fatalf("exit 2 must stay a code failure: %+v", res)
 	}
 }

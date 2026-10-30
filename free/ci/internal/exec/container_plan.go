@@ -146,7 +146,16 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err == nil && code == 125 && !facts.jobRan() { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
-	return code, resourceReason(ctx, code, tail.String(), facts), err
+	reason := resourceReason(ctx, code, tail.String(), facts)
+	if reason == "" && err == nil && ctx.Err() == nil {
+		if line := sandboxFailure(s.Plan, run, began, code, tail.String()); line != "" { // the job could not say: its sandbox died from the process limit
+			reason = "resource_limit"
+			if s.Output != nil {
+				s.Output([]byte("nself-ci: the sandbox died from the container's process limit: " + line + "\n"))
+			}
+		}
+	}
+	return code, reason, err
 }
 
 // cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the

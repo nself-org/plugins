@@ -24,7 +24,7 @@ const (
 const RuntimeName = "runsc"
 
 // InstallHint is what `ci doctor` and an unavailable level tell the operator.
-const InstallHint = "install gVisor (https://gvisor.dev/docs/user_guide/install/), run `sudo runsc install`, restart the Docker daemon"
+const InstallHint = "install gVisor (https://gvisor.dev/docs/user_guide/install/), run `sudo runsc install -- --debug-log=/var/log/runsc/` (the log lets a sandbox killed by its process limit be told from a job that exited), restart the Docker daemon"
 
 // DefaultPlatform is what runsc uses when no --platform argument is set.
 const DefaultPlatform = "systrap"

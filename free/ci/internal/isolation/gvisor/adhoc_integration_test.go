@@ -32,16 +32,17 @@ func runCmd(t *testing.T, dir string, env []string, name string, args ...string)
 	defer cancel()
 	cmd := osexec.CommandContext(ctx, name, args...)
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
-	// SIGQUIT makes a Go binary print every goroutine's stack, which is the evidence a hang needs.
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGQUIT) }
+	// SIGABRT makes a Go binary print every goroutine's stack, which is the evidence a hang needs. SIGQUIT
+	// would not: nself-ci traps it (cmd/v15.go) as a cancel request, so #561's dump stayed empty.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGABRT) }
 	cmd.WaitDelay = 15 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	code := 0
 	if ctx.Err() != nil {
-		t.Fatalf("%s %v did not finish within %s (hang, not a skip): sent SIGQUIT\nstdout: %s\nstderr (goroutine dump): %s\nprocesses and containers at the time:\n%s",
-			name, args, runBudget, stdout.String(), tail(stderr.String(), 12000), hangContext())
+		t.Fatalf("%s %v did not finish within %s (hang, not a skip): sent SIGABRT\nstdout: %s\nstderr (goroutine dump): %s\nprocesses and containers at the time:\n%s",
+			name, args, runBudget, stdout.String(), tail(stderr.String(), 12000), hangContext(env))
 	}
 	if ee, ok := err.(*osexec.ExitError); ok {
 		code = ee.ExitCode()
@@ -52,9 +53,15 @@ func runCmd(t *testing.T, dir string, env []string, name string, args ...string)
 }
 
 // hangContext lists the processes and containers a hung run left, for the failure message.
-func hangContext() string {
+func hangContext(env []string) string {
 	var b strings.Builder
-	for _, c := range [][]string{{"ps", "-eo", "pid,ppid,stat,etime,args"}, {"docker", "ps", "-a", "--format", "{{.ID}} {{.Status}} {{.Names}} {{.Image}}"}} {
+	cmds := [][]string{{"ps", "-eo", "pid,ppid,stat,etime,args"}, {"docker", "ps", "-a", "--format", "{{.ID}} {{.Status}} {{.Names}} {{.Image}}"}}
+	for _, e := range env { // the store says why a queued attempt was not admitted
+		if home, ok := strings.CutPrefix(e, "NSELF_CI_HOME="); ok {
+			cmds = append(cmds, []string{"sqlite3", "-header", "-readonly", filepath.Join(home, "state.db"), "select * from sched_refusal; select * from schedtel_decision;"})
+		}
+	}
+	for _, c := range cmds {
 		out, err := osexec.Command(c[0], c[1:]...).CombinedOutput()
 		fmt.Fprintf(&b, "$ %s (err %v)\n%s\n", strings.Join(c, " "), err, tail(string(out), 4000))
 	}
