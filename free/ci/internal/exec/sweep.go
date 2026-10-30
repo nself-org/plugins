@@ -127,16 +127,19 @@ func (e *Executor) sweepContainers(ctx context.Context, current string) error {
 }
 
 // sweepRuntime removes the stale coordinators' labelled containers of one runtime; a missing or stopped runtime
-// has nothing to sweep.
+// has nothing to sweep. The listing runs first and the shared `info` probe only when it failed, to tell a stopped
+// runtime (nothing to sweep) from a running one whose listing failed (E613, fail closed). `podman info` resolves
+// the package of every helper binary through rpm and dpkg (about 1.5 s on a hosted Ubuntu runner, D-1496), so
+// asking it first put that cost on the start of every run on a host with podman installed.
 func (e *Executor) sweepRuntime(ctx context.Context, current, binary string) error {
 	if _, err := osexec.LookPath(binary); err != nil {
 		return nil
 	}
-	if _, err := RuntimeQuery(ctx, binary, "info"); err != nil { // the shared probe: hygiene and the isolation facts ask the same question
-		return nil
-	}
 	out, err := RuntimeQuery(ctx, binary, "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} "+labelExpr(binary, KindContainer, "nself.ci.coordinator"))
 	if err != nil {
+		if _, ierr := RuntimeQuery(ctx, binary, "info"); ierr != nil { // the shared probe: hygiene and the isolation facts ask the same question
+			return nil
+		}
 		return coded("E613", binary+" orphan listing failed")
 	}
 	for _, line := range strings.Split(string(out), "\n") {
