@@ -42,6 +42,10 @@ type Request struct {
 	Placement sched.Placement
 	Runner    sched.Runner
 	Job       sched.Job
+	// Revision is the commit the caller wants checked out; admission compares it
+	// with the stored pipeline head so a lease cannot run an unapproved revision
+	// under a valid approval (D-1360).
+	Revision string
 	// Local marks the placement for this machine: no fence, no delivery.
 	Local bool
 	// Host is the reservation scope: this machine for a local runner, the node

@@ -24,6 +24,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/health"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -51,6 +52,7 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	runtime.UseStore(st)
 	runtime.UsePolicy(src)
 	hosted.UsePolicy(src)
+	webhook.UsePolicy(src) // D-1363: GitLab webhook secrets reach the source at coordinator start
 	hosted.UseStore(st)
 	hosted.UseAttempts(attemptMetaFrom(st))
 	undoGitLab := serveGitLab(st)
@@ -74,6 +76,7 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 		undoGitLab()
 		hosted.UseAttempts(nil)
 		hosted.UsePolicy(nil)
+		webhook.UsePolicy(nil)
 		runtime.UsePolicy(nil)
 		hosted.ReleaseStore()
 		runtime.ReleaseStore()

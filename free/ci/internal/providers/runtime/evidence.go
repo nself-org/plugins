@@ -37,6 +37,16 @@ func bindEvidence(c providers.Collected, h providers.Handle, l protocol.Lease, n
 	if !strings.EqualFold(ev.Revision, l.Checkout.Revision) {
 		return nil, rejected("provider evidence names another revision")
 	}
+	// D-1328: overwrite trust, policy, binding, selection, trigger, worktree state and repo id from the
+	// lease so a hosted runner cannot claim owner trust or a chosen policy digest. The coordinator's
+	// record is authoritative; a document that disagrees is rewritten, never refused, because the gate
+	// already holds on attempt and revision.
+	if l.Evidence != nil {
+		ev.SourceTrust = model.TrustClass(l.Evidence.SourceTrust)
+		ev.RepoID = l.Evidence.RepoID
+		ev.PolicyDigest = l.Evidence.PolicyDigest
+		ev.Selection.Mode = model.SelectionMode(l.Evidence.SelectionMode)
+	}
 	att := c.Attestation
 	if att.Provider != h.Provider || att.RunID != h.RunID || att.Nonce != h.Nonce {
 		return nil, rejected("provider attestation does not match the dispatched run")
