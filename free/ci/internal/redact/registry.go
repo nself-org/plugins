@@ -26,7 +26,11 @@ type Redactor struct {
 }
 
 // snapshot is an immutable pair of automata (either may be nil).
-type snapshot struct{ a, b, c *automaton }
+type snapshot struct {
+	a, b, c  *automaton
+	gateOnce sync.Once
+	g        *utf16Gate
+}
 
 // New returns an empty Redactor. Token shapes and the neutraliser work with no
 // registered value, so it is useful before any secret exists.
@@ -134,4 +138,20 @@ func (s *snapshot) values(b []byte) (spans []span, hold int) {
 		hold = max(hold, h)
 	}
 	return spans, hold
+}
+
+// scanSpans is values for Scan, which has no use for the carry-over length: it
+// returns the same spans, built without the offset tables when nothing is found
+// (see mappedFind).
+func (s *snapshot) scanSpans(b []byte) []span {
+	var spans []span
+	if s.a != nil {
+		spans, _ = s.a.find(b, nil)
+	}
+	if s.b != nil {
+		spans, _ = s.b.findSkip(b, spans)
+	}
+	spans = append(spans, mappedFind(s.a, b, false)...)
+	spans = append(spans, mappedFind(s.b, b, false)...)
+	return append(spans, mappedFind(s.c, b, true)...)
 }

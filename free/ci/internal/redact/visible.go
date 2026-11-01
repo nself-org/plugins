@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -13,10 +14,33 @@ func invisible(r rune) bool {
 // visible keeps original byte offsets, so a mask includes any inserted controls.
 // folded also ignores whitespace and case for the raw/reversed value family.
 func visible(b []byte, folded bool) ([]byte, []int) {
-	var out []byte
 	var offsets []int
+	out := appendVisible(nil, &offsets, b, folded)
+	return out, offsets
+}
+
+// appendVisible appends the visible form of b to dst. When offsets is not nil
+// it also records, for every appended byte, the original offset it came from.
+// It is the one definition of the visible form: visible (with offsets) and the
+// scan-only path (without, in a pooled buffer) cannot diverge.
+func appendVisible(dst []byte, offsets *[]int, b []byte, folded bool) []byte {
 	for i := 0; i < len(b); {
-		if b[i] == 0x1b {
+		c := b[i]
+		if c < utf8.RuneSelf && c != 0x1b { // ASCII fast path: same outcome as the general case below
+			i++
+			if c == 0 || folded && (c == ' ' || c >= '\t' && c <= '\r') {
+				continue
+			}
+			if folded && c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			dst = append(dst, c)
+			if offsets != nil {
+				*offsets = append(*offsets, i-1)
+			}
+			continue
+		}
+		if c == 0x1b {
 			end, sgr, partial := escape(b, i)
 			if partial {
 				break
@@ -38,17 +62,53 @@ func visible(b []byte, folded bool) ([]byte, []int) {
 			i += size
 			continue
 		}
-		v := b[i : i+size]
 		if folded && r != utf8.RuneError {
-			v = []byte(string(unicode.ToLower(r)))
-		}
-		for j, c := range v {
-			out = append(out, c)
-			offsets = append(offsets, i+min(j, size-1))
+			n := len(dst)
+			dst = utf8.AppendRune(dst, unicode.ToLower(r))
+			if offsets != nil {
+				for j := 0; j < len(dst)-n; j++ {
+					*offsets = append(*offsets, i+min(j, size-1))
+				}
+			}
+		} else {
+			dst = append(dst, b[i:i+size]...)
+			if offsets != nil {
+				for j := 0; j < size; j++ {
+					*offsets = append(*offsets, i+min(j, size-1))
+				}
+			}
 		}
 		i += size
 	}
-	return out, offsets
+	return dst
+}
+
+// visBufs recycles the visible-form buffers of mappedFind.
+var visBufs sync.Pool
+
+// mappedFind is mappedScan for callers that only need the spans (Scan). In the
+// common case, nothing found and no partial match at the end, the visible form
+// is built without the per-byte offset table and nothing is returned, which is
+// exactly what mappedScan returns then. In every other case it is mappedScan.
+func mappedFind(a *automaton, b []byte, folded bool) []span {
+	if a == nil {
+		return nil
+	}
+	var buf []byte
+	if p, ok := visBufs.Get().(*[]byte); ok {
+		buf = (*p)[:0]
+	}
+	if cap(buf) < len(b) {
+		buf = make([]byte, 0, len(b)+len(b)/8)
+	}
+	v := appendVisible(buf, nil, b, folded)
+	matches, hold := a.findSkip(v, nil)
+	visBufs.Put(&v)
+	if len(matches) == 0 && hold == 0 {
+		return nil
+	}
+	found, _ := mappedScan(a, b, folded)
+	return found
 }
 
 func mappedScan(a *automaton, b []byte, folded bool) ([]span, int) {

@@ -18,6 +18,10 @@ var ErrScanBudget = errors.New("compressed content exceeds scan budget")
 // CleanCandidates checks raw, NUL-stripped and both alignments of UTF-16 text
 // (little and big endian). The derived texts are built in pooled scratch
 // buffers, one pass each, so scanning a window does not allocate per call.
+//
+// A scanner that can tell from the 16-bit units alone that no UTF-16 reading
+// can hold a value (UTF16Gate) lets the four decodings be skipped; its false
+// answer is a guarantee, so the verdict is the same as scanning all of them.
 func CleanCandidates(s ValueScanner, b []byte) bool {
 	if !Clean(s, b) {
 		return false
@@ -30,6 +34,9 @@ func CleanCandidates(s ValueScanner, b []byte) bool {
 			return false
 		}
 	}
+	if g, ok := s.(UTF16Gate); ok && !g.UTF16Candidate(b) {
+		return true
+	}
 	for _, big := range []bool{false, true} {
 		for offset := 0; offset < 2; offset++ {
 			sc.buf = appendUTF16(sc.buf[:0], b, offset, big)
@@ -39,6 +46,13 @@ func CleanCandidates(s ValueScanner, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// UTF16Gate is the optional pre-check of a ValueScanner: UTF16Candidate returns
+// false only when Scan finds nothing in any UTF-16 reading of the blob (either
+// byte order, either alignment, decoded as appendUTF16 does).
+type UTF16Gate interface {
+	UTF16Candidate(blob []byte) bool
 }
 
 type scratch struct{ buf []byte }
