@@ -51,11 +51,12 @@ func (t *processTree) stop() {
 // snapshot reads the process table and adds every descendant of the root (and
 // every adopted orphan) to the seen set. A pass that found new processes is
 // repeated (at most three passes) so forks made while the table was being read
-// are caught. The table comes from /proc or sysctl, which cost no fork; ps is
-// only the fallback when those fail.
+// are caught. The table comes from /proc or sysctl, which cost no fork; on Linux
+// it covers only the tree below the root and this process's own children (not
+// every process on the host); ps is only the fallback when those fail.
 func (t *processTree) snapshot() {
 	for i := 0; i < 3; i++ {
-		parents, err := processTable()
+		parents, err := scopedTable(t.roots())
 		if err != nil {
 			if parents, err = psProcessTable(); err != nil {
 				return
@@ -65,6 +66,19 @@ func (t *processTree) snapshot() {
 			return
 		}
 	}
+}
+
+// roots are the pids a snapshot walks down from: the job root and every
+// descendant already seen (an adopted orphan is no longer below the root).
+func (t *processTree) roots() []int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	roots := make([]int, 0, len(t.seen)+1)
+	roots = append(roots, t.root)
+	for pid := range t.seen {
+		roots = append(roots, pid)
+	}
+	return roots
 }
 
 // absorb adds the descendants found in parents to the seen set and reports
