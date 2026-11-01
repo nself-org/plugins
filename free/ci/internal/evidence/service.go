@@ -144,9 +144,32 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 		// an interrupt or an infrastructure error is not a verdict on the revision: exit 2, never the "fails" exit of a red build
 		return v, true, fail(CodeWorktree, ExitInternal, "the run for %s did not finish (%s)", short(rev), ev.Result)
 	}
+	ev = env.recordedAfter(ctx, rev, ev)
 	v = Judge(ev, rev, &current)
 	env.checkScope(ctx, &v) // a rerun is held to the same repository and policy as a stored document
 	return v, true, nil
+}
+
+// recordedAfter returns the newest document the store holds for the run that
+// just finished, or ev when it holds none. A hook can append a later document
+// to a run (the record-pool gate stores one carrying E809 beside the run's
+// own); the next `verify` answers from the store, newest first, so this one
+// must answer the same document or a refusal would show on every call but the
+// first. Only the run's own documents count, never another run of the revision.
+func (env Env) recordedAfter(ctx context.Context, rev string, ev model.Evidence) model.Evidence {
+	if env.Store == nil || ev.RunID == "" {
+		return ev
+	}
+	docs, err := ForRevision(ctx, env.Store, rev)
+	if err != nil {
+		return ev
+	}
+	for _, d := range docs { // newest first; same-instant rows are ordered by id (sortStored)
+		if d.Evidence.RunID == ev.RunID {
+			return d.Evidence
+		}
+	}
+	return ev
 }
 
 // held is the evidence on this machine that already answers for rev.
