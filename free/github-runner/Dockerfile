@@ -13,10 +13,12 @@ WORKDIR /app
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
-FROM alpine:3.19
+FROM alpine:3.19@sha256:b58899f069c47216f6002a6850143dc6fae0d35eb8b0df9300bbe6327b9c2171
 # No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin
+RUN addgroup -S plugin && adduser -S plugin -G plugin && chown plugin:plugin /plugin
+USER plugin
 EXPOSE 3053
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://localhost:3053/health || exit 1
