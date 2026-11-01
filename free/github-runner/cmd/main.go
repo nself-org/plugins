@@ -13,7 +13,7 @@ func main() {
 	cfg := sdk.LoadConfig()
 
 	// Default port 3054 unless PORT env overrides it.
-	// Port 3053 belongs to the push plugin (APNs/FCM relay).
+	// Port 3054 belongs to the push plugin (APNs/FCM relay).
 	port := 3054
 	if cfg.Port != 3000 {
 		port = cfg.Port

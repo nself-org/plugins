@@ -32,7 +32,7 @@ nself plugin install link-preview
 | Name | Required | Default | Description |
 | ---- | -------- | ------- | ----------- |
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `LP_PLUGIN_PORT` | No | `3718` | HTTP server port |
+| `LP_PLUGIN_PORT` | No | `3736` | HTTP server port |
 | `LINK_PREVIEW_ENABLED` | No | `true` | Enable or disable the plugin |
 | `LINK_PREVIEW_CACHE_TTL_HOURS` | No | `168` | Preview cache lifetime in hours (7 days) |
 | `LINK_PREVIEW_TIMEOUT_SECONDS` | No | `10` | Fetch timeout per URL (1–60 seconds) |
@@ -80,7 +80,7 @@ Returns plugin version, enabled state, and cache statistics.
 Returns a cached preview if one exists. If the URL is not cached, stores a partial record and returns it. If the URL is blocked, returns `403`.
 
 ```bash
-curl "http://localhost:3718/api/link-preview?url=https://example.com"
+curl "http://localhost:3736/api/link-preview?url=https://example.com"
 ```
 
 Response:
@@ -361,7 +361,7 @@ Deletes all expired previews (where `cache_expires_at < NOW()`).
 nself-link-preview init
 
 # Start the HTTP server
-nself-link-preview server --port 3718 --host 0.0.0.0
+nself-link-preview server --port 3736 --host 0.0.0.0
 
 # Show cache statistics
 nself-link-preview status
@@ -438,7 +438,7 @@ line appears.
 ### Fetch a preview when a user posts a link
 
 ```typescript
-const response = await fetch('http://localhost:3718/api/link-preview/fetch', {
+const response = await fetch('http://localhost:3736/api/link-preview/fetch', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://github.com/nself-org/cli' }),
@@ -450,7 +450,7 @@ const preview = await response.json();
 ### Track when a preview appears in a message
 
 ```typescript
-await fetch('http://localhost:3718/api/link-preview/usage', {
+await fetch('http://localhost:3736/api/link-preview/usage', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -465,7 +465,7 @@ await fetch('http://localhost:3718/api/link-preview/usage', {
 ### Block an entire domain
 
 ```typescript
-await fetch('http://localhost:3718/api/link-preview/blocklist', {
+await fetch('http://localhost:3736/api/link-preview/blocklist', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -479,7 +479,7 @@ await fetch('http://localhost:3718/api/link-preview/blocklist', {
 ### Configure a channel to disable image previews
 
 ```typescript
-await fetch('http://localhost:3718/api/link-preview/settings/channel/channel-id-here', {
+await fetch('http://localhost:3736/api/link-preview/settings/channel/channel-id-here', {
   method: 'PUT',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ show_images: false }),

@@ -71,7 +71,7 @@
     ],
     "network": []
   },
-  "port": 3735,
+  "port": 3715,
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
     "nself": ">=1.0.0"
@@ -187,7 +187,7 @@
   },
   "status": "stable",
   "tables": [
-    "entitlement_grants"
+    "np_entitlements_grants"
   ],
   "tags": [
     "entitlements",

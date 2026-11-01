@@ -41,7 +41,7 @@ type Config struct {
 // Defaults match plugin.json and TypeScript implementation.
 func LoadConfig() *Config {
 	return &Config{
-		Port:        envOr("GEOCODING_PLUGIN_PORT", envOr("PORT", "3203")),
+		Port:        envOr("GEOCODING_PLUGIN_PORT", envOr("PORT", "3856")),
 		Host:        envOr("GEOCODING_PLUGIN_HOST", envOr("HOST", "0.0.0.0")),
 		DatabaseURL: envOr("DATABASE_URL", ""),
 

@@ -75,7 +75,7 @@
       "idmelabs.com"
     ]
   },
-  "port": 3820,
+  "port": 3010,
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
     "nself": ">=1.0.0"
