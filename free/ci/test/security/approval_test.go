@@ -211,6 +211,23 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 			t.Fatalf("a run whose head moved after its approval was delivered at %s", d.Revision)
 		}
 	}
+	// D-1360: a caller-supplied revision that differs from the stored pipeline head
+	// is refused even when a valid approval exists for the stored head.
+	id3, j3 := r.prepare(newJob("forke", "untrusted", "restricted"), "untrusted")
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: "pipe-forke", Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	wrong := strings.Repeat("b", 40)
+	ctx, cancel := context.WithTimeout(context.Background(), settle)
+	defer cancel()
+	_, err3 := r.d.Submit(ctx, dispatch.Job{AttemptID: id3, Sched: j3, Revision: wrong})
+	if err3 == nil {
+		t.Fatal("a lease whose revision differs from the approved head must be refused")
+	}
+	d3 := awaitDecision(t, r, id3)
+	if d3.Reason != source.ReasonApprovalRequired {
+		t.Fatalf("decision: reason=%q, want %s", d3.Reason, source.ReasonApprovalRequired)
+	}
 }
 
 // moveHead moves the stored head SHA and config digest of a run. Production starts a new run for a push (the

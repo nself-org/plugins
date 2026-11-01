@@ -59,6 +59,14 @@ func Step(ctx context.Context, v dispatch.View) error {
 	if !ok {
 		return fmt.Errorf("approval: run %s has no stored facts", v.PipelineID)
 	}
+	// D-1360: refuse when the caller-supplied revision differs from the stored
+	// pipeline head, so a lease cannot run an unapproved revision under a valid
+	// approval. An empty caller revision means the caller did not bind one (local
+	// runs); the stored head still governs.
+	if v.Request.Revision != "" && st.Revision != "" && v.Request.Revision != st.Revision {
+		return &dispatch.Refusal{Reason: model.PlacementReason(source.ReasonApprovalRequired),
+			Detail: "the lease revision " + v.Request.Revision + " differs from the approved head " + st.Revision}
+	}
 	if !Needed(st) || operatorTyped(st, v.Request.Job.Trust) {
 		return nil
 	}
