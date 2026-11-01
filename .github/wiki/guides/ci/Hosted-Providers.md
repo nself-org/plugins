@@ -56,9 +56,15 @@ Your own Linux nodes can take GitHub jobs through just-in-time (JIT) runners. Ea
 Limits that matter:
 
 - A JIT job is classed untrusted unless the organization runner group meets the protected-group rule below. An untrusted job gets no secrets and no protected-branch rights.
-- The node must be a Linux gVisor node. See [the sandboxed container level](Trust-Security-and-Privacy.md#the-sandboxed-container-level-gvisor).
+- The node must be a Linux gVisor node. See [the sandboxed container level](Trust-Security-and-Privacy.md#the-sandboxed-container-level-gvisor). Docker inside a runner job is not supported; use the sandboxed container level instead.
 - A repository-level runner is never proven restricted, because a runner group governs organization runners only. Repository runners run every workflow of their repository, fork pull requests included.
+- `providers.github.jit.max_pending` caps live runner demands per repository (1 to 50, default 2, operator-only policy key). In poll mode a capped demand is offered again on the next tick; in webhook ingress mode there is no poll, so a capped job stays queued at GitHub until the next webhook delivery.
+- The demand-label check gates minting, not which queued job the runner takes: any job whose `runs-on` labels are a subset of the runner's labels (including a bare `self-hosted`) can land on it. The job remains untrusted and sandboxed regardless.
+- Decoded runner credential files live in a 384 MB memory-only tmpfs; they are never written to disk. The job can read its own runner JIT config from this tmpfs.
+- Each job receives one 88 MB `bin/` copy of the nself binary.
+- The host allowlist is exact-name only; wildcards and CIDR ranges are not accepted.
 
+### Runner groups
 ### Runner groups
 
 A runner group counts as protected only when the API shows all of these:
