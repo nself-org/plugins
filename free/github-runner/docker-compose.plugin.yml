@@ -26,7 +26,7 @@ services:
       - github_runner_data:/runner
       - github_runner_logs:/logs
     ports:
-      - "127.0.0.1:3054:3053"
+      - "127.0.0.1:3054:3054"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3054/health"]
       interval: 30s

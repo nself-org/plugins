@@ -17,7 +17,7 @@ import unittest
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
 # Every conf the CLI would inject for these plugins (it globs nginx/*.conf).
-GATED_PLUGINS = ["cron", "jobs"]
+GATED_PLUGINS = ["cron", "geocoding", "github-runner", "jobs", "link-preview"]
 LOOPBACK = {"127.0.0.1", "::1"}
 # Directives that answer, redirect or re-route a request before or instead of
 # the access phase, or that let a request through some other way.

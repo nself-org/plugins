@@ -6,7 +6,7 @@ services:
     image: nself/nself-geocoding:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3856:3203"
+      - "127.0.0.1:3856:3856"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - GEOCODING_PLUGIN_PORT=3856

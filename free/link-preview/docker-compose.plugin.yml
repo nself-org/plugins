@@ -14,7 +14,7 @@ services:
       PORT: "3736"
       PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
     ports:
-      - "127.0.0.1:3736:3718"
+      - "127.0.0.1:3736:3736"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3736/health"]
       interval: 30s
