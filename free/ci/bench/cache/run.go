@@ -173,6 +173,9 @@ func cycle(ctx context.Context, env *Env, fx Fixture, opts Options, block []byte
 		return smp, Tree{}, err
 	}
 	sess.Cleanup()
+	if err = env.Release(ctx, warm); err != nil {
+		return smp, Tree{}, err
+	}
 	return smp, want, os.RemoveAll(wroot)
 }
 
