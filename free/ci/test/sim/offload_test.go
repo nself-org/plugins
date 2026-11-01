@@ -152,6 +152,10 @@ func (o *offloadNodes) wait(t *testing.T) seen {
 func dirtyFixture(t *testing.T, body func(context.Context, session.JobRun) (session.JobResult, error)) (*fixture, *offloadNodes) {
 	t.Helper()
 	probe := []string{"f.txt", "new.txt", ".env", ".env.local"}
+	// The fixture and the offload's own git calls inherit this environment, so a host global
+	// gitignore (D-1520) cannot change which files the snapshot sees.
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	f := newFixture(t, nil)
 	nodes := newOffloadNodes(f, probe...)
 	for _, n := range f.nodes {
@@ -291,6 +295,36 @@ func TestOffloadDirtyTreeToNode(t *testing.T) {
 	}
 	if after := repoState(t, f.repo); after != before {
 		t.Errorf("the user's repository changed:\n--- before\n%s\n--- after\n%s", before, after)
+	}
+	requirePrivateRefGone(t, f.repo)
+}
+
+// A file the user ignores globally is ignored by the snapshot too: it never reaches the node
+// and, being ignored rather than merely untracked, is not listed as excluded.
+func TestOffloadHonoursGlobalExcludes(t *testing.T) {
+	f, nodes := dirtyFixture(t, passBody)
+	dir := t.TempDir()
+	excludes := filepath.Join(dir, "gitignore")
+	cfg := filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(excludes, []byte(".env*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte("[core]\n\texcludesFile = "+excludes+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", cfg)
+	if got := gitIn(t, f.repo, "check-ignore", ".env.local"); got != ".env.local" {
+		t.Fatalf("check-ignore .env.local = %q: the global excludes file is not in effect", got)
+	}
+	ch, out, excluded := f.startDirty(context.Background(), remoteJob(1))
+	staged := nodes.wait(t)
+	res := wait(t, ch, "the run")
+	if res.Exit != 0 || res.Summary.Result != "pass" {
+		t.Fatalf("exit %d result %s\n%s", res.Exit, res.Summary.Result, out)
+	}
+	requireSnapshotTree(t, f, staged)
+	if len(*excluded) != 0 {
+		t.Errorf("excluded = %v, want none: the global excludes file ignores .env.local", *excluded)
 	}
 	requirePrivateRefGone(t, f.repo)
 }
