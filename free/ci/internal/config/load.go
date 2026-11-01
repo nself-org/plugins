@@ -149,7 +149,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 		return fail(probs...)
 	}
 	out.Path, out.Lines = name, lines
-	out.Warnings = envPresentWarnings(out.Config, lines)
+	out.Warnings = append(envPresentWarnings(out.Config, lines), coordinatorIgnoredWarning(out.Config)...)
 	return &out, nil
 }
 
@@ -263,4 +263,18 @@ func fieldPointer(doc any, field string) string {
 		}
 	}
 	return ptr
+}
+
+// coordinatorIgnoredWarning emits a warning when the committed config carries
+// a ci.coordinator key. The client ignores it (coordclient/target.go warns too);
+// the coordinator's strict decode used to reject it outright (D-1340). Accepting
+// the key with a warning keeps both sides consistent without widening the schema.
+func coordinatorIgnoredWarning(cfg model.PipelineConfig) []Warning {
+	if cfg.Coordinator == nil {
+		return nil
+	}
+	return []Warning{{
+		Code:    CodeIgnored,
+		Message: "ignoring ci.coordinator in .nself/ci.yaml; the coordinator comes from --coordinator, NSELF_CI_COORDINATOR or your user config",
+	}}
 }

@@ -307,3 +307,22 @@ func TestLongKeyPointersAreBudgeted(t *testing.T) {
 		t.Fatalf("long-pointer document accepted: %v", err)
 	}
 }
+
+// D-1340: a committed ci.coordinator key is accepted with a warning, not rejected.
+func TestCoordinatorKeyIgnoredWithWarning(t *testing.T) {
+	doc := "version: 1\ncoordinator: https://example.com\njobs: {a: {kind: test, run: [x]}}\n"
+	loaded, err := Parse("ci.yaml", []byte(doc))
+	if err != nil {
+		t.Fatalf("coordinator key rejected: %v", err)
+	}
+	var found bool
+	for _, w := range loaded.Warnings {
+		if w.Code == CodeIgnored && strings.Contains(w.Message, "ci.coordinator") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected coordinator ignored warning, got warnings: %+v", loaded.Warnings)
+	}
+}

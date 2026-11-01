@@ -4,7 +4,8 @@ package model
 
 // PipelineConfig is the authored ci.pipeline-config/v1 document.
 type PipelineConfig struct {
-	Version   int                    `json:"version"`
+	Version       int                    `json:"version"`
+	Coordinator any                    `json:"coordinator,omitempty"`
 	Support   []string               `json:"support,omitempty"`
 	Detect    *DetectConfig          `json:"detect,omitempty"`
 	Presets   []Preset               `json:"presets,omitempty"`

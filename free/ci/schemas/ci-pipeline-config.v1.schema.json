@@ -5,6 +5,7 @@
       "type": "integer",
       "const": 1
     },
+    "coordinator": true,
     "support": {
       "type": [
         "null",
