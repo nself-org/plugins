@@ -150,28 +150,6 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 	return v, true, nil
 }
 
-// recordedAfter returns the newest document the store holds for the run that
-// just finished, or ev when it holds none. A hook can append a later document
-// to a run (the record-pool gate stores one carrying E809 beside the run's
-// own); the next `verify` answers from the store, newest first, so this one
-// must answer the same document or a refusal would show on every call but the
-// first. Only the run's own documents count, never another run of the revision.
-func (env Env) recordedAfter(ctx context.Context, rev string, ev model.Evidence) model.Evidence {
-	if env.Store == nil || ev.RunID == "" {
-		return ev
-	}
-	docs, err := ForRevision(ctx, env.Store, rev)
-	if err != nil {
-		return ev
-	}
-	for _, d := range docs { // newest first; same-instant rows are ordered by id (sortStored)
-		if d.Evidence.RunID == ev.RunID {
-			return d.Evidence
-		}
-	}
-	return ev
-}
-
 // held is the evidence on this machine that already answers for rev.
 func (env Env) held(ctx context.Context, rev string, current model.InputDigests) (Verdict, bool) {
 	if env.Store == nil {
