@@ -17,6 +17,10 @@ func TestUnitClassSupplementaryRunes(t *testing.T) {
 	}
 }
 
+// TestUnitClassBMP pins the assumption UTF16Candidate's soundness rests on:
+// unicode.ToLower folds only U+0130 and U+212A to an ASCII byte. If a Go
+// toolchain change adds another such rune this test fails on purpose; the gate
+// builds its class table from ToLower, so review the gate before accepting it.
 func TestUnitClassBMP(t *testing.T) {
 	unitClass.once.Do(initUnitClass)
 	var got []rune

@@ -83,7 +83,10 @@ func appendVisible(dst []byte, offsets *[]int, b []byte, folded bool) []byte {
 	return dst
 }
 
-// visBufs recycles the visible-form buffers of mappedFind.
+// visBufs recycles the visible-form buffers of mappedFind. It holds *visBuf, so
+// returning a buffer does not allocate a slice header.
+type visBuf struct{ b []byte }
+
 var visBufs sync.Pool
 
 // mappedFind is mappedScan for callers that only need the spans (Scan). In the
@@ -94,16 +97,16 @@ func mappedFind(a *automaton, b []byte, folded bool) []span {
 	if a == nil {
 		return nil
 	}
-	var buf []byte
-	if p, ok := visBufs.Get().(*[]byte); ok {
-		buf = (*p)[:0]
+	vb, _ := visBufs.Get().(*visBuf)
+	if vb == nil {
+		vb = new(visBuf)
 	}
-	if cap(buf) < len(b) {
-		buf = make([]byte, 0, len(b)+len(b)/8)
+	if cap(vb.b) < len(b) {
+		vb.b = make([]byte, 0, len(b)+len(b)/8)
 	}
-	v := appendVisible(buf, nil, b, folded)
-	matches, hold := a.findSkip(v, nil)
-	visBufs.Put(&v)
+	vb.b = appendVisible(vb.b[:0], nil, b, folded)
+	matches, hold := a.findSkip(vb.b, nil)
+	visBufs.Put(vb)
 	if len(matches) == 0 && hold == 0 {
 		return nil
 	}
