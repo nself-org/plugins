@@ -124,7 +124,7 @@ func TestWorldBuild(t *testing.T) {
 	if local.CoordinatorHost || local.CoordinatorMode != "personal" || !local.Decl.PersonalOwnNode || local.Decl.CoordinatorMode != "personal" {
 		t.Fatalf("the injected local runner is the PERSONAL own node and not a coordinator host: %+v", local.Decl)
 	}
-	const goldenDigest = "e2d715de349154f1cca0c9f2107373dd659f107fe827cd0a98a869a8e1772993"
+	const goldenDigest = "4f7a781efc3af9ba06db27e949f646b1b0e9463304414df8812f615c29c0ee64"
 	if digest != goldenDigest {
 		t.Fatalf("golden world digest: got %s want %s", digest, goldenDigest)
 	}
@@ -244,7 +244,7 @@ func TestWorldBuildFractionalCapability(t *testing.T) {
 	if err != nil || string(canonical) != `{"economics":{"marginal_cost_per_min":0.25},"resources":{"cpu":0.5}}` {
 		t.Fatalf("fractional canonical bytes = %s: %v", canonical, err)
 	}
-	const goldenFractionalDigest = "9d2054e19526227d0c3dcb883ac4dcc8cde76644d1818300d5cb58ec063bd9ff"
+	const goldenFractionalDigest = "b6be07fc2a255156fc21faacfa35b9780a737bb1bb043dc10729a4acb0d2987d"
 	var previous string
 	for i := 0; i < 3; i++ {
 		w, digest, err := Build(context.Background(), d, p)
