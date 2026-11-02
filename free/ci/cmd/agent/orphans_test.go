@@ -53,13 +53,15 @@ func specFile(t *testing.T, attempt string, run ...string) string {
 	return p
 }
 
-// TestAgentStartKillsTheJobOfAKilledAgent is the same orphan, swept by the start of the next pull agent
-// (sweepOrphanJobs) before any job runs: a node whose retry went elsewhere must not finish the old attempt.
-func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
-	skipUnixOnly(t)
-	useState(t)
+// orphanedJob runs an exec agent (this test binary in child mode) whose job sleeps, SIGKILLs the agent and
+// returns the job's pid, which is still running. The kill waits for the agent to have recorded the job's process
+// group (the marker the sweep reads), not only for the job to have started: the agent writes that record after
+// the job process exists, and an agent killed in between leaves a job nothing can find. Killing on "the job
+// started" alone raced the record and flaked on loaded hosted runners.
+func orphanedJob(t *testing.T, attempt string) int {
+	t.Helper()
 	pidFile := filepath.Join(t.TempDir(), "job.pid")
-	spec := specFile(t, "orphan-2", "sh", "-c", "echo $$ > "+pidFile+"; exec sleep 300")
+	spec := specFile(t, attempt, "sh", "-c", "echo $$ > "+pidFile+"; exec sleep 300")
 	child := exec.Command(os.Args[0], "exec", "--spec", spec, "--evidence", filepath.Join(t.TempDir(), "ev.json"))
 	child.Env = append(os.Environ(), "NSELF_AGENT_TEST_CHILD=1")
 	if err := child.Start(); err != nil {
@@ -73,6 +75,11 @@ func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
 			_ = syscall.Kill(-jobPID, syscall.SIGKILL)
 		}
 	})
+	base, err := workBase()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(base, "exec-home", "processes", attempt+".json")
 	waitFor(t, "the job to start", 10*time.Second, func() bool {
 		raw, err := os.ReadFile(pidFile)
 		if err != nil {
@@ -81,6 +88,10 @@ func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
 		jobPID, _ = strconv.Atoi(strings.TrimSpace(string(raw)))
 		return jobPID > 0
 	})
+	waitFor(t, "the agent to record the job", 10*time.Second, func() bool {
+		raw, err := os.ReadFile(marker)
+		return err == nil && len(raw) > 0
+	})
 	if err := child.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +99,15 @@ func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
 	if !pidAlive(jobPID) {
 		t.Fatal("fixture: the job died with its agent; nothing to sweep")
 	}
+	return jobPID
+}
+
+// TestAgentStartKillsTheJobOfAKilledAgent is the same orphan, swept by the start of the next pull agent
+// (sweepOrphanJobs) before any job runs: a node whose retry went elsewhere must not finish the old attempt.
+func TestAgentStartKillsTheJobOfAKilledAgent(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	jobPID := orphanedJob(t, "orphan-2")
 	sweepOrphanJobs(context.Background(), "local", t.Logf)
 	waitFor(t, "the orphaned job to be killed at agent start", 5*time.Second, func() bool { return !pidAlive(jobPID) })
 }
@@ -113,36 +133,7 @@ func TestAgentStartSweepSurvivesAnUnusableWorkBase(t *testing.T) {
 func TestNextStartKillsTheJobOfAKilledAgent(t *testing.T) {
 	skipUnixOnly(t)
 	useState(t)
-	pidFile := filepath.Join(t.TempDir(), "job.pid")
-	spec := specFile(t, "orphan-1", "sh", "-c", "echo $$ > "+pidFile+"; exec sleep 300")
-	child := exec.Command(os.Args[0], "exec", "--spec", spec, "--evidence", filepath.Join(t.TempDir(), "ev.json"))
-	child.Env = append(os.Environ(), "NSELF_AGENT_TEST_CHILD=1")
-	if err := child.Start(); err != nil {
-		t.Fatal(err)
-	}
-	var jobPID int
-	t.Cleanup(func() {
-		_ = child.Process.Kill()
-		_, _ = child.Process.Wait()
-		if jobPID > 0 {
-			_ = syscall.Kill(-jobPID, syscall.SIGKILL)
-		}
-	})
-	waitFor(t, "the job to start", 10*time.Second, func() bool {
-		raw, err := os.ReadFile(pidFile)
-		if err != nil {
-			return false
-		}
-		jobPID, _ = strconv.Atoi(strings.TrimSpace(string(raw)))
-		return jobPID > 0
-	})
-	if err := child.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	_, _ = child.Process.Wait()
-	if !pidAlive(jobPID) {
-		t.Fatal("fixture: the job died with its agent; nothing to sweep")
-	}
+	jobPID := orphanedJob(t, "orphan-1")
 	code, _, stderr := runCmd(t, "exec", "--spec", specFile(t, "next-1", "true"), "--evidence", filepath.Join(t.TempDir(), "ev2.json"))
 	if code != 0 {
 		t.Fatalf("next run exited %d: %s", code, stderr)
