@@ -27,11 +27,16 @@ func init() {
 func machineStatusDefault(o *RunOptions) error {
 	post := postStatusFlag
 	postStatusFlag = false
-	by := os.Getenv("NSELF_INVOKED_BY")
-	if by == "" || post || o.NoStatus {
-		return nil
+	applyMachineStatus(o, post, os.Getenv("NSELF_INVOKED_BY"))
+	return nil
+}
+
+// applyMachineStatus is the D29 rule itself, shared by every command that starts a run of record (bare `ci`,
+// `runs rerun`): a run invoked by a machine caller posts no status unless post (--post-status) is set.
+func applyMachineStatus(o *RunOptions, post bool, invokedBy string) {
+	if invokedBy == "" || post || o.NoStatus {
+		return
 	}
 	o.NoStatus = true
-	fmt.Fprintf(machineNotice, "nself ci: no commit status posted for a run invoked by %s (pass --post-status to post it)\n", by)
-	return nil
+	fmt.Fprintf(machineNotice, "nself ci: no commit status posted for a run invoked by %s (pass --post-status to post it)\n", invokedBy)
 }

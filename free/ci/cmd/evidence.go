@@ -88,7 +88,7 @@ func openHistory(create bool) (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = cirun.Recover(context.Background(), st, "", os.Getenv("NSELF_CI_HOME"))
+	recoverForHuman(context.Background(), st)
 	return st, nil
 }
 

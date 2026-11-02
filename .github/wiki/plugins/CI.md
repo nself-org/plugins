@@ -20,7 +20,7 @@
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
 | `nself ci` | `nself_ci` | `/v1/commands/ci` | remote | document | MCP and HTTP | nonce |
-| `nself ci artifacts` | `nself_ci_artifacts` | `/v1/commands/ci/artifacts` | read | document | MCP and HTTP | none |
+| `nself ci artifacts` | `nself_ci_artifacts` | `/v1/commands/ci/artifacts` | destructive | document | MCP and HTTP | nonce |
 | `nself ci build` | - | - | remote | document | CLI only (json none) | none |
 | `nself ci config ignore add` | - | - | write | document | CLI only (json none) | none |
 | `nself ci config migrate` | `nself_ci_config_migrate` | `/v1/commands/ci/config/migrate` | write | document | MCP and HTTP | none |
@@ -37,15 +37,15 @@
 | `nself ci nodes drain` | `nself_ci_nodes_drain` | `/v1/commands/ci/nodes/drain` | remote | document | MCP and HTTP | nonce |
 | `nself ci nodes enable` | `nself_ci_nodes_enable` | `/v1/commands/ci/nodes/enable` | remote | document | MCP and HTTP | nonce |
 | `nself ci nodes forget-project` | - | - | destructive | document | CLI only (surface cli-only) | none |
-| `nself ci nodes label` | `nself_ci_nodes_label` | `/v1/commands/ci/nodes/label` | write | document | MCP and HTTP | none |
+| `nself ci nodes label` | `nself_ci_nodes_label` | `/v1/commands/ci/nodes/label` | remote | document | MCP and HTTP | nonce |
 | `nself ci nodes list` | `nself_ci_nodes_list` | `/v1/commands/ci/nodes/list` | read | document | MCP and HTTP | none |
 | `nself ci nodes pair` | - | - | remote | interactive | CLI only (surface cli-only) | none |
 | `nself ci nodes pools explain` | `nself_ci_nodes_pools_explain` | `/v1/commands/ci/nodes/pools/explain` | read | document | MCP and HTTP | none |
 | `nself ci nodes pools list` | `nself_ci_nodes_pools_list` | `/v1/commands/ci/nodes/pools/list` | read | document | MCP and HTTP | none |
 | `nself ci nodes pools show` | `nself_ci_nodes_pools_show` | `/v1/commands/ci/nodes/pools/show` | read | document | MCP and HTTP | none |
-| `nself ci nodes projects add` | `nself_ci_nodes_projects_add` | `/v1/commands/ci/nodes/projects/add` | write | document | MCP and HTTP | none |
+| `nself ci nodes projects add` | `nself_ci_nodes_projects_add` | `/v1/commands/ci/nodes/projects/add` | remote | document | MCP and HTTP | nonce |
 | `nself ci nodes projects list` | `nself_ci_nodes_projects_list` | `/v1/commands/ci/nodes/projects/list` | read | document | MCP and HTTP | none |
-| `nself ci nodes projects remove` | `nself_ci_nodes_projects_remove` | `/v1/commands/ci/nodes/projects/remove` | write | document | MCP and HTTP | none |
+| `nself ci nodes projects remove` | `nself_ci_nodes_projects_remove` | `/v1/commands/ci/nodes/projects/remove` | remote | document | MCP and HTTP | nonce |
 | `nself ci nodes provision` | - | - | remote | document | CLI only (surface cli-only) | none |
 | `nself ci nodes remove` | `nself_ci_nodes_remove` | `/v1/commands/ci/nodes/remove` | destructive | document | MCP and HTTP | nonce |
 | `nself ci nodes revoke` | `nself_ci_nodes_revoke` | `/v1/commands/ci/nodes/revoke` | destructive | document | MCP and HTTP | nonce |
@@ -88,7 +88,7 @@
 | `nself ci runs queue` | `nself_ci_runs_queue` | `/v1/commands/ci/runs/queue` | read | document | MCP and HTTP | none |
 | `nself ci runs reproduce` | `nself_ci_runs_reproduce` | `/v1/commands/ci/runs/reproduce` | remote | document | MCP and HTTP | nonce |
 | `nself ci runs rerun` | `nself_ci_runs_rerun` | `/v1/commands/ci/runs/rerun` | remote | document | MCP and HTTP | nonce |
-| `nself ci runs resolve` | `nself_ci_runs_resolve` | `/v1/commands/ci/runs/resolve` | write | document | MCP and HTTP | none |
+| `nself ci runs resolve` | - | - | destructive | document | CLI only (surface cli-only) | none |
 | `nself ci runs stats` | `nself_ci_runs_stats` | `/v1/commands/ci/runs/stats` | read | document | MCP and HTTP | none |
 | `nself ci runs wait` | `nself_ci_runs_wait` | `/v1/commands/ci/runs/wait` | read | document | MCP and HTTP | none |
 | `nself ci serve` | - | - | write | stream | CLI only (surface cli-only) | none |

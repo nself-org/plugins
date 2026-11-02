@@ -18,8 +18,9 @@ import (
 )
 
 type specFlag struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
+	Name    string `yaml:"name"`
+	Type    string `yaml:"type"`
+	CLIOnly bool   `yaml:"cli_only"`
 }
 
 type specRow struct {
@@ -30,6 +31,10 @@ type specRow struct {
 	Confirm    *struct {
 		Flags []string `yaml:"flags"`
 	} `yaml:"confirm"`
+	Args []struct {
+		Name     string `yaml:"name"`
+		Variadic bool   `yaml:"variadic"`
+	} `yaml:"args"`
 	Flags []specFlag `yaml:"flags"`
 }
 
@@ -51,20 +56,6 @@ func loadSpec(t *testing.T) specFile {
 	}
 	return s
 }
-
-// minClass is the lowest side-effect class a key may declare (NODE D17 and the CI/TRUST Tickets that own each key);
-// a key not listed is at least read.
-var minClass = map[string]string{
-	"run": "remote", "build": "remote",
-	"nodes add": "remote", "nodes pair": "remote", "nodes test": "remote", "nodes set": "remote", "nodes drain": "remote",
-	"nodes enable": "remote", "nodes rotate": "remote", "nodes upgrade": "remote", "nodes provision": "remote",
-	"nodes revoke": "destructive", "nodes remove": "destructive", "serve restore": "destructive",
-	"nodes label": "write", "nodes projects add": "write", "nodes projects remove": "write", "serve": "write",
-	"policy set": "write", "policy unset": "write", "policy pin": "write", "config migrate": "write",
-	"runs cancel": "remote", "runs prune": "destructive",
-}
-
-var classRank = map[string]int{"read": 0, "write": 1, "remote": 2, "destructive": 3}
 
 // tableKeys is every key a machine surface row must exist for.
 func tableKeys() []string {
@@ -109,6 +100,9 @@ func constructorFlags(key string) *flag.FlagSet {
 	if e, ok := v15Subcommands[key]; ok && e.Flags != nil {
 		return e.Flags()
 	}
+	if sub, ok := strings.CutPrefix(key, "runs "); ok && runsSubFlags[sub] != nil {
+		return runsSubFlags[sub]()
+	}
 	return nil
 }
 
@@ -131,7 +125,7 @@ func checkFlags(path string, row specRow, fs *flag.FlagSet, reverse bool) []stri
 	}
 	if reverse {
 		fs.VisitAll(func(f *flag.Flag) {
-			if !declared[f.Name] && f.Name != "help" && f.Name != "h" && f.Name != "sha" {
+			if !declared[f.Name] && len(f.Name) > 1 && f.Name != "help" && f.Name != "sha" { // one-letter names are shorthands (-y)
 				out = append(out, fmt.Sprintf("%s: flag --%s is in the code but not in the spec", path, f.Name))
 			}
 		})
@@ -139,31 +133,83 @@ func checkFlags(path string, row specRow, fs *flag.FlagSet, reverse bool) []stri
 	return out
 }
 
-func TestManifestCommandsCurrent(t *testing.T) {
-	s := loadSpec(t)
+func rankOf(class string) int { return classRank[class] }
+
+// classProblems lists every way a row understates what the code behind it can do (surfaceClasses, SideEffect).
+func classProblems(k string, r specRow) []string {
+	var out []string
+	c, ok := surfaceClasses[k]
+	if !ok {
+		return []string{k + ": no surfaceClasses entry: classify the command in cmd/surface_class.go"}
+	}
+	valid := func(class string) bool { _, ok := classRank[class]; return ok }
+	if !valid(c.Min) {
+		return []string{fmt.Sprintf("%s: surfaceClasses has unknown or empty class %q", k, c.Min)}
+	}
+	for what, class := range c.Subs {
+		if !valid(class) {
+			return []string{fmt.Sprintf("%s: surfaceClasses subcommand %s has unknown or empty class %q", k, what, class)}
+		}
+	}
+	for what, class := range c.Flags {
+		if !valid(class) {
+			return []string{fmt.Sprintf("%s: surfaceClasses flag --%s has unknown or empty class %q", k, what, class)}
+		}
+	}
+	if !valid(r.SideEffect) {
+		return []string{fmt.Sprintf("%s: spec side_effect %q is not read|write|remote|destructive", k, r.SideEffect)}
+	}
+	low := func(why, class string) {
+		out = append(out, fmt.Sprintf("%s: side_effect %s is lower than %s (%s)", k, r.SideEffect, class, why))
+	}
+	if rankOf(r.SideEffect) < rankOf(c.Min) {
+		low("the command", c.Min)
+	}
+	if e, ok := v15Subcommands[k]; ok && e.SideEffect != "" && rankOf(r.SideEffect) < rankOf(string(e.SideEffect)) {
+		low("the table entry", string(e.SideEffect))
+	}
+	for sub, class := range c.Subs {
+		if rankOf(r.SideEffect) < rankOf(class) {
+			low("subcommand "+sub+" is reachable through the positional", class)
+		}
+	}
+	declared := map[string]specFlag{}
+	for _, f := range r.Flags {
+		declared[f.Name] = f
+	}
+	fs := constructorFlags(k)
+	for name, class := range c.Flags {
+		if fs != nil && fs.Lookup(name) == nil {
+			out = append(out, fmt.Sprintf("%s: surfaceClasses names flag --%s that the command does not define", k, name))
+		}
+		if f, ok := declared[name]; ok && !f.CLIOnly && rankOf(r.SideEffect) < rankOf(class) {
+			out = append(out, fmt.Sprintf("%s: flag --%s reaches a %s action but the row is %s and the flag is not cli_only", k, name, class, r.SideEffect))
+		}
+	}
+	return out
+}
+
+// specProblems is every disagreement between the spec and the code, as sorted lines naming the path.
+func specProblems(s specFile) []string {
 	rows := map[string]specRow{}
 	for _, r := range s.Commands {
 		rows[r.Path] = r
 	}
 	var problems []string
 	keys := tableKeys()
+	inTable := map[string]bool{}
 	for _, k := range keys {
+		inTable[k] = true
 		r, ok := rows[k]
 		if !ok {
 			problems = append(problems, k+": table key has no spec row")
 			continue
 		}
-		if want, ok := minClass[k]; ok && classRank[r.SideEffect] < classRank[want] {
-			problems = append(problems, fmt.Sprintf("%s: side_effect %s is lower than the table class %s", k, r.SideEffect, want))
-		}
+		problems = append(problems, classProblems(k, r)...)
 		// v1.4 rows (json none) keep the frozen v1.4 flags, which the V15 constructors need not define.
 		if fs := constructorFlags(k); fs != nil && r.JSON == "envelope" {
 			problems = append(problems, checkFlags(k, r, fs, true)...)
 		}
-	}
-	inTable := map[string]bool{}
-	for _, k := range keys {
-		inTable[k] = true
 	}
 	for p := range rows {
 		if !inTable[p] {
@@ -174,8 +220,14 @@ func TestManifestCommandsCurrent(t *testing.T) {
 	if s.Root.SideEffect != "remote" || s.Root.Confirm == nil || len(s.Root.Confirm.Flags) != 0 {
 		problems = append(problems, "root: bare run must be side_effect remote with confirm {flags: []}")
 	}
-	problems = append(problems, manifestProblems(t, s)...)
+	problems = append(problems, consentProblems(s)...)
 	sort.Strings(problems)
+	return problems
+}
+
+func TestManifestCommandsCurrent(t *testing.T) {
+	s := loadSpec(t)
+	problems := append(specProblems(s), manifestProblems(t, s)...)
 	for _, p := range problems {
 		t.Error(p)
 	}
@@ -229,16 +281,14 @@ func manifestProblems(t *testing.T, s specFile) []string {
 	return out
 }
 
-// TestConsentNoPrompt: every exposed remote or destructive row carries a confirm block, and every consent flag it names
-// is a bool flag its command really defines, so a machine caller never meets a prompt it cannot answer. Rows with
-// `flags: []` take the nonce round trip only and need no flag. (No command is executed here: the fixture-store run
-// of each consent flag waits for the Flags constructors of the runs subcommands.)
-func TestConsentNoPrompt(t *testing.T) {
-	s := loadSpec(t)
+// consentProblems: every exposed remote or destructive row carries a confirm block, and every consent flag it names
+// is a bool flag its command really defines. Rows with `flags: []` take the nonce round trip only and need no flag.
+func consentProblems(s specFile) []string {
+	var out []string
 	for _, r := range s.Commands {
 		risky := r.SideEffect == "remote" || r.SideEffect == "destructive"
 		if risky && r.JSON == "envelope" && r.Surface != "cli-only" && r.Confirm == nil {
-			t.Errorf("%s: %s row is exposed without a confirm block", r.Path, r.SideEffect)
+			out = append(out, fmt.Sprintf("%s: %s row is exposed without a confirm block", r.Path, r.SideEffect))
 		}
 		if r.Confirm == nil {
 			continue
@@ -250,8 +300,9 @@ func TestConsentNoPrompt(t *testing.T) {
 				f = fs.Lookup(name)
 			}
 			if f == nil || flagType(f) != "bool" {
-				t.Errorf("%s: consent flag --%s is not a bool flag of the command", r.Path, name)
+				out = append(out, fmt.Sprintf("%s: consent flag --%s is not a bool flag of the command", r.Path, name))
 			}
 		}
 	}
+	return out
 }

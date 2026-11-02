@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,55 +38,49 @@ type resolveArgs struct {
 	attempt, key, reason string
 	action               job.Action
 	yes, asJSON, force   bool
+	rerun, abandon       bool
+}
+
+// resolveFlagSet declares the flags of `runs resolve` into a (nil: a throwaway). The machine transport renders
+// booleans as --abandon=true, consent as --yes=true and puts -- before the positional, so the standard flag package parses it.
+func resolveFlagSet(a *resolveArgs) *flag.FlagSet {
+	if a == nil {
+		a = &resolveArgs{}
+	}
+	fs := flag.NewFlagSet("runs resolve", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(&a.key, "idempotency-key", "", "key that makes the resolution run at most once")
+	fs.StringVar(&a.reason, "reason", "", "why the attempt is resolved this way")
+	fs.BoolVar(&a.rerun, "rerun", false, "run the release attempt again")
+	fs.BoolVar(&a.abandon, "abandon", false, "abandon the release attempt")
+	fs.BoolVar(&a.yes, "yes", false, "consent without a prompt")
+	fs.BoolVar(&a.yes, "y", false, "consent without a prompt")
+	fs.BoolVar(&a.force, "force", false, "resolve even when the attempt looks live")
+	fs.BoolVar(&a.asJSON, "json", false, "print one v1 JSON envelope")
+	return fs
 }
 
 func parseResolve(args []string) (resolveArgs, error) {
 	var a resolveArgs
-	value := func(i *int, name string) (string, error) {
-		if *i+1 >= len(args) {
-			return "", fmt.Errorf("%s needs a value", name)
-		}
-		*i++
-		return args[*i], nil
-	}
-	for i := 0; i < len(args); i++ {
-		var err error
-		switch arg := args[i]; {
-		case arg == "--idempotency-key":
-			a.key, err = value(&i, arg)
-		case strings.HasPrefix(arg, "--idempotency-key="):
-			a.key = strings.TrimPrefix(arg, "--idempotency-key=")
-		case arg == "--reason":
-			a.reason, err = value(&i, arg)
-		case strings.HasPrefix(arg, "--reason="):
-			a.reason = strings.TrimPrefix(arg, "--reason=")
-		case arg == "--rerun" || arg == "--abandon":
-			if a.action != "" {
-				return a, errors.New("choose one of --rerun and --abandon")
-			}
-			a.action = job.Action(strings.TrimPrefix(arg, "--"))
-		case arg == "--yes" || arg == "-y":
-			a.yes = true
-		case arg == "--force":
-			a.force = true
-		case arg == "--json":
-			a.asJSON = true
-		case strings.HasPrefix(arg, "-") || a.attempt != "":
-			return a, fmt.Errorf("unexpected argument %q", arg)
-		default:
-			a.attempt = arg
-		}
-		if err != nil {
-			return a, err
-		}
-	}
+	pos, err := parseMixed(resolveFlagSet(&a), args)
 	switch {
-	case a.attempt == "":
+	case err != nil:
+		return a, fmt.Errorf("unexpected argument: %v", err)
+	case a.rerun && a.abandon:
+		return a, errors.New("choose one of --rerun and --abandon")
+	case len(pos) > 1:
+		return a, fmt.Errorf("unexpected argument %q", pos[1])
+	case len(pos) == 0:
 		return a, errors.New("an attempt id is required")
 	case a.key == "":
 		return a, errors.New("--idempotency-key is required")
-	case a.action == "":
+	case !a.rerun && !a.abandon:
 		return a, errors.New("choose --rerun or --abandon")
+	}
+	a.attempt = pos[0]
+	a.action = job.Rerun
+	if a.abandon {
+		a.action = job.Abandon
 	}
 	return a, nil
 }
@@ -126,11 +121,11 @@ func runResolve(args []string) int {
 		return exitForError(err)
 	}
 	defer func() { _ = st.Close() }()
-	_ = cirun.Recover(ctx, st, "", os.Getenv("NSELF_CI_HOME")) // a dead coordinator's attempt becomes needs-operator first
-	if !confirm(a, os.Stdin, stdinIsTerminal()) {
+	if !confirm(a, os.Stdin, stdinIsTerminal()) { // recovery kills processes and rewrites run state: never before consent
 		fmt.Fprintln(os.Stderr, "nothing changed")
 		return 1
 	}
+	recoverForHuman(ctx, st) // a dead coordinator's attempt becomes needs-operator first
 	actor := "operator"
 	if u := os.Getenv("USER"); u != "" {
 		actor += ":" + u

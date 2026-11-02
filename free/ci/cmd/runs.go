@@ -96,7 +96,7 @@ func runRuns(args []string) int {
 		return exitForError(err)
 	}
 	defer func() { _ = st.Close() }()
-	_ = cirun.Recover(ctx, st, "", os.Getenv("NSELF_CI_HOME"))
+	recoverForHuman(ctx, st)
 	if ref == "" {
 		return listRuns(ctx, st, asJSON)
 	}

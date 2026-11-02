@@ -28,6 +28,10 @@ func TestMain(m *testing.M) {
 		fakeDetachedChild(mode)
 		return
 	}
+	if os.Getenv("NSELF_CI_AS_BINARY") == "1" { // surface_consent_test.go runs real commands as processes
+		main()
+		return
+	}
 	os.Exit(m.Run())
 }
 

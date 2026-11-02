@@ -13,7 +13,7 @@ For the flags of one command, run `nself ci <command> --help`.
 | Command | Surface | Side effect | Summary |
 |---|---|---|---|
 | `nself ci` | v1.4, v1.5 | remote | Run the nself-ci gate suite and post a GitHub commit status |
-| `nself ci artifacts` | v1.5 | read | List, show, fetch and prune stored run artifacts |
+| `nself ci artifacts` | v1.5 | destructive | List, show, fetch, sign and prune stored run artifacts |
 | `nself ci artifacts get` | v1.5 | - | - |
 | `nself ci artifacts key` | v1.5 | - | - |
 | `nself ci artifacts list` | v1.5 | - | - |
@@ -40,15 +40,15 @@ For the flags of one command, run `nself ci <command> --help`.
 | `nself ci nodes drain` | v1.5 | remote | Stop placing new jobs on a node |
 | `nself ci nodes enable` | v1.5 | remote | Place jobs on a node again |
 | `nself ci nodes forget-project` | v1.5 | destructive | Forget a project's node records on this host (local, audited) |
-| `nself ci nodes label` | v1.5 | write | Set or remove node labels (key=value) |
+| `nself ci nodes label` | v1.5 | remote | Set or remove node labels (key=value) |
 | `nself ci nodes list` | v1.5 | read | List nodes |
 | `nself ci nodes pair` | v1.5 | remote | Pair an agent node (foreground enrollment listener) |
 | `nself ci nodes pools explain` | v1.5 | read | Explain a project's effective pool set and every excluded runner |
 | `nself ci nodes pools list` | v1.5 | read | List runner pools and whether the project may use them |
 | `nself ci nodes pools show` | v1.5 | read | Show one runner pool |
-| `nself ci nodes projects add` | v1.5 | write | Authorize projects on a node |
+| `nself ci nodes projects add` | v1.5 | remote | Authorize projects on a node |
 | `nself ci nodes projects list` | v1.5 | read | List the projects a node is authorized for |
-| `nself ci nodes projects remove` | v1.5 | write | Remove project authorizations from a node |
+| `nself ci nodes projects remove` | v1.5 | remote | Remove project authorizations from a node |
 | `nself ci nodes provision` | v1.4 | remote | Install runner dependencies, user, sudoers, and N runner instances |
 | `nself ci nodes remove` | v1.5 | destructive | Remove a node and its registration |
 | `nself ci nodes revoke` | v1.5 | destructive | Revoke a node credential |
@@ -91,7 +91,7 @@ For the flags of one command, run `nself ci <command> --help`.
 | `nself ci runs queue` | v1.5 | read | Show the run queue |
 | `nself ci runs reproduce` | v1.5 | remote | Reproduce a job at its recorded inputs |
 | `nself ci runs rerun` | v1.5 | remote | Run a recorded revision again on a chosen target |
-| `nself ci runs resolve` | v1.5 | write | Resolve a pending run decision |
+| `nself ci runs resolve` | v1.5 | destructive | Resolve a pending run decision |
 | `nself ci runs stats` | v1.5 | read | Show run statistics |
 | `nself ci runs wait` | v1.5 | read | Wait for a run to finish and print its result |
 | `nself ci serve` | v1.4, v1.5 | write | Start the nself-ci webhook listener daemon (port 3845) |
@@ -113,6 +113,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 
 | Flag | Commands |
 |---|---|
+| `--abandon` | `runs resolve` |
 | `--accepts` | `nodes *` |
 | `--addr` | `serve` |
 | `--agent-addr` | `serve *` |
@@ -167,7 +168,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--file` | `evidence *` |
 | `--filesystem` | - |
 | `--flaky` | `runs *` |
-| `--force` | `serve` |
+| `--force` | `runs resolve`, `serve` |
 | `--from` | `nodes sync` |
 | `--from-seq` | `runs follow` |
 | `--gateway` | `run` |
@@ -176,6 +177,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--home` | `config *` |
 | `--hook` | `policy protect` |
 | `--host-key` | `nodes *` |
+| `--idempotency-key` | `runs resolve` |
 | `--image` | - |
 | `--in` | `serve *` |
 | `--init` | `artifacts signer` |
@@ -216,7 +218,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--persistence` | `nodes *` |
 | `--pipeline` | `evidence *`, `explain`, `plan` |
 | `--policy` | `evidence *` |
-| `--post-status` | - |
+| `--post-status` | `runs rerun` |
 | `--prefer` | - |
 | `--privacy-zone` | `nodes *` |
 | `--probe` | `netproxy` |
@@ -226,12 +228,13 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--pubkey` | `serve admin audit checkpoint` |
 | `--public` | `artifacts signer` |
 | `--public-url` | `nodes pair`, `serve *` |
-| `--reason` | `config ignore add` |
+| `--reason` | `config ignore add`, `runs resolve` |
 | `--release` | `artifacts *` |
 | `--release-routes` | `serve *` |
 | `--remove` | `nodes label` |
 | `--repo` | `artifacts verify`, `build`, `config *`, `doctor`, `evidence *`, `explain`, `plan`, `policy *`, `providers *`, `runs *`, `serve *` |
 | `--repos` | `serve watch` |
+| `--rerun` | `runs resolve` |
 | `--reserve-cpu` | `nodes *` |
 | `--reserve-mem` | `nodes *` |
 | `--restore` | `policy protect` |
@@ -272,7 +275,8 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--where` | - |
 | `--workdir` | `serve` |
 | `--write` | `config *` |
-| `--yes` | `artifacts key` |
+| `--y` | `runs resolve` |
+| `--yes` | `artifacts key`, `runs resolve` |
 <!-- END GENERATED:commands -->
 
 <!-- BEGIN GENERATED:exit-codes -->
