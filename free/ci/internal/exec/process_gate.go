@@ -12,6 +12,9 @@ package exec
 
 import (
 	"os"
+	osexec "os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -25,10 +28,10 @@ type startGate struct {
 }
 
 // newStartGate returns nil on a host that cannot gate (the job then starts ungated).
-func newStartGate(s JobSpec) (*startGate, []string, error) {
-	argv, ok := gatedCommand(s)
-	if !ok {
-		return nil, argv, nil
+func newStartGate(s JobSpec, workdir string, env []string) (*startGate, []string, error) {
+	argv, ok, err := gatedCommand(s, workdir, env)
+	if err != nil || !ok {
+		return nil, argv, err
 	}
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -67,4 +70,50 @@ func (g *startGate) abandon() {
 	}
 	g.once.Do(func() { _ = g.w.Close() })
 	_ = g.r.Close() // a no-op after the child started (runCommandFiles closed it); frees it when Start never ran
+}
+
+// resolveGatedPath finds the payload before the job starts, so a missing or non-executable binary is a start
+// error (as cmd.Start reports it) and not a failure inside the shell. A bare name is looked up on the job's
+// PATH, then the agent's; a name with a slash is checked as given (relative to the job directory).
+func resolveGatedPath(name, dir string, env []string) (string, error) {
+	if strings.ContainsRune(name, '/') {
+		p := name
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(dir, p)
+		}
+		return name, executableFile(p)
+	}
+	var paths []string
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, "PATH="); ok {
+			paths = append(paths, filepath.SplitList(v)...)
+		}
+	}
+	if v, ok := os.LookupEnv("PATH"); ok {
+		paths = append(paths, filepath.SplitList(v)...)
+	}
+	for _, d := range paths {
+		if d == "" {
+			d = "."
+		}
+		if !filepath.IsAbs(d) {
+			d = filepath.Join(dir, d)
+		}
+		p := filepath.Join(d, name)
+		if executableFile(p) == nil {
+			return p, nil
+		}
+	}
+	return "", &osexec.Error{Name: name, Err: osexec.ErrNotFound}
+}
+
+func executableFile(p string) error {
+	st, err := os.Stat(p)
+	if err != nil {
+		return err
+	}
+	if st.IsDir() || st.Mode()&0o111 == 0 {
+		return &os.PathError{Op: "exec", Path: p, Err: os.ErrPermission}
+	}
+	return nil
 }

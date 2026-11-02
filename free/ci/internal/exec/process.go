@@ -35,9 +35,14 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
 	s.Command, env = foldEnvPrefix(s.Command, env) // an env wrapper is applied here, not by another exec
+	if !e.GatedStart {
+		return e.runCommandSig(ctx, s.Stdin, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
+			return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)
+		}, s.AttemptID)
+	}
 	// The job starts gated: its shell waits on fd 3 until the marker below is written, so no payload
 	// runs unmarked (D-1531).
-	gate, argv, err := newStartGate(s)
+	gate, argv, err := newStartGate(s, workdir, env)
 	if err != nil {
 		return -1, "", err
 	}

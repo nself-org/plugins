@@ -232,7 +232,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	// The transport expects a cancelled result within five seconds. Leave time
 	// for evidence and cleanup after escalating SIGTERM to SIGKILL.
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: iso, Grace: time.Second}
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: iso, Grace: time.Second, GatedStart: true}
 	if len(in.Secrets) > 0 {
 		ex.Secrets = mapSecrets(in.Secrets)
 	}

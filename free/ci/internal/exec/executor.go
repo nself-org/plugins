@@ -47,9 +47,13 @@ type Executor struct {
 	// the value in an error.
 	RegisterSecret func(value []byte) error
 	// Isolation is required. A missing policy refuses execution before hooks or secrets.
-	Isolation    Isolator
-	Stale        StaleChecker
-	Grace        time.Duration
+	Isolation Isolator
+	Stale     StaleChecker
+	Grace     time.Duration
+	// GatedStart starts each process job behind the start gate (process_gate.go): its payload runs only once
+	// its process marker is on disk (D-1531). Only the pull agent sets it, because only it sweeps those markers;
+	// every other caller keeps the plain start, with the exact environment and start errors it always had.
+	GatedStart   bool
 	redactorOnce sync.Once
 	redactorSlot chan struct{}
 }
@@ -70,7 +74,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			return AttemptResult{Attempt: model.Attempt{ID: s.AttemptID, State: "cancelled", FailureClass: "cancelled"}, Err: err}
 		}
 	}
-	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, RegisterSecret: e.RegisterSecret, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
+	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, RegisterSecret: e.RegisterSecret, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace, GatedStart: e.GatedStart}
 	e = &local
 	if e.NewRedactor != nil {
 		e.Redactor = e.NewRedactor()
