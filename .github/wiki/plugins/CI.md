@@ -88,7 +88,7 @@
 | `nself ci runs queue` | `nself_ci_runs_queue` | `/v1/commands/ci/runs/queue` | read | document | MCP and HTTP | none |
 | `nself ci runs reproduce` | `nself_ci_runs_reproduce` | `/v1/commands/ci/runs/reproduce` | remote | document | MCP and HTTP | nonce |
 | `nself ci runs rerun` | `nself_ci_runs_rerun` | `/v1/commands/ci/runs/rerun` | remote | document | MCP and HTTP | nonce |
-| `nself ci runs resolve` | `nself_ci_runs_resolve` | `/v1/commands/ci/runs/resolve` | destructive | document | MCP and HTTP | nonce |
+| `nself ci runs resolve` | - | - | destructive | document | CLI only (surface cli-only) | none |
 | `nself ci runs stats` | `nself_ci_runs_stats` | `/v1/commands/ci/runs/stats` | read | document | MCP and HTTP | none |
 | `nself ci runs wait` | `nself_ci_runs_wait` | `/v1/commands/ci/runs/wait` | read | document | MCP and HTTP | none |
 | `nself ci serve` | - | - | write | stream | CLI only (surface cli-only) | none |

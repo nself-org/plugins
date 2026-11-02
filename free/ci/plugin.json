@@ -2139,7 +2139,8 @@
         "name": "runs resolve",
         "output": "document",
         "side_effect": "destructive",
-        "summary": "Resolve a pending run decision"
+        "summary": "Resolve a pending run decision",
+        "surface": "cli-only"
       },
       {
         "json": "envelope",

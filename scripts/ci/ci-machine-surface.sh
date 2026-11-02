@@ -205,6 +205,9 @@ case "$code" in 4??) ;; *) echo "HTTP accepted nodes sync --cmd (status $code)" 
 [ ! -e "$marker" ] || { echo "a caller-supplied program ran through the machine surface" >&2; fail=1; }
 mcp session '[{"tool":"nself_ci_artifacts","arguments":{"args":["prune"]}}]' >"$out/artifacts.session"
 [ "$(kind "$out/artifacts.session" 0)" = "request" ] || { echo "artifacts prune acted without a confirmation" >&2; fail=1; }
+# runs resolve spends a one-shot release attempt and its --idempotency-key is a secret to the cli (E421 for mounted plugins), so
+# it has no tool; the handler's acceptance of the cli's rendering (--abandon=true, --yes=true, "--") is a Go test.
+! grep -qx nself_ci_runs_resolve "$out/tools.txt" || { echo "runs resolve is exposed as a tool" >&2; fail=1; }
 mcp session '[{"tool":"nself_ci_runs","arguments":{"args":["prune"]}}]' >"$out/runs-prune.session"
 [ "$(is_error "$out/runs-prune.session" 0)" = "true" ] || [ "$(kind "$out/runs-prune.session" 0)" = "request" ] || { echo "runs prune acted through the read row nself_ci_runs" >&2; fail=1; }
 

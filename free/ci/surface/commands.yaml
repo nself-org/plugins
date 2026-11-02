@@ -758,6 +758,7 @@ commands:
     side_effect: destructive
     output: document
     json: envelope
+    surface: cli-only # the cli treats --idempotency-key as a secret (name rule) and refuses machine-invoked secrets for mounted plugins (E421)
     confirm: {flags: ["yes"]}
     args: [{name: run}]
     flags:

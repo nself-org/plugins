@@ -111,6 +111,34 @@ func TestUnclassifiedKeyFails(t *testing.T) {
 	t.Fatal("an unclassified key passed")
 }
 
+// TestInvalidClassFails: an unknown or empty class never satisfies a requirement (it used to rank as read).
+func TestInvalidClassFails(t *testing.T) {
+	bad := map[string]surfaceClass{
+		"runs rerun": cls("remtoe"), "plan": {}, "doctor": {Min: "read", Flags: map[string]string{"alert": "remtoe"}},
+		"artifacts": {Min: "read", Subs: map[string]string{"prune": ""}},
+	}
+	for key, c := range bad {
+		saved := surfaceClasses[key]
+		surfaceClasses[key] = c
+		found := false
+		for _, p := range specProblems(loadSpec(t)) {
+			found = found || strings.HasPrefix(p, key+": surfaceClasses ") && strings.Contains(p, "unknown or empty class")
+		}
+		surfaceClasses[key] = saved
+		if !found {
+			t.Errorf("%s: an invalid class %+v passed", key, c)
+		}
+	}
+	s := cloneSpec(t, loadSpec(t))
+	rowOf(&s, "plan").SideEffect = "readd"
+	for _, p := range specProblems(s) {
+		if strings.HasPrefix(p, "plan: spec side_effect") {
+			return
+		}
+	}
+	t.Error("a misspelled spec side_effect passed")
+}
+
 // TestSurfaceSubsMatchRegistries: the positional subcommands a dispatcher row reaches are exactly the registered ones,
 // so a new `artifacts <sub>` cannot ship unclassified.
 func TestSurfaceSubsMatchRegistries(t *testing.T) {
@@ -130,7 +158,7 @@ func TestSurfaceSubsMatchRegistries(t *testing.T) {
 
 // TestRunsResolveDeclarationMatchesParser: every flag resolveFlagSet declares is accepted by the hand parser.
 func TestRunsResolveDeclarationMatchesParser(t *testing.T) {
-	resolveFlagSet().VisitAll(func(f *flag.Flag) {
+	resolveFlagSet(nil).VisitAll(func(f *flag.Flag) {
 		args := []string{"att", "--idempotency-key", "k"}
 		switch f.Name {
 		case "idempotency-key", "rerun":

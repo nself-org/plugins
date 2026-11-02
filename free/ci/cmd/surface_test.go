@@ -125,7 +125,7 @@ func checkFlags(path string, row specRow, fs *flag.FlagSet, reverse bool) []stri
 	}
 	if reverse {
 		fs.VisitAll(func(f *flag.Flag) {
-			if !declared[f.Name] && f.Name != "help" && f.Name != "h" && f.Name != "sha" {
+			if !declared[f.Name] && len(f.Name) > 1 && f.Name != "help" && f.Name != "sha" { // one-letter names are shorthands (-y)
 				out = append(out, fmt.Sprintf("%s: flag --%s is in the code but not in the spec", path, f.Name))
 			}
 		})
@@ -141,6 +141,23 @@ func classProblems(k string, r specRow) []string {
 	c, ok := surfaceClasses[k]
 	if !ok {
 		return []string{k + ": no surfaceClasses entry: classify the command in cmd/surface_class.go"}
+	}
+	valid := func(class string) bool { _, ok := classRank[class]; return ok }
+	if !valid(c.Min) {
+		return []string{fmt.Sprintf("%s: surfaceClasses has unknown or empty class %q", k, c.Min)}
+	}
+	for what, class := range c.Subs {
+		if !valid(class) {
+			return []string{fmt.Sprintf("%s: surfaceClasses subcommand %s has unknown or empty class %q", k, what, class)}
+		}
+	}
+	for what, class := range c.Flags {
+		if !valid(class) {
+			return []string{fmt.Sprintf("%s: surfaceClasses flag --%s has unknown or empty class %q", k, what, class)}
+		}
+	}
+	if !valid(r.SideEffect) {
+		return []string{fmt.Sprintf("%s: spec side_effect %q is not read|write|remote|destructive", k, r.SideEffect)}
 	}
 	low := func(why, class string) {
 		out = append(out, fmt.Sprintf("%s: side_effect %s is lower than %s (%s)", k, r.SideEffect, class, why))

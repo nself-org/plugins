@@ -96,7 +96,7 @@ func (s *runSource) View(ctx context.Context) (detach.View, error) {
 	}
 	if time.Since(s.last) >= recoverEvery {
 		s.last = time.Now()
-		_ = cirun.Recover(ctx, s.st, "", os.Getenv("NSELF_CI_HOME"))
+		recoverForHuman(ctx, s.st)
 	}
 	if !s.found {
 		row, err := cirun.ResolveRun(ctx, s.st, s.ref)

@@ -60,6 +60,6 @@ var surfaceClasses = map[string]surfaceClass{
 // runsSubFlags are the Flags constructors of `runs <sub>` handlers that parse their own argv, so the flag check
 // reaches them; a `runs` row whose handler has no constructor here is not flag-checked.
 var runsSubFlags = map[string]func() *flag.FlagSet{
-	"resolve": resolveFlagSet,
+	"resolve": func() *flag.FlagSet { return resolveFlagSet(nil) },
 	"rerun":   func() *flag.FlagSet { return newRerunFlagSet(&rerunFlags{}) },
 }

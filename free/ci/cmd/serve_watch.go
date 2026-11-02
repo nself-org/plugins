@@ -98,10 +98,11 @@ func buildWatcher(ctx context.Context, f serveWatchFlags) (w *watch.Watcher, clo
 	if err != nil {
 		return nil, nil, err
 	}
-	closeFn = func() { _ = st.Close() }
+	closeStore := func() { _ = st.Close() }
+	closeFn = closeStore
 	defer func() {
 		if err != nil {
-			closeFn()
+			closeStore() // closeFn is nil by now: a "return nil, nil, err" overwrote the named result
 		}
 	}()
 	res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}
