@@ -80,6 +80,8 @@ nself ci runs stats --since 168h --project <owner/repo> --json
 
 The fields are described in [CI health](./Scheduling-and-Cost.md#ci-health).
 
+For enrolling the fleet, see [Nodes and Runners](./Nodes-and-Runners.md#lan). For the rules on sharing runners, see [Trust, Security and Privacy](./Trust-Security-and-Privacy.md#workspace-hygiene-and-job-uid-separation). For provider capacity alongside this fleet, see [Hosted Providers](./Hosted-Providers.md#hosted-capacity).
+
 ## Proven by
 
 | Step | Test |
