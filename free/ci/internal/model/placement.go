@@ -53,6 +53,7 @@ type Placement struct {
 	Provider   string               `json:"provider"`
 	Location   string               `json:"location"`
 	CostClass  string               `json:"cost_class"`
+	Tier       string               `json:"tier,omitempty"` // auto tier (hosted, vps, lan, local); left out unless the preset is auto
 	Score      int64                `json:"score"`
 	Components map[string]Component `json:"components"`
 	Estimate   Estimate             `json:"estimate"`

@@ -117,6 +117,7 @@ func decoratePlacement(s *jsonschema.Schema) {
 	if pl := job.Properties["placement"]; pl != nil {
 		pl.Properties["location"].Enum = []any{"local", "lan", "remote", "hosted"}
 		pl.Properties["cost_class"].Enum = []any{"local", "owned", "included", "metered", "ephemeral"}
+		pl.Properties["tier"].Enum = []any{sched.TierHosted, sched.TierVPS, sched.TierLAN, sched.TierLocal}
 		component(pl.Properties["components"])
 		pl.Properties["components"].Type, pl.Properties["components"].Types = "object", nil
 		est := pl.Properties["estimate"]

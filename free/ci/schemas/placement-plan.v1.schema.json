@@ -250,6 +250,15 @@
                   "ephemeral"
                 ]
               },
+              "tier": {
+                "type": "string",
+                "enum": [
+                  "hosted",
+                  "vps",
+                  "lan",
+                  "local"
+                ]
+              },
               "score": {
                 "type": "integer"
               },
