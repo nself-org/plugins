@@ -232,20 +232,24 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 		return err
 	}
 	n, err := io.Copy(f, io.LimitReader(r, h.Size))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
 	if err == nil && n != h.Size {
 		err = io.ErrUnexpectedEOF
+	}
+	if err == nil {
+		err = settleOpen(f, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
 	}
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	return settleFile(root, name, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+	return nil
 }
 
-// settleFile gives a written file its mode (readable by the owner at least) and time.
-func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+// filePerm is the mode a restored file gets: readable by the owner at least,
+// and by everyone when a job under another UID reads the tree.
+func filePerm(mode os.FileMode, opt UnpackOptions) os.FileMode {
 	perm := mode | 0o400
 	if opt.OtherRead {
 		perm |= 0o444
@@ -253,9 +257,17 @@ func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt 
 			perm |= 0o111
 		}
 	}
-	if err := root.Chmod(name, perm); err != nil {
+	return perm
+}
+
+// settleOpen gives the file it just wrote its mode and time through the open
+// descriptor: the descriptor already names the file the unpack created (O_EXCL,
+// inside the pinned root), so no path is walked again. Where the platform has no
+// descriptor-based time call, the time is skipped like a failed Chtimes was.
+func settleOpen(f *os.File, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+	if err := f.Chmod(filePerm(mode, opt)); err != nil {
 		return err
 	}
-	_ = root.Chtimes(name, at, at)
+	_ = setTimes(f, at)
 	return nil
 }

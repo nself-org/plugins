@@ -35,7 +35,8 @@ const (
 var afterFileStart func()
 
 type writeJob struct {
-	name string
+	dir  *dirHandle // the file's parent directory, pinned once for all the files below it
+	name string     // the file's name inside dir
 	buf  []byte
 	mode os.FileMode
 	at   time.Time
@@ -51,6 +52,47 @@ type fileWriter struct {
 	mu   sync.Mutex
 	err  error
 	made map[string]bool // directories the reading goroutine already created
+	cur  *dirHandle      // the directory the reading goroutine is filling
+	curN string          // its name below root
+}
+
+// dirHandle is a sub-root for one directory, closed once it is retired and the
+// last write queued under it has finished. Opening the directory once turns the
+// path walk of every file below it (one openat per component, from the top)
+// into a single openat; the handle is a pinned os.Root like the tree's own, so
+// nothing leaves the directory it names.
+type dirHandle struct {
+	root    *os.Root
+	mu      sync.Mutex
+	refs    int
+	retired bool
+}
+
+func (d *dirHandle) acquire() {
+	d.mu.Lock()
+	d.refs++
+	d.mu.Unlock()
+}
+
+func (d *dirHandle) release() {
+	d.mu.Lock()
+	d.refs--
+	closeNow := d.retired && d.refs == 0
+	d.mu.Unlock()
+	if closeNow {
+		_ = d.root.Close()
+	}
+}
+
+// retire closes the handle as soon as no queued write uses it.
+func (d *dirHandle) retire() {
+	d.mu.Lock()
+	d.retired = true
+	closeNow := d.refs == 0
+	d.mu.Unlock()
+	if closeNow {
+		_ = d.root.Close()
+	}
 }
 
 // newFileWriter starts the writers; nil means write in place (a single CPU).
@@ -74,10 +116,11 @@ func (w *fileWriter) loop() {
 	defer w.wg.Done()
 	for j := range w.jobs {
 		if w.failed() == nil {
-			if err := writeSmall(w.root, j.name, j.buf, j.mode, j.at, w.opt); err != nil {
+			if err := writeSmall(j.dir.root, j.name, j.buf, j.mode, j.at, w.opt); err != nil {
 				w.fail(err)
 			}
 		}
+		j.dir.release()
 		w.free <- j.buf
 	}
 }
@@ -101,11 +144,17 @@ func (w *fileWriter) submit(name string, r io.Reader, h *tar.Header) error {
 	if err := w.failed(); err != nil {
 		return err
 	}
-	if dir := path.Dir(name); dir != "." && !w.made[dir] {
+	dir, base := path.Dir(name), path.Base(name)
+	if dir != "." && !w.made[dir] {
 		if err := w.root.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 		w.made[dir] = true
+	}
+	if w.cur == nil || w.curN != dir {
+		if err := w.enter(dir); err != nil {
+			return err
+		}
 	}
 	buf := <-w.free
 	if int64(cap(buf)) < h.Size {
@@ -119,12 +168,38 @@ func (w *fileWriter) submit(name string, r io.Reader, h *tar.Header) error {
 		}
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	w.jobs <- writeJob{name: name, buf: buf, mode: os.FileMode(h.Mode & 0o777), at: h.ModTime}
+	w.cur.acquire()
+	w.jobs <- writeJob{dir: w.cur, name: base, buf: buf, mode: os.FileMode(h.Mode & 0o777), at: h.ModTime}
 	return nil
 }
 
 // close waits for every queued file and reports the first write error. It may
 // be called again, and on a nil writer (a restore that writes in place).
+// enter makes dir the current directory; the previous one closes when idle.
+// The archive lists a directory's files together, so this opens each directory
+// about once; a crafted order only costs more opens.
+func (w *fileWriter) enter(dir string) error {
+	h := &dirHandle{root: w.root}
+	if dir != "." {
+		sub, err := w.root.OpenRoot(dir)
+		if err != nil {
+			return err
+		}
+		h.root = sub
+	}
+	if w.cur != nil {
+		w.retireCur()
+	}
+	w.cur, w.curN = h, dir
+	return nil
+}
+
+func (w *fileWriter) retireCur() {
+	if w.cur.root != w.root { // the tree's own root is the caller's to close
+		w.cur.retire()
+	}
+}
+
 func (w *fileWriter) close() error {
 	if w == nil {
 		return nil
@@ -132,6 +207,9 @@ func (w *fileWriter) close() error {
 	w.once.Do(func() {
 		close(w.jobs)
 		w.wg.Wait()
+		if w.cur != nil {
+			w.retireCur()
+		}
 	})
 	return w.failed()
 }
@@ -146,11 +224,14 @@ func writeSmall(root *os.Root, name string, data []byte, mode os.FileMode, at ti
 		return err
 	}
 	_, err = f.Write(data)
+	if err == nil {
+		err = settleOpen(f, mode, at, opt)
+	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	return settleFile(root, name, mode, at, opt)
+	return nil
 }
