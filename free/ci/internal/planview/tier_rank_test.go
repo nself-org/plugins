@@ -40,3 +40,40 @@ func TestTierRankComponentIsValidV1(t *testing.T) {
 		t.Fatal("tier_rank must not appear without a bias")
 	}
 }
+
+// TestPlacementTierUnderAuto: a placed job names its auto tier, the document stays
+// valid v1, and every other preset leaves the field out.
+func TestPlacementTierUnderAuto(t *testing.T) {
+	schema, err := os.ReadFile("../../schemas/placement-plan.v1.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, jobs, _ := fixture(t)
+	w.Policy.Preset = sched.AutoPreset
+	doc := Build(Input{Name: "default", Revision: strings.Repeat("a", 40), Trigger: "local", PolicyDigest: "p" + strings.Repeat("0", 63), WorldDigest: "w" + strings.Repeat("0", 63), World: w, Jobs: jobs, Result: sched.Place(w, jobs)})
+	placed := 0
+	for _, j := range doc.Jobs {
+		if j.Placement == nil {
+			continue
+		}
+		placed++
+		if want := sched.TierFor(j.Placement.Location, j.Placement.CostClass); j.Placement.Tier != want || want == "" {
+			t.Fatalf("job %s: tier %q, want %q", j.Name, j.Placement.Tier, want)
+		}
+	}
+	if placed == 0 {
+		t.Fatal("the fixture must place at least one job")
+	}
+	raw, _ := json.Marshal(doc)
+	if !strings.Contains(string(raw), `"tier":"`) {
+		t.Fatalf("an auto plan must carry the tier: %s", raw)
+	}
+	if err = model.ValidateJSON(schema, raw); err != nil {
+		t.Fatalf("a document with tier must stay valid v1: %v", err)
+	}
+	w.Policy.Preset = "balanced"
+	plain, _ := json.Marshal(Build(Input{Name: "default", Revision: strings.Repeat("a", 40), Trigger: "local", PolicyDigest: "p" + strings.Repeat("0", 63), WorldDigest: "w" + strings.Repeat("0", 63), World: w, Jobs: jobs, Result: sched.Place(w, jobs)}))
+	if strings.Contains(string(plain), `"tier":`) {
+		t.Fatal("tier must not appear outside the auto preset")
+	}
+}

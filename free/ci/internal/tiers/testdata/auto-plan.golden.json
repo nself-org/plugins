@@ -413,6 +413,7 @@
         "provider": "operator",
         "location": "lan",
         "cost_class": "owned",
+        "tier": "lan",
         "score": 157500,
         "components": {
           "cache": {

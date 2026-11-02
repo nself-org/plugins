@@ -23,6 +23,9 @@ var costRank = map[string]int{"known": 0, "computed": 1, "estimated": 2, "unknow
 
 func placement(w sched.World, r sched.Runner, p sched.Placement, x sched.Explanation) (model.Placement, costFact) {
 	out := model.Placement{RunnerID: p.RunnerID, Provider: r.Provider, Location: r.Location, CostClass: r.Class}
+	if w.Policy.Preset == sched.AutoPreset {
+		out.Tier = sched.TierFor(r.Location, r.Class)
+	}
 	for _, a := range x.Alternatives {
 		if a.RunnerID == p.RunnerID {
 			if a.Score != nil {
