@@ -14,10 +14,41 @@ package legacy
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestLoadPackageJSONExactScriptNames(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		content string
+		want    map[string]interface{}
+	}{
+		{"e2e only", `{"scripts":{"test:e2e":"playwright test"}}`, map[string]interface{}{"test:e2e": "playwright test"}},
+		{"test and e2e", `{"scripts":{"test":"vitest","test:e2e":"playwright test"}}`, map[string]interface{}{"test": "vitest", "test:e2e": "playwright test"}},
+		{"lint fix only", `{"scripts":{"lint:fix":"eslint --fix"}}`, map[string]interface{}{"lint:fix": "eslint --fix"}},
+		{"typecheck watch only", `{"scripts":{"typecheck:watch":"tsc --watch"}}`, map[string]interface{}{"typecheck:watch": "tsc --watch"}},
+		{"build production only", `{"scripts":{"build:prod":"vite build"}}`, map[string]interface{}{"build:prod": "vite build"}},
+		{"multiline and escaped value", "{\n\"scripts\": {\n\"test:e2e\": \"echo \\\"{ok}\\\"\",\n\"test\": \"vitest\",\n\"lint\": \"eslint\",\n\"typecheck\": \"tsc\",\n\"build\": \"vite build\"\n}}", map[string]interface{}{"test:e2e": `echo "{ok}"`, "test": "vitest", "lint": "eslint", "typecheck": "tsc", "build": "vite build"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writePackageJSON(t, root, tt.content)
+			got := loadPackageJSON(root)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("scripts = %#v, want %#v", got, tt.want)
+			}
+			for _, script := range []string{"test", "test:e2e", "lint", "lint:fix", "typecheck", "typecheck:watch", "build", "build:prod"} {
+				_, want := tt.want[script]
+				if hasScript(got, script) != want || anyMemberHasScript([]string{root}, script) != want {
+					t.Errorf("script %q: root and workspace presence must both be %v", script, want)
+				}
+			}
+		})
+	}
+}
 
 func writePackageJSON(t *testing.T, dir, content string) {
 	t.Helper()
