@@ -31,3 +31,7 @@ func nativeStartID(pid int) (string, bool) {
 	tv := p.Proc.P_starttime
 	return "st:" + strconv.FormatInt(int64(tv.Sec), 10) + "." + strconv.FormatInt(int64(tv.Usec), 10), true
 }
+
+// scopedTable is processTable on macOS: one sysctl already costs no more than
+// walking the tree, so the roots are not needed.
+func scopedTable([]int) (map[int]int, error) { return processTable() }
