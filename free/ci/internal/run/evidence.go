@@ -84,7 +84,7 @@ func runResult(checks []model.Check) model.Result {
 // BuildEvidence assembles the ci.evidence/v1 document of a run.
 func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
-	attempts, runner := placedRunners(in.Jobs)
+	attempts, runner := placedRunners(in.RunID)
 	if len(in.Attempts) == 0 {
 		in.Attempts = attempts
 	}

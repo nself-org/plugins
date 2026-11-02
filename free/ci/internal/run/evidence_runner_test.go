@@ -16,10 +16,22 @@ func remoteRunner(node string) model.AttemptRunner {
 	return model.AttemptRunner{Kind: "ssh", Tier: "lan", Pool: "", Rank: 0, Node: node, Provider: "ssh", Platform: "linux/arm64", Isolation: "container"}
 }
 
-func runnerEvidence(t *testing.T, jobs []JobOutcome) model.Evidence {
+// admit plays the run admitting attempt n of job on node; a non-empty detail is what the dispatcher noted of it.
+func admit(t *testing.T, runID, job string, n int, node string, local bool, detail *model.AttemptRunner) JobOutcome {
+	t.Helper()
+	id := runID + "." + job + ".a" + string(rune('0'+n))
+	NoteAdmission(runID, job, n, Admitted{AttemptID: id, RunnerID: node, Local: local})
+	if detail != nil {
+		NoteRunner(id, *detail)
+	}
+	t.Cleanup(func() { ForgetRun(runID) })
+	return JobOutcome{ID: job, AttemptID: id, N: n, State: StatePassed, Required: true}
+}
+
+func runnerEvidence(t *testing.T, runID string, jobs []JobOutcome) model.Evidence {
 	t.Helper()
 	start := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	ev, _, err := buildEvidence(evidenceInput{Revision: strings.Repeat("a", 40), Start: start, End: start, Trigger: "local", Jobs: jobs,
+	ev, _, err := buildEvidence(evidenceInput{RunID: runID, Revision: strings.Repeat("a", 40), Start: start, End: start, Trigger: "local", Jobs: jobs,
 		Pipeline:  model.PipelineRef{ID: "default", Name: "default", Kind: "default"},
 		Selection: model.Selection{Mode: "full", Reason: "selection.no_base"}})
 	if err != nil {
@@ -36,13 +48,18 @@ func runnerEvidence(t *testing.T, jobs []JobOutcome) model.Evidence {
 	return ev
 }
 
-func executed(id, attempt string) JobOutcome {
-	return JobOutcome{ID: id, AttemptID: attempt, N: 1, State: StatePassed, Required: true}
+func nodes(ev model.Evidence) string {
+	var out []string
+	for _, a := range ev.Attempts {
+		out = append(out, a.JobID+"#"+string(rune('0'+a.Attempt))+"@"+a.Runner.Node)
+	}
+	return strings.Join(out, " ")
 }
 
-// TestEvidenceRunnerLocal: a run with no placement note ran on this host, as a process.
+// TestEvidenceRunnerLocal: a run admitted only on this host ran here, as a process, with no attempt records.
 func TestEvidenceRunnerLocal(t *testing.T) {
-	ev := runnerEvidence(t, []JobOutcome{executed("build", "run.build.a1")})
+	o := admit(t, "rl", "build", 1, "local", true, nil)
+	ev := runnerEvidence(t, "rl", []JobOutcome{o})
 	want := model.RunnerRef{ID: "local", Provider: "local", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"}
 	if ev.Runner != want {
 		t.Errorf("runner %+v, want %+v", ev.Runner, want)
@@ -52,40 +69,67 @@ func TestEvidenceRunnerLocal(t *testing.T) {
 	}
 }
 
-// TestEvidenceRunnerRemote: a run placed on one node names that node, its platform and isolation,
-// and lists the attempt; a skipped job is not an attempt.
+// TestEvidenceRunnerRemote: a run placed on one node names that node, its platform and isolation, and lists the attempts.
 func TestEvidenceRunnerRemote(t *testing.T) {
-	NoteRunner("run.build.a1", remoteRunner("lab-arm"))
-	NoteRunner("run.test.a1", remoteRunner("lab-arm"))
-	t.Cleanup(func() { ForgetRunner("run.build.a1"); ForgetRunner("run.test.a1") })
-	ev := runnerEvidence(t, []JobOutcome{executed("test", "run.test.a1"), executed("build", "run.build.a1"), {ID: "docs", State: StateSkipped}})
+	d := remoteRunner("lab-arm")
+	a := admit(t, "rr", "test", 1, "lab-arm", false, &d)
+	b := admit(t, "rr", "build", 1, "lab-arm", false, &d)
+	ev := runnerEvidence(t, "rr", []JobOutcome{a, b, {ID: "docs", State: StateSkipped}})
 	want := model.RunnerRef{ID: "lab-arm", Provider: "ssh", Platform: "linux/arm64", Isolation: "container"}
 	if ev.Runner != want {
 		t.Errorf("runner %+v, want %+v", ev.Runner, want)
 	}
-	if len(ev.Attempts) != 2 || ev.Attempts[0].JobID != "build" || ev.Attempts[1].JobID != "test" {
-		t.Fatalf("attempts %+v, want build then test", ev.Attempts)
+	if got := nodes(ev); got != "build#1@lab-arm test#1@lab-arm" {
+		t.Errorf("attempts %s", got)
 	}
-	if a := ev.Attempts[0].Runner; a.Node != "lab-arm" || a.Platform != "linux/arm64" || a.Isolation != "container" || a.Kind != "ssh" {
-		t.Errorf("attempt runner %+v", a)
+	if r := ev.Attempts[0].Runner; r.Platform != "linux/arm64" || r.Isolation != "container" || r.Kind != "ssh" {
+		t.Errorf("attempt runner %+v", r)
 	}
 }
 
-// TestEvidenceRunnerMixed: jobs on different runners (or one placed, one local) have no single
-// runner; the coordinator host is the run-level runner and every placed attempt names its own.
-func TestEvidenceRunnerMixed(t *testing.T) {
-	NoteRunner("run.build.a1", remoteRunner("lab-arm"))
-	NoteRunner("run.test.a1", remoteRunner("lab-x86"))
-	t.Cleanup(func() { ForgetRunner("run.build.a1"); ForgetRunner("run.test.a1") })
-	ev := runnerEvidence(t, []JobOutcome{executed("build", "run.build.a1"), executed("test", "run.test.a1"), executed("lint", "run.lint.a1")})
-	if ev.Runner != CoordinatorRunner() {
-		t.Errorf("a mixed run names the coordinator host, got %+v", ev.Runner)
+// TestEvidenceRunnerRetryMovesNode: attempt 1 ran on one runner and its infra retry on another. Only the
+// last attempt is a job outcome, yet both are listed and no single runner is named for the run.
+func TestEvidenceRunnerRetryMovesNode(t *testing.T) {
+	a, b := remoteRunner("lab-arm"), remoteRunner("lab-x86")
+	admit(t, "rt", "test", 1, "lab-arm", false, &a)
+	final := admit(t, "rt", "test", 2, "lab-x86", false, &b)
+	confirm := admit(t, "rt", "test", 3, "lab-arm", false, &a) // a confirmation rerun is no job outcome either
+	_ = confirm
+	ev := runnerEvidence(t, "rt", []JobOutcome{final})
+	if got, want := nodes(ev), "test#1@lab-arm test#2@lab-x86 test#3@lab-arm"; got != want {
+		t.Errorf("attempts %s, want %s", got, want)
 	}
-	if len(ev.Attempts) != 2 || ev.Attempts[0].Runner.Node != "lab-arm" || ev.Attempts[1].Runner.Node != "lab-x86" {
+	if ev.Runner != CoordinatorRunner() {
+		t.Errorf("two runners executed the job: the run-level runner is the coordinator, got %+v", ev.Runner)
+	}
+}
+
+// TestEvidenceRunnerMixed: a placed job and a job that ran here have no single runner either.
+func TestEvidenceRunnerMixed(t *testing.T) {
+	d := remoteRunner("lab-arm")
+	a := admit(t, "rm", "build", 1, "lab-arm", false, &d)
+	b := admit(t, "rm", "lint", 1, "local", true, nil)
+	ev := runnerEvidence(t, "rm", []JobOutcome{a, b})
+	if ev.Runner != CoordinatorRunner() {
+		t.Errorf("mixed run names the coordinator host, got %+v", ev.Runner)
+	}
+	if got := nodes(ev); got != "build#1@lab-arm lint#1@local" {
+		t.Errorf("attempts %s", got)
+	}
+}
+
+// TestEvidenceRunnerUnknownIsNeverLocal: a dispatched attempt whose runner details were never noted (the
+// telemetry that carries them failed) is written as unknown, naming the node the lease was granted to.
+func TestEvidenceRunnerUnknownIsNeverLocal(t *testing.T) {
+	o := admit(t, "ru", "test", 1, "lab-arm", false, nil)
+	ev := runnerEvidence(t, "ru", []JobOutcome{o})
+	if ev.Runner.ID != "lab-arm" || ev.Runner.Platform != "unknown" || ev.Runner.Provider != "unknown" {
+		t.Errorf("run-level runner %+v, want lab-arm with unknown platform and provider", ev.Runner)
+	}
+	if len(ev.Attempts) != 1 || ev.Attempts[0].Runner.Kind != "unknown" || ev.Attempts[0].Runner.Node != "lab-arm" {
 		t.Errorf("attempts %+v", ev.Attempts)
 	}
-	ForgetRunner("run.test.a1") // one remote placement plus an unplaced (local) job is also mixed
-	if ev = runnerEvidence(t, []JobOutcome{executed("build", "run.build.a1"), executed("test", "run.test.a1")}); ev.Runner != CoordinatorRunner() {
-		t.Errorf("a placed and an unplaced job: %+v", ev.Runner)
+	if ev.Runner == CoordinatorRunner() || ev.Attempts[0].Runner.Kind == "local" {
+		t.Error("a dispatched attempt must never be recorded as local")
 	}
 }

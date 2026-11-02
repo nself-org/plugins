@@ -135,7 +135,7 @@ func AttemptDocument(run model.Evidence, o cirun.JobOutcome) model.Evidence {
 		ev.PlacementRef = &ref
 	}
 	ev.Attempts = nil
-	if r, ok := cirun.RunnerNote(o.AttemptID); ok { // the document of one attempt names the runner of that attempt
+	if r, ok := cirun.AdmittedRunner(run.RunID, o.AttemptID); ok { // the document of one attempt names the runner of that attempt
 		ev.Runner = cirun.RunnerRefOf(r)
 		ev.Attempts = []model.AttemptEvidence{{JobID: o.ID, Attempt: max(o.N, 1), Runner: r}}
 	} else if len(run.Attempts) > 0 { // the run was placed, this attempt was not: it ran on the coordinator host

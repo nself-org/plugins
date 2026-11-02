@@ -720,7 +720,8 @@
                   "local",
                   "ssh",
                   "agent",
-                  "hosted"
+                  "hosted",
+                  "unknown"
                 ]
               },
               "tier": {

@@ -5,7 +5,8 @@ package model
 // v1 and experimental.
 
 // RunnerKinds are the placement kinds an attempt can record.
-var RunnerKinds = []string{"local", "ssh", "agent", "hosted"}
+// "unknown" is an attempt the coordinator admitted on a runner it knows only by id.
+var RunnerKinds = []string{"local", "ssh", "agent", "hosted", "unknown"}
 
 // AttemptRunner is where one attempt ran, from its recorded placement.
 type AttemptRunner struct {

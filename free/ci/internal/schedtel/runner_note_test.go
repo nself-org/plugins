@@ -1,9 +1,12 @@
 package schedtel
 
 import (
+	"context"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
@@ -47,5 +50,31 @@ func TestAttemptRunner(t *testing.T) {
 	}
 	if _, ok := attemptRunner(nil, "here"); ok {
 		t.Error("no world, no runner")
+	}
+}
+
+// TestRunnerNoteSurvivesFailedTelemetry: the runner an admitted attempt ran on is noted even when the
+// decision record cannot be written, because dispatch still runs the job it admitted.
+func TestRunnerNoteSurvivesFailedTelemetry(t *testing.T) {
+	e := newEnv(t)
+	sink := NewSink(e.st, e.ms)
+	attempt := e.attempt("run-f", "unit")
+	d := decision("run-f", attempt, "run-f.unit", "lab-arm", dispatch.OutcomeAdmitted)
+	cap := nodeRunner("lab-arm", "ssh", "lan", "linux", "arm64", "container")
+	d.World.Runners = []sched.Runner{cap}
+	if err := e.st.Close(); err != nil { // every store call of the sink now fails
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cirun.ForgetRunner(attempt) })
+	sink.Record(context.Background(), d)
+	if err := sink.takeErr(); err == nil {
+		t.Fatal("the telemetry write must have failed for this test to mean anything")
+	}
+	if _, ok := cirun.PlacementRef(context.Background(), attempt); ok {
+		t.Error("a placement ref must not point at a record that was never stored")
+	}
+	got, ok := cirun.RunnerNote(attempt)
+	if !ok || got.Node != "lab-arm" || got.Platform != "linux/arm64" || got.Isolation != "container" {
+		t.Errorf("runner note %+v (found %v), want lab-arm linux/arm64 container", got, ok)
 	}
 }

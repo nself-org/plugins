@@ -53,6 +53,11 @@ func (s *Sink) Record(ctx context.Context, d dispatch.Decision) {
 	if id == "" {
 		return
 	}
+	if d.Outcome == dispatch.OutcomeAdmitted && d.Placement != nil { // before any store call: the evidence must name the runner even when the record cannot be written
+		if r, found := attemptRunner(d.World, d.Placement.RunnerID); found {
+			cirun.NoteRunner(id, r)
+		}
+	}
 	at := s.clock()
 	bind(d.Job.Pipeline.ID, s) // before any store call, so the finalizer reports even a first failure
 	s.mu.Lock()
@@ -118,11 +123,6 @@ func (s *Sink) store(ctx context.Context, d dispatch.Decision, at, waited int64)
 	}
 	if d.Outcome == dispatch.OutcomeAdmitted {
 		cirun.NotePlacement(id, RefPrefix+id)
-		if d.Placement != nil {
-			if r, found := attemptRunner(d.World, d.Placement.RunnerID); found {
-				cirun.NoteRunner(id, r)
-			}
-		}
 	}
 	return nil
 }
