@@ -116,8 +116,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	}
 	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
 	tail := &outputTail{max: 4096}
+	var outputCheck sandboxOutput
 	sink := func(b []byte) {
 		tail.write(b)
+		outputCheck.write(b)
 		if s.Output != nil {
 			s.Output(b)
 		}
@@ -156,9 +158,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	pids := watch.stop()
 	reason := resourceReason(ctx, code, tail.String(), facts)
 	if watch != nil && err == nil && ctx.Err() == nil && code != 0 {
-		// A sandbox can fail silently or print runtime diagnostics, depending on which
-		// thread loses the race to the limit. Both have the same trusted evidence.
-		if sandboxReason := e.sandboxReason(s, run, began, code, pids); sandboxReason != "" {
+		if sandboxReason := e.sandboxReason(s, run, began, code, pids, outputCheck); sandboxReason != "" {
 			reason = sandboxReason
 		}
 	}
