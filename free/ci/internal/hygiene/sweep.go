@@ -4,7 +4,7 @@ package hygiene
 // owns (a crashed agent or coordinator left them).
 // Inputs:  the attempt ids of live leases.
 // Outputs: a SweepReport; E681 when something could not be removed.
-// Constraints: only directories named like an attempt are swept (Host.IsAttempt); a live attempt is never touched; a root younger than Host.MinAge is skipped; only
+// Constraints: an attempt Host.Live names at the moment of removal is spared; only directories named like an attempt are swept (Host.IsAttempt); a live attempt is never touched; a root younger than Host.MinAge is skipped; only
 // entries with a safe attempt name and resources carrying the attempt label are considered, and a
 // labelled resource counts only when its attempt has a root under Base (or Host.OwnsRuntime is set).
 
@@ -141,6 +141,10 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		if err := ctx.Err(); err != nil {
 			return rep, err
 		}
+		if h.liveNow(name) {
+			rep.Skipped = append(rep.Skipped, name)
+			continue
+		}
 		if err := h.CleanupJob(ctx, name, h.rootOwner(name)); err != nil {
 			rep.Failed[name] = err
 			continue
@@ -151,4 +155,17 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		return rep, leakError(ReasonCleanupFailed, "%d orphans could not be removed", len(rep.Failed))
 	}
 	return rep, nil
+}
+
+// liveNow reports whether name is live at this moment according to Host.Live (false when none is set).
+func (h *Host) liveNow(name string) bool {
+	if h.Live == nil {
+		return false
+	}
+	for _, id := range h.Live() {
+		if id == name {
+			return true
+		}
+	}
+	return false
 }

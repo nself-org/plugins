@@ -122,6 +122,7 @@ func TestHygieneAttemptStartSweepsOrphansOnceAndSparesLiveWork(t *testing.T) {
 	if err := h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "own1"}); err != nil {
 		t.Fatal(err)
 	}
+	h.joinSweep(context.Background()) // the sweep runs beside the run
 	for id, want := range map[string]bool{"orphan.a1": false, "marked.a1": true, "fresh.a1": true, "nselfci-1a2b3c4d": true, "nselfci-1a2b3c4d.lock": true} {
 		_, err := os.Lstat(filepath.Join(work, id))
 		if (err == nil) != want {

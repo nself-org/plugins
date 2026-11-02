@@ -2,7 +2,7 @@ package run
 
 // Purpose: wire internal/hygiene into the local run loop (Epic D12). Every attempt the run starts is
 // cleaned and leak-checked when the run closes, and orphans of crashed runs are swept once per
-// process when the first attempt starts.
+// process, beside the run, from the moment the first attempt starts (Finalize joins the sweep).
 // Inputs:  the attempts seen by the AttemptStart hook with the run's home (Options.Home, else
 // NSELF_CI_HOME or ~/.nself/ci, the executor's own default), and the run's job outcomes.
 // Outputs: a Finalizer error carrying E681 (a note on the run, never a changed verdict) and a call
@@ -39,7 +39,10 @@ type hygieneHook struct {
 	byRun    map[string][]seenAttempt
 	once     sync.Once
 	sweepErr error
-	drain    func(reason string)
+	// sweepDone is closed when the start sweep ends (nil until it starts); sweepCancel stops it.
+	sweepDone   chan struct{}
+	sweepCancel context.CancelFunc
+	drain       func(reason string)
 	// rt is the container runtime view; nil means the docker or podman CLI (tests inject a fake).
 	rt hygiene.Runtime
 }
@@ -85,7 +88,7 @@ func managed(home string) bool {
 	return err != nil || (info.Mode()&os.ModeSymlink == 0 && info.IsDir())
 }
 
-// AttemptStart records the attempt and, once per process, sweeps orphans.
+// AttemptStart records the attempt and, once per process, starts the orphan sweep beside the run.
 func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	if runtime.GOOS == "windows" {
 		return nil // confined removal is not supported there (Epic D35); exec refuses local jobs too
@@ -98,12 +101,25 @@ func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 		if home == "" || !managed(home) {
 			return
 		}
-		sctx, cancel := context.WithTimeout(ctx, sweepTimeout) // follows the job's context: Ctrl-C stops it
-		defer cancel()
-		_, err := hygieneHost(home, hygiene.BatchRuntime(h.rt)).SweepOrphans(sctx, h.liveAttempts(home))
+		// The sweep runs beside the run, not in front of it. This attempt is registered above, before the
+		// goroutine starts, and Host.Live reads the registry again before each removal, so an attempt the run
+		// starts while the sweep lists is spared too. Finalize joins the sweep.
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sweepTimeout)
+		done := make(chan struct{})
 		h.mu.Lock()
-		h.sweepErr = err
+		h.sweepDone, h.sweepCancel = done, cancel
 		h.mu.Unlock()
+		host := hygieneHost(home, hygiene.BatchRuntime(h.rt))
+		host.Live = func() []string { return h.liveAttempts(home) }
+		live := h.liveAttempts(home)
+		go func() {
+			defer close(done)
+			defer cancel()
+			_, err := host.SweepOrphans(sctx, live)
+			h.mu.Lock()
+			h.sweepErr = err
+			h.mu.Unlock()
+		}()
 	})
 	return nil
 }
@@ -153,11 +169,29 @@ func markerLive(path string) bool {
 // Name orders the finalizer (names sort; hygiene runs after the evidence finalizers).
 func (h *hygieneHook) Name() string { return "zz-hygiene" }
 
+// joinSweep waits for the start sweep, if one runs, before the run's result is written. A cancelled run stops
+// the sweep and waits for it to return.
+func (h *hygieneHook) joinSweep(ctx context.Context) {
+	h.mu.Lock()
+	done, cancel := h.sweepDone, h.sweepCancel
+	h.mu.Unlock()
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+		cancel()
+		<-done
+	}
+}
+
 // Finalize cleans and leak-checks every attempt of the run, each in the home it ran in.
 func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
+	h.joinSweep(ctx)
 	h.mu.Lock()
 	seen := h.byRun[r.RunID]
 	delete(h.byRun, r.RunID)
