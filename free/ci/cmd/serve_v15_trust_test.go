@@ -27,6 +27,7 @@ func TestDispatchForgeTrust(t *testing.T) {
 		{"verified push", "push", "owner", false, true, false, false},
 		{"fork pull request", "pull_request", "untrusted", true, false, false, false},
 		{"unreviewed pull request", "pull_request", "untrusted", false, false, false, false},
+		{"admin reachable pull request", "pull_request", "untrusted", false, true, false, false},
 		{"forge unavailable", "push", "untrusted", false, true, true, false},
 		{"cached authority only", "push", "untrusted", false, true, false, true},
 	} {
@@ -104,8 +105,8 @@ func TestDispatchReleaseAuthorization(t *testing.T) {
 		{"release job", "user:releaser", "o/r", "release", false, true},
 		{"release secret", "user:releaser", "o/r", "test", true, true},
 		{"release wrong project", "user:releaser", "other/repo", "release", false, false},
-		{"webhook release", "", "o/r", "release", false, false},
-		{"webhook secret", "", "o/r", "test", true, false},
+		{"webhook release", "", "o/r", "release", false, true},
+		{"webhook secret", "", "o/r", "test", true, true},
 		{"webhook ordinary", "", "o/r", "test", false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -128,7 +129,7 @@ func TestDispatchReleaseAuthorization(t *testing.T) {
 			// Put an ordinary job first: the gate must scan the complete selected plan.
 			p := &plan.Plan{Jobs: []plan.PlannedJob{{Job: model.Job{Kind: "test"}}, {Job: job}}}
 			allowed, err := authorizeDispatchRelease(ctx, st, tc.label, tc.project, p)
-			if (err == nil) != tc.want || allowed != (tc.want && (tc.secret || tc.kind == "release")) {
+			if (err == nil) != tc.want || allowed != (tc.want && tc.label != "" && (tc.secret || tc.kind == "release")) {
 				t.Fatalf("authorized=%v, err=%v, want success=%v", allowed, err, tc.want)
 			}
 			rows, err := st.AuditEntries(ctx, 0, 0)

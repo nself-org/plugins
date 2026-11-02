@@ -8,11 +8,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/serve"
@@ -27,8 +29,9 @@ var (
 )
 
 type forgeDispatchTrust struct {
-	facts model.TriggerFacts
-	hook  cirun.SourceTrust
+	facts           model.TriggerFacts
+	hook            cirun.SourceTrust
+	home, submitter string
 }
 
 // Classify verifies the checkout SHA matches the intake before asking the forge.
@@ -36,11 +39,67 @@ func (h forgeDispatchTrust) Classify(ctx context.Context, r cirun.TrustRequest) 
 	if !strings.EqualFold(r.Revision, h.facts.Revision) || r.Revision == "" {
 		return "untrusted", fmt.Errorf("submitted revision does not match checkout")
 	}
+	if h.facts.Source == "manual" && h.facts.Kind == "api" {
+		return h.classifyAPI(ctx, r)
+	}
 	got, err := h.hook.ClassifyForge(ctx, r.Root, h.facts)
-	if h.facts.Kind == "pull_request" && got.Class != "owner" {
-		return "untrusted", err // an unreviewed head never inherits repository collaborator authority
+	if h.facts.Kind == "pull_request" {
+		return "untrusted", err // approval is not recorded by this dispatch path
 	}
 	return got.Class, err
+}
+
+// classifyAPI combines current TEAM access with forge-proven default-branch reachability.
+// A member may run default-branch code, but cannot gain owner or release authority.
+func (h forgeDispatchTrust) classifyAPI(ctx context.Context, r cirun.TrustRequest) (model.TrustClass, error) {
+	st, err := cirun.OpenStore(filepath.Join(h.home, "state.db"))
+	if err != nil {
+		return "untrusted", err
+	}
+	defer st.Close()
+	svc := roles.New(st, &audit.Log{St: st})
+	actor, err := svc.ActorFromSubmitter(ctx, h.submitter)
+	if err != nil {
+		return "untrusted", err
+	}
+	// Revalidate the captured role as well as scope so a concurrent downgrade
+	// cannot leave an old admin snapshot supplying owner trust.
+	if err := roles.Authorize(ctx, actor, actor.Role(), h.facts.Repo); err != nil {
+		return "untrusted", err
+	}
+	hook := h.hook
+	refetch := hook.Refetch
+	if refetch == nil {
+		refetch = refetchDispatchAPI
+	}
+	facts := h.facts
+	// Manual API submissions use the same GitHub repository as SafeCloneURL.
+	facts.Source, facts.Auth = "github", "per-repo"
+	facts.Actor = model.Fact[string]{}
+	hook.Refetch = func(ctx context.Context, f model.TriggerFacts) (model.TriggerFacts, error) {
+		fresh, err := refetch(ctx, f)
+		if err != nil {
+			return f, err
+		}
+		// This permission comes from the live local grant, not a forge login claim.
+		permission := "admin"
+		fresh.ActorPermission = model.Fact[string]{Value: &permission, Source: "local"}
+		return fresh, nil
+	}
+	got, err := hook.ClassifyForge(ctx, r.Root, facts)
+	if actor.Role() != roles.Admin && got.Class == "owner" {
+		got.Class = "internal"
+	}
+	return got.Class, err
+}
+
+// refetchDispatchAPI requires an installed trust provider before using the API route.
+func refetchDispatchAPI(ctx context.Context, f model.TriggerFacts) (model.TriggerFacts, error) {
+	p, ok := providers.Lookup(f.Source)
+	if _, can := p.(providers.TrustFacts); !ok || !can {
+		return f, fmt.Errorf("no forge trust provider for %s", f.Source)
+	}
+	return providers.RefetchFacts(ctx, f)
 }
 
 // dispatchTrustFacts retains only query inputs and payload claims, never stored authority.
@@ -67,6 +126,9 @@ func dispatchTrustFacts(row store.IntakeRow, legacy pipelineFacts) (model.Trigge
 
 // authorizeDispatchRelease checks every selected job before the coordinator can execute any.
 func authorizeDispatchRelease(ctx context.Context, st *store.Store, submitter, project string, p *plan.Plan) (bool, error) {
+	if submitter == "" {
+		return false, nil
+	}
 	for _, j := range p.Jobs {
 		if j.Job.Kind != "release" && len(j.Job.Secrets) == 0 {
 			continue

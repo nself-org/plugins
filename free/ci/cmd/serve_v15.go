@@ -228,7 +228,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		if f.verbose {
 			out = os.Stderr
 		}
-		hooks := cirun.Hooks{Trust: forgeDispatchTrust{facts: forge}}
+		hooks := cirun.Hooks{Trust: forgeDispatchTrust{facts: forge, home: home, submitter: facts.Submitter}}
 		res, err := dispatchRun(ctx, &cirun.Coordinator{Opts: o, Hooks: hooks, Plan: p, ConfigDigest: digest, Substantive: subst, Out: out})
 		if err != nil {
 			return coordinator.RunResult{}, err
