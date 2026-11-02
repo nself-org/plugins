@@ -56,13 +56,24 @@ func Classify(in Input) Diagnosis {
 	if in.Reason == "resource_limit" {
 		return infra(signatures[0])
 	}
-	for _, s := range signatures {
-		if s.matches(in) {
-			return infra(s)
-		}
+	if i := strings.LastIndex(in.Tail, PrepareFailed); i >= 0 && in.ExitCode == PrepareExit {
+		return classifyPrepare(in.Tail[:i]) // a Node gate's frozen install failed (P7-AUTO-16)
 	}
 	if in.ExitCode == PinExit && strings.Contains(in.Tail, PinMismatch) {
 		return pinDiagnosis()
+	}
+	tail := in.Tail
+	if len(tail) > TailWindow {
+		tail = tail[len(tail)-TailWindow:]
+	}
+	if testFailure.MatchString(tail) {
+		tail = "" // a failing test in the window: any infra-looking message is the program's own
+	}
+	tail = lastLines(tail, OutputLines)
+	for _, s := range signatures {
+		if s.matches(in, tail) {
+			return infra(s)
+		}
 	}
 	if in.ExecClass == "infra" {
 		return Diagnosis{Class: "infra", Signature: SigExecutor, Remediation: classRemediation[SigExecutor]} // not proven transient: never retried
@@ -82,7 +93,7 @@ func ForClass(c model.FailureClass) Diagnosis {
 	return named(SigCode, "code")
 }
 
-func (s signature) matches(in Input) bool {
+func (s signature) matches(in Input, tail string) bool {
 	for _, x := range s.exits {
 		if in.Err == "" && in.ExitCode == x && (x != -1 || externalKill(in.Signal)) {
 			return true
@@ -91,7 +102,7 @@ func (s signature) matches(in Input) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return false
+	return s.id != SigOOM && in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
 }
 
 // externalKill reports whether a signal can come from outside the job (the
@@ -128,4 +139,19 @@ func Excerpt(text string, max int) string {
 		cut = cut[i+1:] // start at a whole line when that costs under a quarter
 	}
 	return cut
+}
+
+// lastLines is the last n non-empty lines of text.
+func lastLines(text string, n int) string {
+	lines := strings.Split(strings.TrimRight(text, "\r\n "), "\n")
+	var keep []string
+	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			keep = append(keep, lines[i])
+		}
+	}
+	for i, j := 0, len(keep)-1; i < j; i, j = i+1, j-1 {
+		keep[i], keep[j] = keep[j], keep[i]
+	}
+	return strings.Join(keep, "\n")
 }

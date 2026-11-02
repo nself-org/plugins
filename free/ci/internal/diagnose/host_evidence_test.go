@@ -2,16 +2,16 @@ package diagnose
 
 import "testing"
 
-func TestJobOutputCannotAuthorizeInfraRetry(t *testing.T) {
+func TestResourceOutputCannotAuthorizeInfraRetry(t *testing.T) {
 	for name, in := range map[string]Input{
+		"bare exit 137":               {ExitCode: 137},
 		"shell Killed line after 137": {ExitCode: 137, Tail: "make\nsh: line 1:  4242 Killed   cc1\n"},
 		"kernel oom line in output":   {ExitCode: 1, Tail: "build\nOut of memory: Killed process 4242 (cc1)\n"},
 		"allocation refusal":          {ExitCode: 1, Tail: "cannot allocate memory"},
-		"docker daemon":               {ExitCode: 1, Tail: "Cannot connect to the Docker daemon"},
+		"fork refusal":                {ExitCode: 1, Tail: "sh: can't fork"},
+		"fork unavailable":            {ExitCode: 1, Tail: "fork: Resource temporarily unavailable"},
+		"pids counter in output":      {ExitCode: 1, Tail: "pids.events: max=8"},
 		"prepare memory":              {ExitCode: PrepareExit, Tail: "sh: line 1:  4242 Killed npm ci\n" + PrepareFailed},
-		"prepare disk":                {ExitCode: PrepareExit, Tail: "npm error code ENOSPC\n" + PrepareFailed},
-		"prepare dns":                 {ExitCode: PrepareExit, Tail: "npm error code ENOTFOUND\n" + PrepareFailed},
-		"prepare network":             {ExitCode: PrepareExit, Tail: "npm error code ECONNRESET\n" + LocalRegistryInfra + "\n" + PrepareFailed},
 	} {
 		t.Run(name, func(t *testing.T) {
 			d := Classify(in)
@@ -24,6 +24,18 @@ func TestJobOutputCannotAuthorizeInfraRetry(t *testing.T) {
 				t.Fatalf("host evidence overridden by job output: %+v", d)
 			}
 		})
+	}
+}
+
+func TestHostResourceEvidencePrecedesJobMarkers(t *testing.T) {
+	for _, in := range []Input{
+		{Reason: "resource_limit", ExitCode: PinExit, Tail: PinMismatch},
+		{Reason: "resource_limit", ExitCode: PrepareExit, Tail: "npm error code ENOSPC\n" + PrepareFailed},
+	} {
+		d := Classify(in)
+		if d.Class != "infra" || d.Signature != SigOOM || !d.Retryable {
+			t.Fatalf("host resource evidence overridden by job marker: %+v", d)
+		}
 	}
 }
 

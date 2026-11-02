@@ -59,7 +59,7 @@ func checkOf(t *testing.T, res Result, id string) model.Check {
 func TestInfraFailureIsRetriedOnceThenFailsAsInfra(t *testing.T) {
 	t.Parallel()
 	m := newMarker(t)
-	r := newRig(t, map[string]model.Job{"mem": counting(m, `echo "Out of memory: Killed process 4242 (cc1)"; exit 137`)}, gitFake{})
+	r := newRig(t, map[string]model.Job{"mem": counting(m, `echo "write: no space left on device"; echo "Out of memory: Killed process 4242 (cc1)"; exit 137`)}, gitFake{})
 	res := r.run(t)
 	o := outcome(res, "mem")
 	if o.State != StateFailed || o.FailureClass != "infra" || o.N != 2 || len(o.Retries) != 1 {
@@ -72,7 +72,7 @@ func TestInfraFailureIsRetriedOnceThenFailsAsInfra(t *testing.T) {
 		t.Fatalf("job ran %d times, want 2", strings.Count(string(b), "x"))
 	}
 	c := checkOf(t, res, "mem")
-	if c.FailureClass != "infra" || c.Diagnosis != "infra.oom" || c.Exit == nil || *c.Exit != 137 || c.Remediation == "" || !strings.Contains(c.Excerpt, "Out of memory") {
+	if c.FailureClass != "infra" || c.Diagnosis != "infra.disk_full" || c.Exit == nil || *c.Exit != 137 || c.Remediation == "" || !strings.Contains(c.Excerpt, "Out of memory") {
 		t.Fatalf("check %+v", c)
 	}
 	if rt := res.Summary.Doc.Retries; len(rt) != 1 || rt[0].JobID != "mem" || rt[0].Attempt != 2 || rt[0].Class != "infra" {
@@ -80,6 +80,28 @@ func TestInfraFailureIsRetriedOnceThenFailsAsInfra(t *testing.T) {
 	}
 	if res.Exit == 0 || res.Summary.Result == "pass" {
 		t.Fatalf("a failed required job passed: exit %d result %s", res.Exit, res.Summary.Result)
+	}
+}
+
+func TestOOMTextWithoutHostEvidenceIsNotRetriedAsInfra(t *testing.T) {
+	t.Parallel()
+	m := newMarker(t)
+	r := newRig(t, map[string]model.Job{"mem": counting(m, `echo "Out of memory: Killed process 4242 (cc1)"; exit 137`)}, gitFake{})
+	res := r.run(t)
+	if o := outcome(res, "mem"); o.State != StateFailed || o.FailureClass != "code" || o.N != 1 || len(o.Retries) != 0 {
+		t.Fatalf("outcome %+v\n%s", o, r.Out)
+	}
+	if got := attemptsOf(t, r, res); strings.Join(got, ",") != "failed/code" {
+		t.Fatalf("attempts %v, want one failed code attempt", got)
+	}
+	if b, _ := os.ReadFile(m); strings.Count(string(b), "x") != 1 {
+		t.Fatalf("job ran %d times, want 1", strings.Count(string(b), "x"))
+	}
+	if c := checkOf(t, res, "mem"); c.FailureClass != "code" || c.Diagnosis != "code" || c.Exit == nil || *c.Exit != 137 {
+		t.Fatalf("check %+v", c)
+	}
+	if rt := res.Summary.Doc.Retries; len(rt) != 0 {
+		t.Fatalf("retries %+v", rt)
 	}
 }
 

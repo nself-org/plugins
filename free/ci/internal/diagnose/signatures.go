@@ -1,15 +1,26 @@
 package diagnose
 
 // Purpose: the table of infrastructure failure signatures. A job that ran and
-// exited non-zero is a code failure unless its host-observed exit signal or
-// the executor's error text matches a row here. Job output cannot prove infra.
+// exited non-zero is a code failure unless its exit status, the executor's
+// error text or the end of its redacted output matches a row here.
 // Inputs:  none (a fixed table). Outputs: Signatures, matched by Classify.
 // Constraints: pure data; a row names one cause, one remediation, and where it
-// may match (an exit status counts only when the executor reported no error, and a plain
+// may match (an executor error is stronger evidence than program output, so
+// output rows match only the last OutputLines lines and never a bare word; an
+// exit status counts only when the executor reported no error, and a plain
 // exit status chosen by the program (137, 127) is never enough on its own);
+// Resource signatures require host evidence and never match job output.
 // unknown stays code (misclassifying a code failure as infra hides bugs).
 
 import "regexp"
+
+// TailWindow is how much of the end of the output text signatures may match.
+const TailWindow = 4 << 10
+
+// OutputLines is how many of the last non-empty output lines signatures may
+// match: a test that prints an expected infra message and then goes on to
+// report its own assertion is a code failure.
+const OutputLines = 3
 
 // Signature IDs recorded in evidence (`check.diagnosis`).
 const (
@@ -30,8 +41,14 @@ type signature struct {
 	id          string
 	exits       []int          // exit statuses that alone identify the cause
 	errText     *regexp.Regexp // the executor, admission or prepare error text
+	output      *regexp.Regexp // the end of the redacted output
 	remediation string
 }
+
+// testFailure marks output that reports a failing test or assertion: a message
+// in the same lines (an expected DNS error, a disk-full path under test) is the
+// program's own, so no output row may match there.
+var testFailure = re(`(?i)(^|\s)(FAILED|FAIL|--- FAIL)\b|(?m)^not ok\b|✕|✗|assertion ?error|assertion failed|panic:`)
 
 func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 
@@ -46,21 +63,25 @@ var signatures = []signature{
 	{
 		id:          SigDisk,
 		errText:     re(`(?i)no space left on device|disk quota exceeded`),
+		output:      re(`(?i)no space left on device|disk quota exceeded`),
 		remediation: "The disk is full. Free space on the runner's work and cache volumes (`nself ci runs prune`, Docker prune), then run it again.",
 	},
 	{
 		id:          SigDocker,
 		errText:     re(`(?i)cannot connect to the docker daemon|is the docker daemon running|error during connect: .*docker`),
+		output:      re(`(?i)cannot connect to the docker daemon|is the docker daemon running`),
 		remediation: "The Docker daemon is not reachable. Start Docker (or Colima), check `docker info`, then run it again.",
 	},
 	{
 		id:          SigDNS,
 		errText:     re(`(?i)temporary failure in name resolution|could not resolve host|name or service not known|no such host|dial tcp: lookup `),
+		output:      re(`(?i)temporary failure in name resolution|could not resolve host|name or service not known|getaddrinfo (enotfound|eai_again)|dial tcp: lookup .* (no such host|server misbehaving)`),
 		remediation: "A DNS lookup failed. Check the runner's network and resolver, then run it again; use `--network` to confirm the job may reach the internet.",
 	},
 	{
 		id:          SigTool,
 		errText:     re(`(?i)executable file not found|fork/exec .*: no such file or directory|command not found`),
+		output:      re(`(?im)command not found|executable file not found|^\S*sh: (line \d+: |\d+: )?\S+: not found$`),
 		remediation: "A tool the job needs is not installed on the runner. Install it, or declare it under `requires.tools` so the job only lands where it exists.",
 	},
 }
