@@ -37,6 +37,9 @@ type Options struct {
 	// SecretsTrust caps secret eligibility for an embedding handler that already classified
 	// and isolated the source before overriding the local admission classifier.
 	SecretsTrust model.TrustClass
+	// TeamRun marks coordinator intake rather than the operator's own local work.
+	// ReleaseAuthorized records the dispatcher's release.start authorization.
+	TeamRun, ReleaseAuthorized bool
 
 	// ConfirmFlaky reruns a job that failed with class code up to N more times, explicitly
 	// and recorded as retries (P7-CI-40). The failed result never changes; 0 is off.

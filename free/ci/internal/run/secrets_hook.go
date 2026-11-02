@@ -66,8 +66,9 @@ type SecretsInfo struct {
 	// concurrent attempt does not take it for a leftover.
 	CoordinatorID string
 	// SecretClasses is the effective policy's `trust.secrets` allowlist; HasSecretClasses is false when the policy has no such key.
-	SecretClasses    []string
-	HasSecretClasses bool
+	SecretClasses              []string
+	HasSecretClasses           bool
+	TeamRun, ReleaseAuthorized bool
 }
 
 // RegisterSecrets sets the per-attempt secret source factory (single slot).
@@ -118,6 +119,9 @@ func newSecretSource(a AttemptInfo, newRedactor func() ciexec.Redactor) ciexec.S
 	secretsMu.Lock()
 	rt, probe := secretsRuntime, secretsProbe
 	secretsMu.Unlock()
+	if a.TeamRun {
+		rt.Mode, rt.Facts, rt.Legacy = secrets.ModeTeamCoordinator, teamFacts, nil
+	}
 	facts := localFacts
 	if rt.Facts != nil {
 		facts = rt.Facts

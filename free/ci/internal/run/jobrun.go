@@ -86,7 +86,8 @@ func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string, n 
 	}
 	return AttemptInfo{SourceClass: source, RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
 		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container, PipelineCache: pipelineCache,
-		SecretsInfo: SecretsInfo{Root: rs.c.Opts.Root, CoordinatorID: rs.sess.Coordinator.ID, SecretClasses: rs.pol.SecretClasses, HasSecretClasses: rs.pol.HasSecretClasses}}
+		SecretsInfo: SecretsInfo{Root: rs.c.Opts.Root, CoordinatorID: rs.sess.Coordinator.ID, SecretClasses: rs.pol.SecretClasses,
+			HasSecretClasses: rs.pol.HasSecretClasses, TeamRun: rs.c.Opts.TeamRun, ReleaseAuthorized: rs.c.Opts.ReleaseAuthorized}}
 }
 
 // failed fills a failure outcome from an error.
