@@ -65,7 +65,8 @@ No service mounts `/var/run/docker.sock` or sets `DOCKER_HOST`; there is no Dock
 |---|---|---|
 | Unknown Host on 443 | closes the connection (`return 444`) | empty 404, no upstream reached (the one accepted equivalence) |
 | Rate limit buckets | one bucket per zone and client across all routes | one bucket per router and client; token bucket, parity asserted on status. Limits are counted per router, so a route that is split by name class (exact and wildcard names, or two wildcard suffixes in one route) gets one counter per class, and each class allows the full rate |
-| `Vary: Accept-Encoding` | added for every compressible type | added when the answer is compressed |
+| `Vary: Accept-Encoding` | added for every compressible type | added via a headers middleware on every route that carries the compress middleware (parity with nginx `gzip_vary`) |
+| Security headers on websocket upgrades | applied to every response | browsers ignore CSP and X-Frame-Options on a 101 handshake; the renderer adds Strict-Transport-Security via a headers middleware on HTTPS websocket routes so HSTS still protects the upgrade |
 | DHE ciphers | offered | not implemented by Go; the ECDHE suites remain |
 | OCSP stapling | on when the chain is trusted | not provided |
 | `X-Powered-By` | hidden on generated routes | not hidden (not in the route model) |

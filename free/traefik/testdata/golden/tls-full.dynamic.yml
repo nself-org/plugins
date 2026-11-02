@@ -27,12 +27,20 @@ http:
                 customResponseHeaders:
                     Cache-Control: no-store
                     Content-Type: text/html
+        headers-789b1a4c:
+            headers:
+                customResponseHeaders:
+                    Vary: Accept-Encoding
         headers-a60f4e30:
             headers:
                 customResponseHeaders:
                     Access-Control-Allow-Origin: '*'
                     Cache-Control: no-store
                     Content-Type: application/json
+        headers-b4ced9a8:
+            headers:
+                customResponseHeaders:
+                    Strict-Transport-Security: max-age=31536000
         headers-fec414ab:
             headers:
                 customResponseHeaders:
@@ -189,6 +197,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -212,6 +221,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`auth.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -223,6 +233,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-dc354fa7
                 - inFlightReq-2ddcbcc7
                 - buffering-8642699b
@@ -236,6 +247,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -281,6 +293,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -304,6 +317,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`api.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -315,6 +329,8 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
+                - headers-b4ced9a8
                 - rateLimit-bdb6e689
                 - inFlightReq-fef96462
                 - buffering-8642699b
@@ -328,6 +344,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -373,6 +390,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -396,6 +414,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`storage.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -407,6 +426,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-65bf1d7a
                 - inFlightReq-2ddcbcc7
                 - buffering-8642699b
@@ -420,6 +440,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -465,6 +486,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -488,6 +510,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`storage-console.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -499,6 +522,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25602002
             rule: Host(`storage-console.example.org`) && PathPrefix(`/`)
@@ -510,6 +534,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -555,6 +580,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -578,6 +604,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`worker-one.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -589,6 +616,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-682b8c9a
                 - buffering-8642699b
             priority: 25602002
@@ -601,6 +629,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -701,6 +730,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -724,6 +754,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`web.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -735,6 +766,8 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
+                - headers-b4ced9a8
                 - rateLimit-228f9a91
                 - buffering-8642699b
             priority: 25602002
@@ -747,6 +780,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -792,6 +826,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -815,6 +850,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`internal-one.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -826,6 +862,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-682b8c9a
                 - inFlightReq-fef96462
                 - buffering-8642699b
@@ -839,6 +876,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -884,6 +922,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -907,6 +946,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`internal-two.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -918,6 +958,8 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
+                - headers-b4ced9a8
                 - rateLimit-682b8c9a
                 - inFlightReq-fef96462
                 - buffering-8642699b
@@ -931,6 +973,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -976,6 +1019,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -999,6 +1043,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`functions.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -1010,6 +1055,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-0443ee9d
                 - inFlightReq-fef96462
                 - buffering-8642699b
@@ -1023,6 +1069,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
@@ -1068,6 +1115,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-f9f47695
                 - buffering-8642699b
             priority: 25660022
@@ -1091,6 +1139,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - buffering-8642699b
             priority: 25660017
             rule: Host(`mail.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
@@ -1102,6 +1151,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-682b8c9a
                 - buffering-8642699b
             priority: 25602002
@@ -1114,6 +1164,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - compress-6dedd647
+                - headers-789b1a4c
                 - rateLimit-8291d82c
                 - buffering-8642699b
             priority: 25602010
