@@ -91,7 +91,7 @@ func checkSpec(s KeySpec) error {
 				return refuse("key %s default is not in its Order", s.Key)
 			}
 		}
-	case TightenSubset, TightenSuperset:
+	case TightenSubset, TightenSuperset, TightenOrdered:
 		if s.Default != nil {
 			if _, ok := stringList(s.Default); !ok {
 				return refuse("key %s default is not a string list", s.Key)

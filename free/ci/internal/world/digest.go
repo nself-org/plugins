@@ -25,6 +25,11 @@ func Digest(w sched.World) (string, error) {
 	if err = dec.Decode(&data); err != nil {
 		return "", failed("decode world", err)
 	}
+	if w.Policy.Preset == sched.AutoPreset { // the only preset whose placement reads the policy keys the view adds
+		if err = addPolicyView(data, w); err != nil {
+			return "", err
+		}
+	}
 	canonical, err := canonicalWorld(data)
 	if err != nil {
 		return "", failed("canonical world", err)
@@ -103,4 +108,32 @@ func writeCanonicalWorld(b *bytes.Buffer, v any) error {
 		b.Write(encoded)
 		return nil
 	}
+}
+
+// addPolicyView puts the effective trust policy into the hashed data. Policy.Trust keeps
+// its fields unexported, so json.Marshal wrote it as {}: two worlds that differ only in a
+// policy value placement reads (sched.auto.step_sec, sched.auto.order)
+// had one digest. The explicit Snapshot covers every effective key and its source. Only
+// `auto` worlds carry it, so the digest of every other preset is unchanged.
+func addPolicyView(data any, w sched.World) error {
+	root, ok := data.(map[string]any)
+	if !ok {
+		return failed("world is not an object", nil)
+	}
+	pol, ok := root["Policy"].(map[string]any)
+	if !ok {
+		return failed("world has no policy object", nil)
+	}
+	raw, err := json.Marshal(w.Policy.Trust.Snapshot())
+	if err != nil {
+		return failed("marshal policy", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var view any
+	if err = dec.Decode(&view); err != nil {
+		return failed("decode policy", err)
+	}
+	pol["Trust"] = view
+	return nil
 }

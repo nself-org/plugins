@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/sched"
@@ -172,4 +173,21 @@ func currentHooks() (func(context.Context, string) ([]string, error), func(conte
 	hooks.RLock()
 	defer hooks.RUnlock()
 	return hooks.labels, hooks.facts
+}
+
+// selfReportedRankPrefix is the label a node must not set itself: the tier rank of
+// `auto` (internal/tiers.RankLabel) comes only from operator-assigned labels, which
+// the label callback adds after this strip. The registry strips it at intake too;
+// this covers a node stored before that rule.
+const selfReportedRankPrefix = "rank="
+
+// withoutSelfReportedRank returns labels without any rank= entry.
+func withoutSelfReportedRank(labels []string) []string {
+	out := make([]string, 0, len(labels))
+	for _, l := range labels {
+		if !strings.HasPrefix(l, selfReportedRankPrefix) {
+			out = append(out, l)
+		}
+	}
+	return out
 }

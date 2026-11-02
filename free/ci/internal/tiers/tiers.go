@@ -32,7 +32,10 @@ const Name = "tiers"
 // Owner is the owner recorded on the keys this package registers.
 const Owner = "sched"
 
-// KeyOrder is the tier order key: a subset of DefaultOrder, best tier first.
+// KeyOrder is the tier order key: a subset of DefaultOrder, best tier first. It is an
+// OperatorOnly key (operator and project scope only: a revision, pipeline or job scope
+// cannot set it, E671) because the order decides which tier runs first, and a tier it leaves
+// out is not used at all (sched excludes its runners). A lower scope keeps the relative order (TightenOrdered).
 const KeyOrder = "sched.auto.order"
 
 // KeyStepSec is the bounded wait for a busy better tier, in seconds.
@@ -62,7 +65,7 @@ func init() {
 // Keys returns the specs of the two auto keys.
 func Keys() []policy.KeySpec {
 	return []policy.KeySpec{
-		{Key: KeyOrder, Owner: Owner, Kind: policy.TightenSubset, Default: DefaultOrder(), Decode: decodeOrder},
+		{Key: KeyOrder, Owner: Owner, Kind: policy.TightenOrdered, OperatorOnly: true, Default: DefaultOrder(), Decode: decodeOrder},
 		{Key: KeyStepSec, Owner: Owner, Kind: policy.TightenLower, Default: sched.DefaultAutoStepSec, Decode: decodeStep},
 	}
 }

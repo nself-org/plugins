@@ -21,7 +21,8 @@ func preservePlacement(in, old model.Capability) model.Capability {
 func reportedLabels(reported, assigned []string) []string {
 	out := make([]string, 0, len(reported)+len(assigned))
 	for _, label := range reported {
-		if !strings.HasPrefix(label, "pool.") {
+		// pool. and rank= are operator facts: a node never sets them itself.
+		if !strings.HasPrefix(label, "pool.") && !strings.HasPrefix(label, "rank=") {
 			out = append(out, label)
 		}
 	}

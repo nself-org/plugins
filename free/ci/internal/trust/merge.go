@@ -40,7 +40,7 @@ func decodeValue(spec KeySpec, raw json.RawMessage) (any, error) {
 				v = spec.Order[len(spec.Order)-1]
 			}
 		}
-	case TightenSubset, TightenSuperset:
+	case TightenSubset, TightenSuperset, TightenOrdered:
 		list, ok := v.([]any)
 		if !ok {
 			return nil, fmt.Errorf("expected string list")
@@ -73,7 +73,10 @@ func setValues(v any) map[string]bool {
 	}
 	return out
 }
-func stricter(spec KeySpec, old, next any) bool {
+
+// stricter reports whether next is a legal tightening of old. src is where old came
+// from; only TightenOrdered reads it (an unset-by-anyone default may be reordered).
+func stricter(spec KeySpec, old, next any, src Source) bool {
 	switch spec.Kind {
 	case TightenAny:
 		return true
@@ -101,6 +104,8 @@ func stricter(spec KeySpec, old, next any) bool {
 			return y <= x
 		}
 		return y >= x
+	case TightenOrdered:
+		return orderedTighter(old, next, src == SourceDefault)
 	case TightenSubset, TightenSuperset:
 		a, b := setValues(old), setValues(next)
 		if spec.Kind == TightenSubset {
@@ -155,20 +160,24 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 			if err != nil {
 				return Effective{}, "", fmt.Errorf("E672 %s: %w", key, err)
 			}
-			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
-				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 spend key requires operator scope"})
+			if (spec.Spend || spec.OperatorOnly) && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
+				why := "E671 spend key requires operator scope"
+				if !spec.Spend {
+					why = "E671 key requires operator scope"
+				}
+				e.ignored = append(e.ignored, Ignored{key, scope.Kind, why})
 				continue
 			}
 			old, exists := e.values[key]
 			if scope.Kind == SourceRun {
-				if why := runRefusal(spec, key, old.value, exists, v); why != "" {
+				if why := runRefusal(spec, key, old.value, old.source, exists, v); why != "" {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, why})
 					continue
 				}
 				e.values[key] = entry{value: v, source: scope.Kind}
 				continue
 			}
-			if exists && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
+			if exists && (!stricter(spec, old.value, v, old.source) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
 				if scope.Kind == SourceRevision {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision widening"})
 					continue
@@ -176,7 +185,7 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 				return Effective{}, "", fmt.Errorf("E670 %s loosens %s from %s", scope.Kind, key, old.source)
 			}
 			if scope.Kind == SourceRevision && !exists {
-				if spec.Default == nil || !stricter(spec, spec.Default, v) || spec.Kind == TightenAny && !reflect.DeepEqual(spec.Default, v) {
+				if spec.Default == nil || !stricter(spec, spec.Default, v, SourceDefault) || spec.Kind == TightenAny && !reflect.DeepEqual(spec.Default, v) {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision key not stricter than registered default"})
 					continue
 				}
@@ -232,7 +241,7 @@ var runOpenOwners = map[string]bool{"sched": true}
 // runRefusal says why a run-scope value may not apply ("" when it may). A key
 // of an open owner that nothing set yet and without a default is open: any value
 // restricts it, except an off switch or a free-form value, which restrict nothing.
-func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string {
+func runRefusal(spec KeySpec, key string, old any, src Source, exists bool, next any) string {
 	const widening = "E819 run scope widening"
 	switch {
 	case spec.Spend || spec.Secret:
@@ -245,12 +254,12 @@ func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string
 		}
 		return widening
 	case exists:
-		if stricter(spec, old, next) {
+		if stricter(spec, old, next, src) {
 			return ""
 		}
 		return widening
 	case spec.Default != nil:
-		if stricter(spec, spec.Default, next) {
+		if stricter(spec, spec.Default, next, SourceDefault) {
 			return ""
 		}
 		return widening

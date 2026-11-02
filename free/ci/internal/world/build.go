@@ -84,6 +84,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 		if err = json.Unmarshal(node.Capability, &cap); err != nil {
 			return sched.World{}, "", failed("node "+node.ID, err)
 		}
+		cap.Identity.Labels = withoutSelfReportedRank(cap.Identity.Labels)
 		cap.Availability.State.Value = &node.State
 		cap.Availability.State.Confidence = "known"
 		cap.Availability.State.Source = "assigned"
