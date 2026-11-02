@@ -17,6 +17,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -97,6 +98,17 @@ type StatsStmt struct {
 // statsTables are the tables whose set may be absent; the rest are core.
 var statsTables = []string{"schedtel_outcome", "ledger", "cache_use", "cache_entry", "cache_artifact", "outbox", "node"}
 
+// The outcomes statements. "outcomes" reads stat_row (migration sched-telemetry 0003): one packed text per
+// finished attempt that still has its job, whose fields are, in order, attempt number, wait, runtime, cold start,
+// a flag number (passed, infra failure, ephemeral runner), project, runner, trigger, job key, job id.
+// "outcomes_cells" is the same set as separate columns, read only when a text field holds the separator.
+const (
+	outcomeRows  = "SELECT stat_row FROM schedtel_outcome WHERE project BETWEEN ? AND ? AND ts>=? AND stat_row IS NOT NULL"
+	outcomeCells = "SELECT attempt_n,wait_ms,runtime_ms,cold_start_ms,(result='passed')+2*(failure_class='infra')+4*(runner_class='ephemeral')," +
+		"project,runner,pipeline_trigger,job_key,job_id FROM schedtel_outcome " +
+		"WHERE project BETWEEN ? AND ? AND ts>=? AND job_id IS NOT NULL AND result IN ('passed','failed')"
+)
+
 // StatsStatements returns the read statements for q, in the order StatsRead runs them.
 func StatsStatements(q StatsQuery) []StatsStmt {
 	lo, hi := "", "\U0010ffff"
@@ -106,9 +118,8 @@ func StatsStatements(q StatsQuery) []StatsStmt {
 	cut := q.Now.Add(-q.Since)
 	ms, ns := cut.UnixMilli(), cut.UnixNano()
 	return []StatsStmt{
-		{"outcomes", `SELECT job_id,attempt_n,project,job_key,runner,pipeline_trigger,wait_ms,runtime_ms,cold_start_ms,
-(result='passed')+2*(failure_class='infra')+4*(runner_class='ephemeral')
-FROM schedtel_outcome WHERE project BETWEEN ? AND ? AND ts>=? AND job_id IS NOT NULL AND result IN ('passed','failed')`, []any{lo, hi, ms}},
+		{"outcomes", outcomeRows, []any{lo, hi, ms}},
+		{"outcomes_cells", outcomeCells, []any{lo, hi, ms}},
 		{"queued", `SELECT p.project,p.trigger,count(*) FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.state='queued' AND p.project BETWEEN ? AND ? GROUP BY p.project,p.trigger`, []any{lo, hi}},
 		{"cache", `SELECT coalesce(project,''),result,count(*),sum(bytes) FROM cache_use WHERE ts>=? GROUP BY 1,2`, []any{ns}},
 		{"ledger", `SELECT project,confidence,count(*),sum(coalesce(act_micro,est_micro)) FROM ledger WHERE provider>='' AND admitted_at>=? GROUP BY project,confidence`, []any{ns}},
@@ -139,7 +150,7 @@ func (s *Store) StatsRead(ctx context.Context, q StatsQuery) (StatsRows, error) 
 	skip := map[string]bool{"outcomes": out.Missing["schedtel_outcome"], "cache": out.Missing["cache_use"], "ledger": out.Missing["ledger"],
 		"cas": out.Missing["cache_entry"], "artifacts": out.Missing["cache_artifact"], "nodes": out.Missing["node"], "outbox": out.Missing["outbox"]}
 	for _, st := range StatsStatements(q) {
-		if skip[st.Name] {
+		if skip[st.Name] || st.Name == "outcomes_cells" {
 			continue
 		}
 		rows, err := tx.QueryContext(ctx, st.SQL, st.Args...)
@@ -151,11 +162,34 @@ func (s *Store) StatsRead(ctx context.Context, q StatsQuery) (StatsRows, error) 
 		if err == nil {
 			err = rows.Err()
 		}
+		if errors.Is(err, errPacked) {
+			err = readOutcomeCells(ctx, tx, q, &out)
+		}
 		if err != nil {
 			return out, coded("E607", err.Error())
 		}
 	}
 	return out, nil
+}
+
+// readOutcomeCells reads the outcomes again as separate columns, for a store whose text fields hold the
+// separator of the packed form.
+func readOutcomeCells(ctx context.Context, tx *sql.Tx, q StatsQuery, out *StatsRows) error {
+	for _, st := range StatsStatements(q) {
+		if st.Name != "outcomes_cells" {
+			continue
+		}
+		rows, err := tx.QueryContext(ctx, st.SQL, st.Args...)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		if err = foldOutcomeCells(rows, out); err != nil {
+			return err
+		}
+		return rows.Err()
+	}
+	return nil
 }
 
 func scanStats(rows *sql.Rows, name string, out *StatsRows) error {

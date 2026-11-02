@@ -5,6 +5,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"strings"
 	"testing"
 	"time"
 )
@@ -62,5 +64,62 @@ func TestStatsReadMissingSet(t *testing.T) {
 	rows, err := s.StatsRead(context.Background(), StatsQuery{Now: time.Now(), Since: time.Hour})
 	if err != nil || !rows.Missing["outbox"] || rows.Missing["ledger"] {
 		t.Fatalf("missing = %v, %v", rows.Missing, err)
+	}
+}
+
+// A text field that holds the separator of the packed outcome row is read through the column form.
+func TestStatsReadSeparatorInText(t *testing.T) {
+	s := testStore(t)
+	now := time.Now()
+	statsSeed(t, s, "acme/a", "a1", now.Add(-time.Minute).UnixMilli())
+	// stat_row follows job_id, attempt_n and trigger (the triggers that set them rebuild it), so touch one.
+	if _, err := s.writer.Exec(`UPDATE schedtel_outcome SET runner='r'||char(31)||'1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.writer.Exec(`UPDATE schedtel_outcome SET job_id=job_id`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.StatsRead(context.Background(), StatsQuery{Now: now, Since: time.Hour})
+	if err != nil || len(rows.Runs) != 1 || rows.Runs[0].Runner != "r\x1f1" || rows.Runs[0].N != 1 || len(rows.Jobs) != 1 || len(rows.Waits) != 1 {
+		t.Fatalf("runs %+v, jobs %+v, waits %+v, %v", rows.Runs, rows.Jobs, rows.Waits, err)
+	}
+}
+
+// stat_row is what the trigger writes and what the migration's UPDATE backfills for existing rows.
+func TestStatsRowTextAndBackfill(t *testing.T) {
+	s := testStore(t)
+	statsSeed(t, s, "acme/a", "a1", time.Now().UnixMilli())
+	const want = "1\x1f10\x1f20\x1f-1\x1f1\x1facme/a\x1fr1\x1fpush\x1fbuild\x1fj-a1"
+	read := func() string {
+		var got sql.NullString
+		if err := s.writer.QueryRow(`SELECT stat_row FROM schedtel_outcome`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got.String
+	}
+	if got := read(); got != want {
+		t.Fatalf("trigger wrote %q, want %q", got, want)
+	}
+	file, err := schedTelemetryMigrations.ReadFile("migrations/sched-telemetry/0003_outcome_row.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var backfill string
+	for _, line := range strings.Split(string(file), "\n") {
+		if strings.HasPrefix(line, "UPDATE schedtel_outcome SET stat_row=") {
+			backfill = line
+		}
+	}
+	if backfill == "" {
+		t.Fatal("no backfill statement in the migration")
+	}
+	if _, err = s.writer.Exec(`UPDATE schedtel_outcome SET stat_row=NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.writer.Exec(backfill); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != want {
+		t.Fatalf("backfill wrote %q, want %q", got, want)
 	}
 }
