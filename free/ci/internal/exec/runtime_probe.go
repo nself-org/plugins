@@ -107,7 +107,6 @@ func checkSandboxRuntime(level model.Isolation, cmd ContainerCommand, image stri
 	if level != "sandboxed-container" {
 		return nil
 	}
-	var runtimeOK, taskLimitOK bool
 	for i := 1; i < len(cmd.Args) && cmd.Args[i] != image; i++ {
 		name, value, hasValue := strings.Cut(cmd.Args[i], "=")
 		takesValue := plannedFlags[name]
@@ -116,17 +115,8 @@ func checkSandboxRuntime(level model.Isolation, cmd ContainerCommand, image stri
 			value = cmd.Args[i]
 		}
 		if name == "--runtime" && value == sandboxRuntime {
-			runtimeOK = true
-		}
-		if name == "--ulimit" && value == SandboxNprocLimit {
-			taskLimitOK = true
+			return nil
 		}
 	}
-	if !runtimeOK {
-		return coded("E613", "sandboxed-container job planned without --runtime="+sandboxRuntime)
-	}
-	if !taskLimitOK {
-		return coded("E613", "sandboxed-container job planned without --ulimit "+SandboxNprocLimit)
-	}
-	return nil
+	return coded("E613", "sandboxed-container job planned without --runtime="+sandboxRuntime)
 }

@@ -3,9 +3,9 @@ package gvisor
 // Purpose: tell a sandbox killed by its process limit from a job that exited with the same code.
 // Inputs:  the --debug-log value of the runsc runtime entry, the attempt's workspace path, the attempt start.
 // Outputs: the runsc log line that shows the death, or "".
-// Constraints: the host cgroup pids limit can make the Sentry fail to create a stub process.
-// These death records were seen on the GitHub ubuntu runner, gVisor 20261012.0;
-// they are not guaranteed for every guest task refusal (guest RLIMIT_NPROC is separate):
+// Constraints: under gVisor the container's pids limit is a host cgroup limit on the sentry, so a fork bomb
+// ends with the sentry failing to create a stub process: it exits 2 and the job prints nothing. Only runsc's
+// own boot log says so (seen on the GitHub ubuntu runner, gVisor 20261012.0):
 //   handlePtraceSyscallRequest failed: unable to create a stub process: creating stub process: resource temporarily unavailable
 //   panic: Unknown syscall 57 error: createStub: failed to get clone
 //   panic: Unknown syscall 57 error: createSysmsgThread: failed to get clone

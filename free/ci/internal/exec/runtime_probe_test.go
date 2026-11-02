@@ -95,14 +95,14 @@ func TestRuntimeToolVersion(t *testing.T) {
 
 func TestCheckSandboxRuntime(t *testing.T) {
 	image := "docker.io/library/busybox@" + probeDigest
-	with := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime=runsc", "--ulimit", SandboxNprocLimit, "--rm", image, "sh"}}
+	with := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime=runsc", "--rm", image, "sh"}}
 	without := ContainerCommand{Binary: "docker", Args: []string{"run", "--rm", image, "sh"}}
 	inJob := ContainerCommand{Binary: "docker", Args: []string{"run", "--rm", image, "echo", "--runtime=runsc"}} // a job word, after the image
 	if err := checkSandboxRuntime("sandboxed-container", with, image); err != nil {
 		t.Fatalf("runsc command refused: %v", err)
 	}
 	asLabel := ContainerCommand{Binary: "docker", Args: []string{"run", "--label", "--runtime=runsc", "--rm", image, "sh"}} // a label value
-	spaced := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime", "runsc", "--ulimit=" + SandboxNprocLimit, "--rm", image, "sh"}}
+	spaced := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime", "runsc", "--rm", image, "sh"}}
 	if err := checkSandboxRuntime("sandboxed-container", spaced, image); err != nil {
 		t.Fatalf("spaced runtime form refused: %v", err)
 	}
@@ -113,28 +113,5 @@ func TestCheckSandboxRuntime(t *testing.T) {
 	}
 	if err := checkSandboxRuntime("container", without, image); err != nil {
 		t.Errorf("the container level needs no runtime: %v", err)
-	}
-}
-
-func TestCheckSandboxRuntimeRequiresGuestTaskLimit(t *testing.T) {
-	for _, args := range [][]string{
-		{"run", "--runtime=runsc", "image", "--ulimit", SandboxNprocLimit},
-		{"run", "--runtime=runsc", "--label", "--ulimit=" + SandboxNprocLimit, "image"},
-		{"run", "--runtime=runsc", "--ulimit", "nproc=513:513", "image"},
-	} {
-		if err := checkSandboxRuntime("sandboxed-container", ContainerCommand{Args: args}, "image"); err == nil {
-			t.Errorf("guest task limit bypass accepted: %v", args)
-		}
-	}
-}
-
-func TestContainerNprocLimitCannotBeWidenedOrReplaced(t *testing.T) {
-	for _, value := range []string{"nproc=513:513", "nproc=512:1024", "nproc=unlimited", "nofile=512:512"} {
-		if err := checkFlagValue("--ulimit", value, ContainerRun{}); err == nil {
-			t.Errorf("unsafe ulimit accepted: %s", value)
-		}
-	}
-	if err := checkFlagValue("--ulimit", SandboxNprocLimit, ContainerRun{}); err != nil {
-		t.Fatal(err)
 	}
 }

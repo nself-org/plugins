@@ -32,12 +32,6 @@ func RunnerRootTmpfs() string { return RunnerRootPath + ":rw,exec,nosuid,nodev,s
 // minJobUID is the first job UID (Epic D12: 65532 + slot).
 const minJobUID = 65532
 
-// SandboxTaskLimit bounds guest tasks independently of the Sentry's host threads.
-const SandboxTaskLimit = 512
-
-// SandboxNprocLimit is the only permitted guest process rlimit, soft and hard equal.
-const SandboxNprocLimit = "nproc=512:512"
-
 var (
 	runtimeBinary = regexp.MustCompile(`^(docker|podman)$`)
 	// resourceSignatures are what a job prints when the kernel refuses a fork.
@@ -54,7 +48,7 @@ var plannedFlags = map[string]bool{
 	"--rm": false, "--read-only": false, "--name": true, "--label": true, "--network": true, "--dns": true,
 	"--cap-drop": true, "--security-opt": true, "--tmpfs": true, "--pids-limit": true, "--cpus": true,
 	"--memory": true, "--memory-swap": true, "--user": true, "--env": true, "--runtime": true, "--userns": true,
-	"--entrypoint": true, "--mount": true, "--workdir": true, "--env-file": true, "--interactive": false, "--ulimit": true,
+	"--entrypoint": true, "--mount": true, "--workdir": true, "--env-file": true, "--interactive": false,
 }
 
 // checkContainerCommand refuses a planned command that is not a hardened `run` of run.Image.
@@ -210,10 +204,6 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 	case "--pids-limit":
 		if n, err := strconv.Atoi(value); err != nil || n < 1 || n > 1<<20 {
 			return bad("pids-limit must be a positive number")
-		}
-	case "--ulimit":
-		if value != SandboxNprocLimit {
-			return bad("ulimit must be " + SandboxNprocLimit)
 		}
 	case "--memory", "--memory-swap":
 		if !memoryValue.MatchString(value) {

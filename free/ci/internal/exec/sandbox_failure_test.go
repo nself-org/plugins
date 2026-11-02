@@ -13,21 +13,24 @@ type deathPlanner struct {
 
 func (d deathPlanner) SandboxFailure(ContainerRun, time.Time) string { return d.line }
 
-func TestSandboxFailureUsesRuntimeEvidenceForEveryFailedExit(t *testing.T) {
+func TestSandboxFailureOnlyForASilentFailure(t *testing.T) {
 	died := deathPlanner{line: "createStub: failed to get clone"}
 	cases := []struct {
 		name string
 		plan ContainerPlanner
 		code int
+		tail string
 		want string
 	}{
-		{"runtime cites a death", died, 2, died.line},
-		{"exit 0", died, 0, ""},
-		{"runtime has no record of a death (exit 2 script)", deathPlanner{}, 2, ""},
-		{"planner cannot explain", nil, 2, ""},
+		{"silent failure, runtime cites a death", died, 2, "", died.line},
+		{"blank output counts as silent", died, 2, " \n", died.line},
+		{"the job printed something", died, 2, "boom", ""},
+		{"exit 0", died, 0, "", ""},
+		{"runtime has no record of a death (exit 2 script)", deathPlanner{}, 2, "", ""},
+		{"planner cannot explain", nil, 2, "", ""},
 	}
 	for _, c := range cases {
-		if got := sandboxFailure(c.plan, ContainerRun{}, time.Time{}, c.code); got != c.want {
+		if got := sandboxFailure(c.plan, ContainerRun{}, time.Time{}, c.code, c.tail); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -41,7 +44,7 @@ func (notePlanner) SandboxNote(ContainerRun, time.Time) string {
 	return "runsc log: 2 boot logs, none of this attempt"
 }
 
-func TestSandboxReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
+func TestSilentReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
 	cases := []struct {
 		name     string
 		plan     ContainerPlanner
@@ -57,55 +60,12 @@ func TestSandboxReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
 	for _, c := range cases {
 		var out []byte
 		s := JobSpec{Plan: c.plan, Output: func(b []byte) { out = append(out, b...) }}
-		got := (&Executor{}).sandboxReason(s, ContainerRun{}, time.Time{}, 2, c.pids, sandboxOutput{})
+		got := (&Executor{}).silentReason(s, ContainerRun{}, time.Time{}, 2, "", c.pids)
 		if got != c.want || !strings.Contains(string(out), c.contains) {
 			t.Errorf("%s: got %q out %q", c.name, got, out)
 		}
 		if c.want == "" && !strings.Contains(string(out), "boot logs") {
 			t.Errorf("%s: the runtime note is missing: %q", c.name, out)
 		}
-	}
-}
-
-func TestSandboxReasonRequiresSilentOutputOrExactTaskReport(t *testing.T) {
-	for _, tc := range []struct {
-		name, output, reason string
-		max                  uint64
-	}{
-		{"limit hit with FAIL", "FAIL\n", "", 1},
-		{"unsourced diagnostic rejected", "sandbox wait failed\nsandbox wait failed\n", "", 1},
-		{"no limit hit", "sandbox wait failed\n", "", 0},
-		{"silent limit hit", "", "resource_limit", 1},
-		{"silent without limit hit", "", "", 0},
-		{"whitespace only limit hit", " \t\n", "resource_limit", 1},
-		{"unsourced diagnostic without final newline", "sandbox wait failed", "", 1},
-		{"FAIL mixed with diagnostic", "sandbox wait failed\nFAIL\n", "", 1},
-		{"FAIL appended to diagnostic", "sandbox wait failed: FAIL\n", "", 1},
-		{"FAIL before tail", "FAIL\n" + strings.Repeat("sandbox wait failed\n", 300), "", 1},
-		{"incomplete diagnostic", "sandbox wait", "", 1},
-		{"guest report with host max zero", SandboxTaskLimitReport + "\n", "resource_limit", 0},
-		{"guest report without final newline", SandboxTaskLimitReport, "resource_limit", 0},
-		{"guest report after FAIL", "FAIL\n" + SandboxTaskLimitReport + "\n", "", 0},
-		{"guest report before FAIL", SandboxTaskLimitReport + "\nFAIL\n", "", 0},
-		{"guest report suffix", SandboxTaskLimitReport + ": FAIL\n", "", 0},
-		{"wrong task count", strings.Replace(SandboxTaskLimitReport, "tasks=512", "tasks=511", 1) + "\n", "", 0},
-		{"wrong errno", strings.Replace(SandboxTaskLimitReport, "EAGAIN", "ENOMEM", 1) + "\n", "", 0},
-		{"FAIL evicted from tail", "FAIL\n" + strings.Repeat(SandboxTaskLimitReport+"\n", 300), "", 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			// Try whole writes and split lines, as runtime output arrives in arbitrary chunks.
-			for _, chunkSize := range []int{1, 7, len(tc.output) + 1} {
-				var output sandboxOutput
-				for rest := tc.output; len(rest) > 0; {
-					n := min(chunkSize, len(rest))
-					output.write([]byte(rest[:n]))
-					rest = rest[n:]
-				}
-				got := (&Executor{}).sandboxReason(JobSpec{}, ContainerRun{}, time.Time{}, 2, pidsReading{Max: tc.max}, output)
-				if got != tc.reason {
-					t.Fatalf("chunk size %d: reason %q want %q", chunkSize, got, tc.reason)
-				}
-			}
-		})
 	}
 }

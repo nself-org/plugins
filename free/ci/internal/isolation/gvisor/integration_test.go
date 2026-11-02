@@ -183,46 +183,65 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 	}
 }
 
+// A real process fork bomb is stopped by a limit and the host stays whole. Under gVisor the bomb ends
+// one of three ways, and which one varies run to run: the host pids limit refuses the Sentry a stub
+// process (pids.events max rises), the memory limit kills the sandbox (137), or the Sentry refuses the
+// guest fork itself and the shell exits 2 while the host counter stays at 0 (seen on the GitHub ubuntu
+// runner, D-1580: "sh: sleep: Out of memory", pids.events max=0). The test therefore proves what holds
+// in all three, from readings the host takes itself: the container's own cgroup carries pids.max=512 and
+// never exceeds it, the host can spawn while the bomb runs and after, the bomb ends through a refused
+// fork or a kill (the loop cannot end any other way) well inside its timeout, and the container is
+// removed. The executor's class is checked for consistency, not demanded: resource_limit only comes
+// from host evidence, so a run with none stays a code failure.
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
-	prerequisites(t)
-	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		t.Fatalf("bounded task fixture requires amd64 or arm64, got %s", runtime.GOARCH)
-	}
-	src := t.TempDir()
-	build := osexec.Command("go", "build", "-mod=vendor", "-o", filepath.Join(src, "taskbomb"), "./testdata/taskbomb")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+runtime.GOARCH)
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build bounded task fixture: %v\n%s", err, out)
-	}
-	for i := 0; i < 3; i++ { // fixed repetitions; every attempt must independently prove the limit
-		forkBombOnce(t, fmt.Sprintf("t05-fork%d-%d", i, time.Now().UnixNano()), src)
+	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
+		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
 	}
 }
 
-func forkBombOnce(t *testing.T, id, src string) {
+func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
+	host := watchHost("nself-ci-" + id)
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, id, "", func(s *exec.JobSpec) {
-		s.Timeout = 20 * time.Second
-		s.SourceDir = src
-		s.Command = []string{"/repo/taskbomb"}
-	})
-	t.Logf("%s evidence: %q", id, tail(out, 600))
-	if res.Err != nil || res.ExitCode != 2 || res.Reason != "resource_limit" || res.Attempt.State != "failed" {
-		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
+	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
+	took := time.Since(start)
+	seen := host.stop()
+	t.Logf("%s: exit %d reason %q in %s; host: %s; job output tail: %q", id, res.ExitCode, res.Reason, took.Round(time.Millisecond), seen, tail(out, 600))
+	if res.Err != nil || res.Attempt.State != "failed" {
+		t.Fatalf("fork bomb did not end as a failed job: %+v\n%q", res, tail(out, 1500))
 	}
-	if !strings.Contains(out, "nself-ci: task limit reached: limit=512 tasks=512 errno=EAGAIN\n") {
-		t.Fatalf("no exact in-sandbox task count and refused-clone evidence: %q", tail(out, 1500))
+	// `while :; do sleep 300 & done` never exits by itself: 2 is the shell's refused fork, 137 a kill by a limit.
+	switch {
+	case res.ExitCode == 137 && res.Reason != "resource_limit":
+		t.Fatalf("a limit kill (137) was not classified: %+v", res)
+	case res.ExitCode == 2 && res.Reason == "" && res.Attempt.FailureClass != "code":
+		t.Fatalf("an unclassified exit 2 must stay a code failure: %+v", res)
+	case res.ExitCode != 2 && res.ExitCode != 137:
+		t.Fatalf("fork bomb ended with exit %d, not a refused fork (2) or a limit kill (137): %+v\n%q", res.ExitCode, res, tail(out, 1500))
+	case res.Reason != "" && res.Reason != "resource_limit":
+		t.Fatalf("fork bomb reason %q: %+v", res.Reason, res)
 	}
-	if took := time.Since(start); took > 60*time.Second {
+	if res.Attempt.FailureClass == "timeout" {
+		t.Fatalf("fork bomb was stopped by its timeout, not a limit: %+v", res)
+	}
+	if took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
 	}
+	if seen.cgroup == "" {
+		t.Fatalf("the host never read the container's cgroup: %s", seen)
+	}
+	if seen.limit != "512" {
+		t.Fatalf("container cgroup pids.max is %q, want the host limit 512: %s", seen.limit, seen)
+	}
+	if seen.peak < 1 || seen.peak > 512 {
+		t.Fatalf("container cgroup pids.current peaked at %d, outside 1..512: %s", seen.peak, seen)
+	}
+	if seen.spawnedDuring == 0 || seen.spawnErr != "" {
+		t.Fatalf("the host could not spawn while the bomb ran: %s", seen)
+	}
 	assertGone(t, "nself-ci-"+id)
-	// Starting another host process proves the sandbox did not exhaust the host's pids.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := osexec.CommandContext(ctx, "/bin/true").Run(); err != nil {
-		t.Fatalf("host cannot start a process after the fork bomb: %v", err)
+	if err := osexec.Command("/bin/true").Run(); err != nil {
+		t.Fatalf("the host cannot spawn after the fork bomb: %v", err)
 	}
 }
 

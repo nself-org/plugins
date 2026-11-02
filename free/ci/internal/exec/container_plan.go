@@ -116,10 +116,8 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	}
 	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
 	tail := &outputTail{max: 4096}
-	var outputCheck sandboxOutput
 	sink := func(b []byte) {
 		tail.write(b)
-		outputCheck.write(b)
 		if s.Output != nil {
 			s.Output(b)
 		}
@@ -157,10 +155,8 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	}
 	pids := watch.stop()
 	reason := resourceReason(ctx, code, tail.String(), facts)
-	if watch != nil && err == nil && ctx.Err() == nil && code != 0 {
-		if sandboxReason := e.sandboxReason(s, run, began, code, pids, outputCheck); sandboxReason != "" {
-			reason = sandboxReason
-		}
+	if reason == "" && err == nil && ctx.Err() == nil && silentFailure(code, tail.String()) {
+		reason = e.silentReason(s, run, began, code, tail.String(), pids)
 	}
 	return code, reason, err
 }
