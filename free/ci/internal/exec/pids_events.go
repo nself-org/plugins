@@ -5,8 +5,8 @@ package exec
 // Outputs: pidsReading, the highest `max` counter of the container cgroup's pids.events and what was read.
 // Constraints: planned containers run with --rm, so the cgroup is gone when the job ends; the counter is
 // sampled while the container lives and the last good reading is kept. pids.events `max` rises each time
-// a fork or clone is refused at pids.max, whatever runtime ran the job, so it does not depend on the
-// runtime's log. Only a host that exposes the cgroup (cgroup v2 under /sys/fs/cgroup) answers; elsewhere
+// a host fork or clone is refused at pids.max. Guest task refusals inside gVisor do not increment it.
+// Only a host that exposes the cgroup (cgroup v2 under /sys/fs/cgroup) answers; elsewhere
 // nothing is claimed and the reading says why.
 
 import (

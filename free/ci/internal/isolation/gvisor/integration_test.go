@@ -184,25 +184,35 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 }
 
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
-	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
-		forkBombOnce(t, fmt.Sprintf("t05-fork%d-%d", i, time.Now().UnixNano()))
+	prerequisites(t)
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Fatalf("bounded task fixture requires amd64 or arm64, got %s", runtime.GOARCH)
+	}
+	src := t.TempDir()
+	build := osexec.Command("go", "build", "-mod=vendor", "-o", filepath.Join(src, "taskbomb"), "./testdata/taskbomb")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+runtime.GOARCH)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build bounded task fixture: %v\n%s", err, out)
+	}
+	for i := 0; i < 3; i++ { // fixed repetitions; every attempt must independently prove the limit
+		forkBombOnce(t, fmt.Sprintf("t05-fork%d-%d", i, time.Now().UnixNano()), src)
 	}
 }
 
-func forkBombOnce(t *testing.T, id string) {
+func forkBombOnce(t *testing.T, id, src string) {
 	p, image := prerequisites(t)
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
-	t.Logf("%s evidence: %q", id, tail(out, 600)) // the kernel counter or the runtime record that classified it
-	if res.Err != nil || res.ExitCode == 0 || res.Reason != "resource_limit" || res.Attempt.State != "failed" {
+	out, res := runJob(t, p, "sandboxed-container", image, id, "", func(s *exec.JobSpec) {
+		s.Timeout = 20 * time.Second
+		s.SourceDir = src
+		s.Command = []string{"/repo/taskbomb"}
+	})
+	t.Logf("%s evidence: %q", id, tail(out, 600))
+	if res.Err != nil || res.ExitCode != 2 || res.Reason != "resource_limit" || res.Attempt.State != "failed" {
 		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
 	}
-	pidsEvidence := false
-	for _, signature := range []string{"the container's process limit refused forks:", "the sandbox died from the container's process limit:", "Resource temporarily unavailable", "can't fork", "Cannot fork", "pthread_create failed"} {
-		pidsEvidence = pidsEvidence || strings.Contains(out, signature)
-	}
-	if !pidsEvidence {
-		t.Fatalf("no positive pids-limit evidence (an OOM alone is insufficient): %q", tail(out, 1500))
+	if !strings.Contains(out, "nself-ci: task limit reached: limit=512 tasks=512 errno=EAGAIN\n") {
+		t.Fatalf("no exact in-sandbox task count and refused-clone evidence: %q", tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)

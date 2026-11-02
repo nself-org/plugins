@@ -145,7 +145,10 @@ func TestPlannedContainerReasons(t *testing.T) {
 func TestPlannedSandboxFailureRequiresSilentOrRuntimeOnlyOutput(t *testing.T) {
 	for _, tc := range []struct{ name, output, code, death, reason string }{
 		{"silent", "", "2", "failed to get clone", "resource_limit"},
-		{"runtime diagnostics", "sandbox wait failed\n", "2", "failed to get clone", "resource_limit"},
+		{"unsourced diagnostics", "sandbox wait failed\n", "2", "failed to get clone", ""},
+		{"guest limit without host evidence", SandboxTaskLimitReport + "\n", "2", "", "resource_limit"},
+		{"guest limit with FAIL", "FAIL\n" + SandboxTaskLimitReport + "\n", "2", "", ""},
+		{"guest limit succeeded", SandboxTaskLimitReport + "\n", "0", "", ""},
 		{"job failure despite runtime evidence", "FAIL\n", "2", "failed to get clone", ""},
 		{"job failure before diagnostics", "FAIL\n" + strings.Repeat("sandbox wait failed\n", 300), "2", "failed to get clone", ""},
 		{"diagnostics without evidence", "sandbox wait failed\n", "2", "", ""},

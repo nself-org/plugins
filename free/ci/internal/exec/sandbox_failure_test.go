@@ -67,22 +67,30 @@ func TestSandboxReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
 	}
 }
 
-func TestSandboxReasonRequiresOnlyRuntimeOutputEvenWhenPidsLimitWasHit(t *testing.T) {
+func TestSandboxReasonRequiresSilentOutputOrExactTaskReport(t *testing.T) {
 	for _, tc := range []struct {
 		name, output, reason string
 		max                  uint64
 	}{
 		{"limit hit with FAIL", "FAIL\n", "", 1},
-		{"limit hit with only runtime diagnostics", "sandbox wait failed\nsandbox wait failed\n", "resource_limit", 1},
+		{"unsourced diagnostic rejected", "sandbox wait failed\nsandbox wait failed\n", "", 1},
 		{"no limit hit", "sandbox wait failed\n", "", 0},
 		{"silent limit hit", "", "resource_limit", 1},
 		{"silent without limit hit", "", "", 0},
 		{"whitespace only limit hit", " \t\n", "resource_limit", 1},
-		{"runtime line without final newline", "sandbox wait failed", "resource_limit", 1},
+		{"unsourced diagnostic without final newline", "sandbox wait failed", "", 1},
 		{"FAIL mixed with diagnostic", "sandbox wait failed\nFAIL\n", "", 1},
 		{"FAIL appended to diagnostic", "sandbox wait failed: FAIL\n", "", 1},
 		{"FAIL before tail", "FAIL\n" + strings.Repeat("sandbox wait failed\n", 300), "", 1},
 		{"incomplete diagnostic", "sandbox wait", "", 1},
+		{"guest report with host max zero", SandboxTaskLimitReport + "\n", "resource_limit", 0},
+		{"guest report without final newline", SandboxTaskLimitReport, "resource_limit", 0},
+		{"guest report after FAIL", "FAIL\n" + SandboxTaskLimitReport + "\n", "", 0},
+		{"guest report before FAIL", SandboxTaskLimitReport + "\nFAIL\n", "", 0},
+		{"guest report suffix", SandboxTaskLimitReport + ": FAIL\n", "", 0},
+		{"wrong task count", strings.Replace(SandboxTaskLimitReport, "tasks=512", "tasks=511", 1) + "\n", "", 0},
+		{"wrong errno", strings.Replace(SandboxTaskLimitReport, "EAGAIN", "ENOMEM", 1) + "\n", "", 0},
+		{"FAIL evicted from tail", "FAIL\n" + strings.Repeat(SandboxTaskLimitReport+"\n", 300), "", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Try whole writes and split lines, as runtime output arrives in arbitrary chunks.

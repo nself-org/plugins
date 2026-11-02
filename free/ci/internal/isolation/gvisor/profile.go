@@ -5,7 +5,7 @@ package gvisor
 // Outputs: a spec whose planner adds --runtime=runsc to the container profile's own command.
 // Constraints: all hardening (caps, user, limits, labels, network) stays in the container
 // profile and exec's argv backstop still checks the final command, so this profile only adds the
-// runtime; it never builds a container command of its own. Labels are the container profile's,
+// runtime and the guest task limit; it never builds a container command of its own. Labels are the container profile's,
 // so its List already finds these containers and this profile does not list (no duplicates).
 
 import (
@@ -214,6 +214,8 @@ func withRuntime(cmd exec.ContainerCommand) (exec.ContainerCommand, error) {
 	if len(cmd.Args) == 0 || cmd.Args[0] != "run" {
 		return cmd, isolation.Unavailable(isolation.ReasonProbeFailed, "container profile planned a command that is not a run")
 	}
-	cmd.Args = append([]string{"run", "--runtime=" + RuntimeName}, cmd.Args[1:]...)
+	// OCI pids limits constrain the Sentry's host threads. RLIMIT_NPROC also
+	// constrains its guest task table, which is independent of those threads.
+	cmd.Args = append([]string{"run", "--runtime=" + RuntimeName, "--ulimit", exec.SandboxNprocLimit}, cmd.Args[1:]...)
 	return cmd, nil
 }

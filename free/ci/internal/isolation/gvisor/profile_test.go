@@ -33,7 +33,7 @@ func TestPlanAddsRunscToTheHardenedCommand(t *testing.T) {
 		t.Fatalf("runtime not first after run: %v", cmd.Args)
 	}
 	joined := " " + strings.Join(cmd.Args, " ") + " "
-	for _, want := range []string{" --cap-drop=ALL ", " --network=none ", " --read-only ", " --user 65532:65532 ", " --pids-limit 512 ", " " + ProbeImage + " sh -c echo ok "} {
+	for _, want := range []string{" --cap-drop=ALL ", " --network=none ", " --read-only ", " --user 65532:65532 ", " --pids-limit 512 ", " --ulimit nproc=512:512 ", " " + ProbeImage + " sh -c echo ok "} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in %s", want, joined)
 		}

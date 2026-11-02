@@ -3,12 +3,13 @@ package exec
 // Purpose: let a sandbox runtime say why a container died when the job could not (D-1580 fork bomb).
 // Inputs:  the planner, run, start time, exit code, kernel counter and full-output eligibility.
 // Outputs: the reason of a failed run ("resource_limit" or ""), with the evidence written to the job output.
-// Constraints: only a silent failure or exact runtime diagnostic lines are eligible. Any job output
+// Constraints: only a silent failure or exact task-limit reports are eligible. Any other job output
 // keeps its class even if a fork was refused earlier, so a real test failure cannot become infra.
-// A script that just runs `exit 2` also keeps its class without evidence. Two signals decide:
+// A script that just runs `exit 2` also keeps its class without evidence. Signals include a bounded
+// in-sandbox probe reporting EAGAIN at exactly the configured task limit,
 // the container cgroup's pids.events `max` counter (the kernel's own
-// count of forks refused at the limit) and the runtime's own record (gVisor's debug log). When neither
-// fires, the readings of both are written so the next flake explains itself.
+// count of host forks refused at the limit) and the runtime's own record (gVisor's debug log).
+// Without evidence, the readings are written so the next failure explains itself.
 
 import (
 	"strings"
@@ -16,14 +17,20 @@ import (
 )
 
 // sandboxOutput checks every output byte with bounded storage, including bytes evicted from the tail.
-// Only the complete diagnostic below is allowed; prefixes with appended job text are rejected.
+// Only the complete report below is allowed; prefixes with appended job text are rejected.
 type sandboxOutput struct {
 	line      string
 	jobOutput bool
 	nonSilent bool
+	reported  bool
 }
 
-const sandboxWaitDiagnostic = "sandbox wait failed"
+// SandboxTaskLimitReport is emitted by the bounded integration probe only after checking
+// RLIMIT_NPROC, live task count and clone's errno. Like a shell's "can't fork", job output
+// is diagnostic evidence, not attestation against a job deliberately forging diagnostics.
+// Enforcement: runsc release-20261012.0 pkg/sentry/kernel/kernel.go:96-103
+// returns EAGAIN above RLIMIT_NPROC; task_start.go:155 checks every new task.
+const SandboxTaskLimitReport = "nself-ci: task limit reached: limit=512 tasks=512 errno=EAGAIN"
 
 func (o *sandboxOutput) write(b []byte) {
 	o.nonSilent = o.nonSilent || strings.TrimSpace(string(b)) != ""
@@ -32,9 +39,10 @@ func (o *sandboxOutput) write(b []byte) {
 			return
 		}
 		if c == '\n' {
-			o.jobOutput = o.line != "" && o.line != sandboxWaitDiagnostic
+			o.jobOutput = strings.TrimSpace(o.line) != "" && o.line != SandboxTaskLimitReport
+			o.reported = o.reported || o.line == SandboxTaskLimitReport
 			o.line = ""
-		} else if len(o.line) < len(sandboxWaitDiagnostic) {
+		} else if len(o.line) < len(SandboxTaskLimitReport) {
 			o.line += string(c)
 		} else {
 			o.jobOutput = true
@@ -43,7 +51,7 @@ func (o *sandboxOutput) write(b []byte) {
 }
 
 func (o sandboxOutput) eligible() bool {
-	return !o.nonSilent || (!o.jobOutput && (o.line == "" || o.line == sandboxWaitDiagnostic))
+	return !o.nonSilent || (!o.jobOutput && (strings.TrimSpace(o.line) == "" || o.line == SandboxTaskLimitReport))
 }
 
 // SandboxFailureReader is implemented by a planner whose runtime keeps a record of a sandbox that died
@@ -79,6 +87,9 @@ func (e *Executor) sandboxReason(s JobSpec, run ContainerRun, began time.Time, c
 	}
 	if code == 0 || !output.eligible() {
 		return ""
+	}
+	if output.reported || output.line == SandboxTaskLimitReport {
+		return "resource_limit"
 	}
 	if pids.Hit() {
 		say("the container's process limit refused forks: " + pids.String())
