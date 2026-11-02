@@ -51,6 +51,46 @@ func TestDigestCoversPolicyValues(t *testing.T) {
 	}
 }
 
+func isolationWorld(t *testing.T, preset, min string) sched.World {
+	t.Helper()
+	dec := func(raw json.RawMessage) (any, error) {
+		var s string
+		return s, json.Unmarshal(raw, &s)
+	}
+	reg, err := trust.NewRegistry(trust.KeySpec{Key: "trust.isolation_min", Owner: "trust", Kind: trust.TightenHigher, Order: []string{"process", "container", "sandboxed-container", "vm", "ephemeral-vm"}, Default: "process", Decode: dec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eff, _, err := reg.Merge("", trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.isolation_min": json.RawMessage(strconv.Quote(min))}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sched.World{Policy: sched.Policy{Preset: preset, Trust: eff}, Runners: []sched.Runner{{ID: "box", Location: "lan", Decl: trust.Declaration{Isolation: "container"}}}}
+}
+
+// TestDigestCoversPolicyForEveryPreset: balanced worlds that differ only in
+// trust.isolation_min (a container runner is eligible under one and not the other) have
+// different digests for every preset; identical policies keep identical digests (D-1527).
+func TestDigestCoversPolicyForEveryPreset(t *testing.T) {
+	for _, preset := range []string{"balanced", "fast", "cheap", "private", sched.AutoPreset} {
+		container, vm := isolationWorld(t, preset, "container"), isolationWorld(t, preset, "vm")
+		a, err := Digest(container)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := Digest(vm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a == b {
+			t.Fatalf("%s: isolation_min container and vm must not share a world digest", preset)
+		}
+		if again, _ := Digest(isolationWorld(t, preset, "container")); again != a {
+			t.Fatalf("%s: identical policies must keep one digest", preset)
+		}
+	}
+}
+
 func TestWithoutSelfReportedRank(t *testing.T) {
 	got := withoutSelfReportedRank([]string{"arch=amd64", "rank=0", "pool.x", "rank=10"})
 	if len(got) != 2 || got[0] != "arch=amd64" || got[1] != "pool.x" {
