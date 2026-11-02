@@ -705,7 +705,7 @@ Create `.env`:
 ```bash
 DATABASE_URL=postgresql://postgres:password@localhost:5432/nself_db
 GEOCODING_API_KEY=test-key
-GEOCODING_PORT=3203
+GEOCODING_PORT=3856
 
 GEOCODING_PROVIDERS=google
 GEOCODING_GOOGLE_API_KEY=your_api_key_here
@@ -723,7 +723,7 @@ pnpm start
 
 **Forward Geocode**:
 ```bash
-curl -X POST http://localhost:3203/api/geocode \
+curl -X POST http://localhost:3856/api/geocode \
   -H "Content-Type: application/json" \
   -H "X-API-Key: test-key" \
   -d '{
@@ -736,7 +736,7 @@ curl -X POST http://localhost:3203/api/geocode \
 
 **Reverse Geocode**:
 ```bash
-curl -X POST http://localhost:3203/api/reverse \
+curl -X POST http://localhost:3856/api/reverse \
   -H "Content-Type: application/json" \
   -H "X-API-Key: test-key" \
   -d '{"lat": 37.4224764, "lng": -122.0842499}'
@@ -744,7 +744,7 @@ curl -X POST http://localhost:3203/api/reverse \
 
 **Autocomplete**:
 ```bash
-curl -X POST http://localhost:3203/api/autocomplete \
+curl -X POST http://localhost:3856/api/autocomplete \
   -H "Content-Type: application/json" \
   -H "X-API-Key: test-key" \
   -d '{
@@ -757,7 +757,7 @@ curl -X POST http://localhost:3203/api/autocomplete \
 
 **Create Geofence**:
 ```bash
-curl -X POST http://localhost:3203/api/geofences \
+curl -X POST http://localhost:3856/api/geofences \
   -H "Content-Type: application/json" \
   -H "X-API-Key: test-key" \
   -d '{
@@ -771,7 +771,7 @@ curl -X POST http://localhost:3203/api/geofences \
 
 **Check Point in Geofence**:
 ```bash
-curl -X POST http://localhost:3203/api/geofences/evaluate \
+curl -X POST http://localhost:3856/api/geofences/evaluate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: test-key" \
   -d '{

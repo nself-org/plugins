@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	port := 3718
+	port := 3736
 	if v := os.Getenv("PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			port = p

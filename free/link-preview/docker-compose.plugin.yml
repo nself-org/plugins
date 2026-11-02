@@ -11,12 +11,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
-      PORT: "3718"
+      PORT: "3736"
       PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
     ports:
-      - "127.0.0.1:3718:3718"
+      - "127.0.0.1:3736:3736"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3718/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3736/health"]
       interval: 30s
       timeout: 10s
       retries: 3

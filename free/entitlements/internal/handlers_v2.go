@@ -300,7 +300,7 @@ func (h *Handlers) ListGrants(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.pool.Query(ctx,
 		`SELECT id, source_account_id, user_id, workspace_id, feature_key, reason,
 		        granted_by, expires_at, revoked_at, metadata, created_at, updated_at
-		 FROM entitlement_grants WHERE source_account_id=$1 ORDER BY created_at DESC`, sa)
+		 FROM np_entitlements_grants WHERE source_account_id=$1 ORDER BY created_at DESC`, sa)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("query: %v", err)})
 		return
@@ -372,7 +372,7 @@ func (h *Handlers) CreateGrant(w http.ResponseWriter, r *http.Request) {
 	metaJSON, _ := json.Marshal(metadata)
 	var id string
 	err := h.pool.QueryRow(ctx,
-		`INSERT INTO entitlement_grants
+		`INSERT INTO np_entitlements_grants
 		 (source_account_id, user_id, workspace_id, feature_key, reason, granted_by, expires_at, metadata)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
 		sa, nullStr(userID), nullStr(workspaceID), featureKey,
@@ -391,7 +391,7 @@ func (h *Handlers) RevokeGrant(w http.ResponseWriter, r *http.Request) {
 	sa := h.sa(r)
 	id := chi.URLParam(r, "id")
 	_, err := h.pool.Exec(ctx,
-		`UPDATE entitlement_grants SET revoked_at=NOW(), updated_at=NOW()
+		`UPDATE np_entitlements_grants SET revoked_at=NOW(), updated_at=NOW()
 		 WHERE id=$1 AND source_account_id=$2 AND revoked_at IS NULL`,
 		id, sa)
 	if err != nil {

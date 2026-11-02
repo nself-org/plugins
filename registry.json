@@ -2348,7 +2348,7 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "entitlements",
-      "port": 3735,
+      "port": 3715,
       "releaseTag": "v1.2.13",
       "release_signature": {
         "alg": "ed25519",
@@ -2357,14 +2357,7 @@
       },
       "requires_license": false,
       "tables": [
-        "np_entitlements_plans",
-        "np_entitlements_subscriptions",
-        "np_entitlements_features",
-        "np_entitlements_quotas",
-        "np_entitlements_usage",
-        "np_entitlements_addons",
-        "np_entitlements_grants",
-        "np_entitlements_events"
+        "np_entitlements_grants"
       ],
       "tags": [
         "entitlements",
@@ -3759,7 +3752,7 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "idme",
-      "port": 3820,
+      "port": 3010,
       "releaseTag": "v1.2.13",
       "release_signature": {
         "alg": "ed25519",

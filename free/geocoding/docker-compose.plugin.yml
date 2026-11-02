@@ -6,10 +6,10 @@ services:
     image: nself/nself-geocoding:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3203:3203"
+      - "127.0.0.1:3856:3856"
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - GEOCODING_PLUGIN_PORT=3203
+      - GEOCODING_PLUGIN_PORT=3856
       - GEOCODING_GOOGLE_API_KEY=${GEOCODING_GOOGLE_API_KEY:-}
       - GEOCODING_MAPBOX_ACCESS_TOKEN=${GEOCODING_MAPBOX_ACCESS_TOKEN:-}
       - GEOCODING_NOMINATIM_URL=${GEOCODING_NOMINATIM_URL:-https://nominatim.openstreetmap.org}
@@ -22,7 +22,7 @@ services:
       - GEOCODING_RATE_LIMIT_MAX=${GEOCODING_RATE_LIMIT_MAX:-500}
       - GEOCODING_RATE_LIMIT_WINDOW_MS=${GEOCODING_RATE_LIMIT_WINDOW_MS:-60000}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3203/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3856/health"]
       interval: 30s
       timeout: 5s
       retries: 3
