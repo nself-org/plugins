@@ -224,14 +224,18 @@ func writeSmall(root *os.Root, name string, data []byte, mode os.FileMode, at ti
 		return err
 	}
 	_, err = f.Write(data)
+	byPath := false
 	if err == nil {
-		err = settleOpen(f, mode, at, opt)
+		byPath, err = settleOpen(f, mode, at, opt)
 	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
+	}
+	if byPath {
+		_ = root.Chtimes(name, at, at)
 	}
 	return nil
 }

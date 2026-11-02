@@ -2,13 +2,15 @@
 
 package specs
 
-// Purpose: platforms without a descriptor-based time call keep the time the
-// file was written with (the restore sets modes, which Go cache trimming does
-// not depend on). Constraints: never an error; a missing time is not a failure.
+// Purpose: platforms without a descriptor-based time call (Windows, the BSDs).
+// Constraints: setTimes always reports an error, so settleOpen tells the caller
+// to set the time by path with root.Chtimes after closing the file, exactly as
+// every restore did before the descriptor path existed.
 
 import (
+	"errors"
 	"os"
 	"time"
 )
 
-func setTimes(*os.File, time.Time) error { return nil }
+func setTimes(*os.File, time.Time) error { return errors.ErrUnsupported }

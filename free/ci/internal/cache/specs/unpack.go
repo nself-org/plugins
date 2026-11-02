@@ -235,14 +235,18 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 	if err == nil && n != h.Size {
 		err = io.ErrUnexpectedEOF
 	}
+	byPath := false
 	if err == nil {
-		err = settleOpen(f, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+		byPath, err = settleOpen(f, os.FileMode(h.Mode&0o777), h.ModTime, opt)
 	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
+	}
+	if byPath {
+		_ = root.Chtimes(name, h.ModTime, h.ModTime)
 	}
 	return nil
 }
@@ -260,14 +264,17 @@ func filePerm(mode os.FileMode, opt UnpackOptions) os.FileMode {
 	return perm
 }
 
-// settleOpen gives the file it just wrote its mode and time through the open
-// descriptor: the descriptor already names the file the unpack created (O_EXCL,
-// inside the pinned root), so no path is walked again. Where the platform has no
-// descriptor-based time call, the time is skipped like a failed Chtimes was.
-func settleOpen(f *os.File, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+// settleOpen gives the file it just wrote its mode, and its time where the
+// platform can set it through the descriptor. The descriptor already names the
+// file the unpack created (O_EXCL, inside the pinned root), so no path is walked
+// again. byPath is true when the caller must set the time with root.Chtimes
+// after closing the file, as every restore did before.
+func settleOpen(f *os.File, mode os.FileMode, at time.Time, opt UnpackOptions) (byPath bool, err error) {
 	if err := f.Chmod(filePerm(mode, opt)); err != nil {
-		return err
+		return false, err
 	}
-	_ = setTimes(f, at)
-	return nil
+	if setTimes(f, at) != nil {
+		return true, nil
+	}
+	return false, nil
 }
