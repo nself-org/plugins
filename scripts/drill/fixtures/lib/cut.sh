@@ -125,9 +125,11 @@ NFT
 add chain inet $CUT_TABLE docker_daemon { type filter hook output priority 0; policy accept; }
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname { "lo", "docker0" } accept
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname "br-*" accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" limit rate 20/second burst 50 packets log prefix "DRILLCUT-DOCKER-$CUT_ID " flags all
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" counter drop
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname { "lo", "docker0" } accept
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname "br-*" accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" limit rate 20/second burst 50 packets log prefix "DRILLCUT-CONTAINERD-$CUT_ID " flags all
 add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" counter drop
 NFT
 		# shellcheck disable=SC2034 # read by the drills
@@ -184,6 +186,15 @@ cut_info() {
 	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>&1 | grep counter | sed -E 's/^[[:space:]]+//; s/ counter packets ([0-9]+) bytes [0-9]+ drop/ => \1/; s/meta skgid [0-9]+ //' | tr '\n' ';' ;;
 	Darwin) { sudo -n pfctl -s info 2>&1 | grep -E 'Status|block|match' | tr '\n' ' '; sudo -n pfctl -a "$CUT_PF_ANCHOR" -s rules -v 2>&1 | grep -E 'Packets' | tr '\n' ' '; } | tr -s ' ' ;;
 	esac
+}
+
+# cut_daemon_drops: where the docker.service / containerd.service packets the cut dropped were going (kernel log of the
+# log rules above, rate limited), one line per destination. Diagnostic text for a failed assertion only; empty when
+# nothing was logged or the kernel log is unreadable. Added for run 41297919212, where 29 daemon packets were counted
+# and their destinations were not recorded.
+cut_daemon_drops() {
+	[ "$CUT_OS" = Linux ] || return 0
+	sudo -n dmesg 2>/dev/null | grep "DRILLCUT-.*-$CUT_ID " | sed -n 's/.*DRILLCUT-\([A-Z]*\)-[0-9]* .*DST=\([^ ]*\) .*PROTO=\([A-Z]*\).*DPT=\([0-9]*\).*/\1 \2 \3\/\4/p' | sort | uniq -c | head -n 8 | tr -s ' \n' ' '
 }
 
 # cut_probe_ip / cut_probe_dns: try to reach a public address / resolve a public name from inside the cut. Succeed (0) when it

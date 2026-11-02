@@ -264,7 +264,7 @@ if [ -z "$nocut" ]; then
 	if [ "${p2:-x}" = "${p1:-y}" ]; then
 		ev_pass no-egress-after-cut "0 packets counted after the probes ($p1 -> $p2); $CUT_NOTE; $(cut_info)"
 	else
-		ev_fail no-egress-after-cut "the rule counted ${p2:-?} packets, $p1 at the probe: $(cut_info)"
+		ev_fail no-egress-after-cut "the rule counted ${p2:-?} packets, $p1 at the probe: $(cut_info) daemon drops by destination: $(cut_daemon_drops)"
 	fi
 	cut_remove
 fi
