@@ -26,6 +26,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -162,6 +163,7 @@ func (c *Coordinator) persist(ctx context.Context, st *store.Store, runID string
 // Run executes the plan. A returned error is an infrastructure or usage
 // failure (exit 2 or 1 by its code); a failed gate is a Result with Exit 1.
 func (c *Coordinator) Run(ctx context.Context) (Result, error) {
+	ctx = policy.WithBranchSnapshot(ctx)
 	h := c.Hooks.Resolved()
 	if err := c.Opts.Validate(h); err != nil {
 		return Result{}, err
@@ -257,7 +259,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	post.Notes = append(post.Notes, dispatchNotes(runID)...)
-	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
+	res := c.conclude(finishIn{Context: ctx, St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
 		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
 	rs.render.Done(res.Summary)
 	return res, nil

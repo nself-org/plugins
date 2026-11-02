@@ -98,7 +98,7 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 
 	var ignored []Ignored
 	res := Resolved{Fetch: FetchNone}
-	branch, err := readBranch(ctx, r.Run, repo.Root)
+	branch, err := branchForRun(ctx, r.Run, repo.Root)
 	if err != nil {
 		return Resolved{}, err
 	}

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -79,6 +80,8 @@ type treeFS struct {
 	files map[string]blob
 	links map[string]bool     // symlinks: present but never followed, so never "absent"
 	dirs  map[string][]string // directory -> child names
+	mu    sync.Mutex
+	data  map[string]string // immutable object id -> successfully read blob bytes
 }
 
 type blob struct {
@@ -140,10 +143,8 @@ func (t *treeFS) Open(name string) (fs.File, error) {
 	if !ok || !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.ctx), 60*time.Second)
-	defer cancel()
-	out, ok := git(ctx, t.c, t.root, "cat-file", "blob", b.oid)
-	if !ok || int64(len(out)) != b.size {
+	out, err := t.readBlob(b)
+	if err != nil {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fmt.Errorf("git blob %s unreadable", short(b.oid))}
 	}
 	return &memFile{name: name, r: strings.NewReader(out), size: b.size}, nil
