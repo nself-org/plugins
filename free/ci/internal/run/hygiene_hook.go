@@ -218,7 +218,7 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), hygieneTimeout)
 	defer cancel()
 	var problems, reasons []string
-	rt := hygiene.BatchRuntime(h.rt) // one listing per resource kind for the whole run
+	rt := hygiene.ConcurrentBatchRuntime(h.rt) // joined parallel listings, one snapshot for the run
 	if sweepErr != nil {
 		problems = append(problems, "orphan sweep: "+sweepErr.Error())
 	}

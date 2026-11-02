@@ -124,11 +124,18 @@ func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, 
 
 // listBinary uses a fresh probe or lets the listing establish availability before asking info.
 func (r *ExecRuntime) listBinary(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) ([]exec.Labelled, runtimeState, error) {
+	return r.listBinaryUsing(ctx, bin, kind, attempt, exec.RuntimeListLabelled)
+}
+
+type listingQuery func(context.Context, string, exec.ResourceKind, string) ([]exec.Labelled, error)
+
+// listBinaryUsing applies the same probe policy to live and concurrently collected listings.
+func (r *ExecRuntime) listBinaryUsing(ctx context.Context, bin string, kind exec.ResourceKind, attempt string, query listingQuery) ([]exec.Labelled, runtimeState, error) {
 	state, hit := r.cachedProbe(bin)
 	if hit && state != runtimeUp {
 		return nil, state, nil
 	}
-	found, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
+	found, err := query(ctx, bin, kind, attempt)
 	if err == nil {
 		if !hit {
 			r.recordProbe(bin, runtimeUp)
@@ -155,11 +162,16 @@ func (r *ExecRuntime) listBinary(ctx context.Context, bin string, kind exec.Reso
 // List returns the labelled resources of every usable runtime; an installed runtime that does not
 // answer is reported as a RuntimeDownError next to what the others returned.
 func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
+	return r.listUsing(ctx, kind, attempt, exec.RuntimeListLabelled)
+}
+
+// listUsing reduces listings in binary order, including short-circuiting on the first error.
+func (r *ExecRuntime) listUsing(ctx context.Context, kind exec.ResourceKind, attempt string, query listingQuery) ([]exec.Labelled, error) {
 	var out []exec.Labelled
 	var down []string
 	present := 0
 	for _, bin := range r.binaries() {
-		found, state, err := r.listBinary(ctx, bin, kind, attempt)
+		found, state, err := r.listBinaryUsing(ctx, bin, kind, attempt, query)
 		if err != nil {
 			return nil, err
 		}
@@ -211,14 +223,20 @@ type snapshot struct {
 }
 
 type batchRuntime struct {
-	inner Runtime
-	mu    sync.Mutex
-	snap  map[exec.ResourceKind]*snapshot
+	inner    Runtime
+	mu       sync.Mutex
+	snap     map[exec.ResourceKind]*snapshot
+	parallel bool
 }
 
 func (b *batchRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.parallel && len(b.snap) == 0 {
+		if r, ok := b.inner.(*ExecRuntime); ok {
+			b.snap = r.listKinds(ctx)
+		}
+	}
 	sn := b.snap[kind]
 	if sn == nil {
 		items, err := b.inner.List(ctx, kind, "")
