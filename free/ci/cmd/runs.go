@@ -170,10 +170,12 @@ func printRun(asJSON bool, v cirun.RunView) int {
 // runCancel is `nself ci runs cancel <run>`: it writes the cancel intents;
 // the owning coordinator stops the jobs and the process trees.
 func runCancel(args []string) int {
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
+	pos, err := parseMixed(cancelFlagSet(), args)
+	if err != nil || len(pos) != 1 {
 		fmt.Fprintln(os.Stderr, "usage: nself ci runs cancel <run>")
 		return 1
 	}
+	args = pos
 	ctx := context.Background()
 	if code, ok := coordCancel(ctx, args[0]); ok { // never open the store of a local serve (P7-NODE-19)
 		return code

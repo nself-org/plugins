@@ -63,16 +63,13 @@ type decisionView struct {
 
 func runDecisions(args []string) int {
 	var asJSON bool
+	pos, err := parseMixed(jsonOnlyFlagSet("runs decisions", &asJSON), args)
+	if err != nil || len(pos) > 1 {
+		return usageErr(decisionsUsage)
+	}
 	var ref string
-	for _, a := range args {
-		switch {
-		case a == "--json" || a == "-json" || a == "--json=true":
-			asJSON = true
-		case strings.HasPrefix(a, "-") || ref != "":
-			return usageErr(decisionsUsage)
-		default:
-			ref = a
-		}
+	if len(pos) == 1 {
+		ref = pos[0]
 	}
 	ctx := context.Background()
 	st, err := openHistory(false)

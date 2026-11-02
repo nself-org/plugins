@@ -50,11 +50,8 @@ type queueView struct {
 
 func runQueue(args []string) int {
 	var asJSON bool
-	for _, a := range args {
-		if a != "--json" && a != "-json" && a != "--json=true" {
-			return usageErr(queueUsage)
-		}
-		asJSON = true
+	if pos, err := parseMixed(jsonOnlyFlagSet("runs queue", &asJSON), args); err != nil || len(pos) > 0 {
+		return usageErr(queueUsage)
 	}
 	ctx := context.Background()
 	st, err := openHistory(false)

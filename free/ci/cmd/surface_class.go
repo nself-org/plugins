@@ -9,7 +9,13 @@ package main
 //          class; a Subs entry (a dispatcher such as `artifacts`) forces the row to its strongest subcommand,
 //          because the machine caller chooses the positional.
 
-import "flag"
+import (
+	"flag"
+
+	"github.com/nself-org/plugins/free/ci/internal/forgejo"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/provision"
+	"github.com/nself-org/plugins/free/ci/internal/serve"
+)
 
 type surfaceClass struct {
 	Min   string            // lowest class of the key itself
@@ -57,9 +63,31 @@ var surfaceClasses = map[string]surfaceClass{
 	"serve admin roles": cls("destructive"), "serve admin token": cls("destructive"),
 }
 
-// runsSubFlags are the Flags constructors of `runs <sub>` handlers that parse their own argv, so the flag check
-// reaches them; a `runs` row whose handler has no constructor here is not flag-checked.
+// runsSubFlags are the Flags constructors of every `runs <sub>` handler that is not a v1.5 table entry of its own
+// (those are `runs follow` and `runs wait`). The surface test fails for a `runs` row without a constructor here.
 var runsSubFlags = map[string]func() *flag.FlagSet{
-	"resolve": func() *flag.FlagSet { return resolveFlagSet(nil) },
-	"rerun":   func() *flag.FlagSet { return newRerunFlagSet(&rerunFlags{}) },
+	"approve":   func() *flag.FlagSet { return approveFlagSet(&approveFlags{}) },
+	"cancel":    cancelFlagSet,
+	"decisions": func() *flag.FlagSet { return jsonOnlyFlagSet("runs decisions", nil) },
+	"list":      func() *flag.FlagSet { return newHistoryFlagSet(&historyFlags{}, false) },
+	"outbox":    func() *flag.FlagSet { return jsonOnlyFlagSet("runs outbox", nil) },
+	"pending":   func() *flag.FlagSet { return jsonOnlyFlagSet("runs pending", nil) },
+	"prune":     pruneFlagSet,
+	"queue":     func() *flag.FlagSet { return jsonOnlyFlagSet("runs queue", nil) },
+	"reproduce": func() *flag.FlagSet { return newReproduceFlagSet(&reproduceFlags{}) },
+	"rerun":     func() *flag.FlagSet { return newRerunFlagSet(&rerunFlags{}) },
+	"resolve":   func() *flag.FlagSet { return resolveFlagSet(nil) },
+	"stats":     func() *flag.FlagSet { return statsFlagSet(nil, nil) },
+}
+
+// legacyFlagSets are the frozen v1.4 flag sets of the commands that are still reached through the v1.4 argv
+// (`subcommands`). commands.yaml declares their flags (json none or legacy rows), together with the v1.5-only flags
+// the row's usage names; the surface test compares the row with the union of this set and the v1.5 constructor.
+var legacyFlagSets = map[string]func() *flag.FlagSet{
+	"build":           func() *flag.FlagSet { return newBuildFlagSet(&buildOpts{}, flag.ContinueOnError) },
+	"forgejo":         func() *flag.FlagSet { return newForgejoFlagSet(&forgejo.Config{}, flag.ContinueOnError) },
+	"nodes provision": func() *flag.FlagSet { return provision.StdFlagSet("provision") },
+	"nodes verify":    func() *flag.FlagSet { return provision.StdFlagSet("verify") },
+	"run":             func() *flag.FlagSet { return newRunFlags(flag.ContinueOnError).fs },
+	"serve":           func() *flag.FlagSet { return newServeFlagSet(&serve.ServeConfig{}, &listFlag{}, flag.ContinueOnError) },
 }

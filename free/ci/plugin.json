@@ -448,9 +448,10 @@
       {
         "flags": [
           {
-            "name": "runner",
-            "type": "string",
-            "usage": "Runner container name (default: <PROJECT>_forgejo_runner)"
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "V15 only (NSELF_V15=1): print one v1 JSON envelope"
           },
           {
             "default": "http://localhost:3844",
@@ -962,6 +963,18 @@
             "usage": "Extra labels appended after self-hosted,Linux,X64"
           },
           {
+            "default": "false",
+            "name": "no-deprecation-warnings",
+            "type": "bool",
+            "usage": "Accepted for core argv parity; no effect"
+          },
+          {
+            "default": "false",
+            "name": "no-monorepo",
+            "type": "bool",
+            "usage": "Accepted for core argv parity; no effect"
+          },
+          {
             "name": "ssh-key",
             "type": "string",
             "usage": "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"
@@ -1329,6 +1342,18 @@
             "name": "json",
             "type": "bool",
             "usage": "Print JSON instead of the text parity matrix: raw []HostReport in v1.4, one v1 envelope in V15 (NSELF_V15=1)"
+          },
+          {
+            "default": "false",
+            "name": "no-deprecation-warnings",
+            "type": "bool",
+            "usage": "Accepted for core argv parity; no effect"
+          },
+          {
+            "default": "false",
+            "name": "no-monorepo",
+            "type": "bool",
+            "usage": "Accepted for core argv parity; no effect"
           },
           {
             "name": "ssh-key",
@@ -1887,6 +1912,13 @@
             "name": "run"
           }
         ],
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
         "json": "envelope",
         "name": "runs decisions",
         "output": "document",
@@ -1945,6 +1977,13 @@
         "summary": "List recent runs"
       },
       {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
         "json": "envelope",
         "name": "runs outbox",
         "output": "document",
@@ -1952,6 +1991,13 @@
         "summary": "Show queued status and event deliveries"
       },
       {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
         "json": "envelope",
         "name": "runs pending",
         "output": "document",
@@ -1982,11 +2028,6 @@
             "type": "int"
           },
           {
-            "default": "20",
-            "name": "limit",
-            "type": "int"
-          },
-          {
             "default": "0",
             "name": "max-age-days",
             "type": "int"
@@ -1994,10 +2035,6 @@
           {
             "name": "max-log-bytes",
             "type": "int"
-          },
-          {
-            "name": "repo",
-            "type": "string"
           },
           {
             "name": "tidy",
@@ -2011,6 +2048,13 @@
         "summary": "Remove old runs and logs (--dry-run previews; --tidy [--apply] also tidies cache and job roots)"
       },
       {
+        "flags": [
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          }
+        ],
         "json": "envelope",
         "name": "runs queue",
         "output": "document",
@@ -2143,6 +2187,25 @@
         "surface": "cli-only"
       },
       {
+        "flags": [
+          {
+            "name": "coordinator",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "project",
+            "type": "string"
+          },
+          {
+            "name": "since",
+            "type": "string"
+          }
+        ],
         "json": "envelope",
         "name": "runs stats",
         "output": "document",
@@ -2203,6 +2266,77 @@
             "name": "concurrency",
             "type": "int",
             "usage": "Max concurrent CI jobs"
+          },
+          {
+            "name": "data-dir",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): coordinator state directory (state.db); default NSELF_CI_HOME or ~/.nself/ci"
+          },
+          {
+            "default": "false",
+            "name": "force",
+            "type": "bool",
+            "usage": "V15 only (NSELF_V15=1): run every accepted trigger, even when an identical pipeline is live (audited)"
+          },
+          {
+            "name": "agent-addr",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the agent listener (default :3864)"
+          },
+          {
+            "name": "api-addr",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the user-api listener (default 127.0.0.1:3865)"
+          },
+          {
+            "name": "api-lock",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the api-lock listener (on, off or an address)"
+          },
+          {
+            "name": "api-public-url",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): URL users reach the user API at (its host goes into the server certificate)"
+          },
+          {
+            "name": "api-socket",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the local-socket listener (auto, off or a path)"
+          },
+          {
+            "name": "api-submit-role",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Role that may start a run through the user API: release (default) or member"
+          },
+          {
+            "name": "drain-deadline",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): How long running jobs may finish after SIGTERM before they are cancelled and handed back"
+          },
+          {
+            "name": "enroll-addr",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the enroll listener (default :3866)"
+          },
+          {
+            "name": "node-admin-routes",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the node-admin-routes listener (on, off or an address)"
+          },
+          {
+            "name": "public-url",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): URL agents reach this coordinator at (its host becomes a SAN of the agent certificate)"
+          },
+          {
+            "name": "release-routes",
+            "type": "string",
+            "usage": "V15 only (NSELF_V15=1): Listen address of the release-routes listener (on, off or an address)"
+          },
+          {
+            "name": "team",
+            "type": "bool",
+            "usage": "V15 only (NSELF_V15=1): Run as a TEAM coordinator (permanent for this data dir, audited)"
           },
           {
             "default": "false",

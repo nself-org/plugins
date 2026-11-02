@@ -41,6 +41,19 @@ func (l *listFlag) Set(v string) error {
 func parseServeArgs(args []string, eh flag.ErrorHandling) (serve.ServeConfig, error) {
 	var cfg serve.ServeConfig
 	var allowed listFlag
+	fs := newServeFlagSet(&cfg, &allowed, eh)
+	if _, err := parseInterspersed(fs, args); err != nil {
+		return cfg, err
+	}
+	if !cfg.AllowUnsandboxed && strings.EqualFold(os.Getenv("NSELF_CI_ALLOW_UNSANDBOXED"), "true") {
+		cfg.AllowUnsandboxed = true
+	}
+	cfg.AllowedRepos = append(allowed.vals, splitAllowedReposEnv(os.Getenv("NSELF_CI_ALLOWED_REPOS"))...)
+	return cfg, nil
+}
+
+// newServeFlagSet declares the frozen v1.4 `serve` flags into cfg and allowed.
+func newServeFlagSet(cfg *serve.ServeConfig, allowed *listFlag, eh flag.ErrorHandling) *flag.FlagSet {
 	fs := flag.NewFlagSet("serve", eh)
 	fs.StringVar(&cfg.Addr, "addr", ":3845", "Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry")
 	fs.StringVar(&cfg.Secret, "secret", "", "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)")
@@ -51,15 +64,8 @@ func parseServeArgs(args []string, eh flag.ErrorHandling) (serve.ServeConfig, er
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "Alias for -v (core spelling)")
 	fs.BoolVar(&cfg.Insecure, "insecure", false, "DANGEROUS: start without a webhook secret (disables signature verification).")
 	fs.BoolVar(&cfg.AllowUnsandboxed, "allow-unsandboxed", false, "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job.")
-	fs.Var(&allowed, "allowed-repos", "Comma-separated or repeatable \"owner/repo\" allowlist.")
-	if _, err := parseInterspersed(fs, args); err != nil {
-		return cfg, err
-	}
-	if !cfg.AllowUnsandboxed && strings.EqualFold(os.Getenv("NSELF_CI_ALLOW_UNSANDBOXED"), "true") {
-		cfg.AllowUnsandboxed = true
-	}
-	cfg.AllowedRepos = append(allowed.vals, splitAllowedReposEnv(os.Getenv("NSELF_CI_ALLOWED_REPOS"))...)
-	return cfg, nil
+	fs.Var(allowed, "allowed-repos", "Comma-separated or repeatable \"owner/repo\" allowlist.")
+	return fs
 }
 
 // serveCmd parses the flags and runs the daemon.

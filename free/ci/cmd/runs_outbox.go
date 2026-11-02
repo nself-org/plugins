@@ -42,11 +42,8 @@ type outboxView struct {
 
 func runOutbox(args []string) int {
 	var asJSON bool
-	for _, a := range args {
-		if a != "--json" && a != "-json" && a != "--json=true" {
-			return usageErr(outboxUsage)
-		}
-		asJSON = true
+	if pos, err := parseMixed(jsonOnlyFlagSet("runs outbox", &asJSON), args); err != nil || len(pos) > 0 {
+		return usageErr(outboxUsage)
 	}
 	list := []outboxView{}
 	st, err := openHistory(false)

@@ -3,9 +3,7 @@ package main
 // List pending approvals after voiding stale approval bindings.
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/approval"
@@ -25,10 +23,8 @@ type pendingOut struct {
 }
 
 func runPending(args []string, env approveEnv) int {
-	fs := flag.NewFlagSet("runs pending", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	asJSON := fs.Bool("json", false, "print one v1 JSON envelope")
-	pos, err := adminParse(fs, args)
+	var asJSON bool
+	pos, err := adminParse(jsonOnlyFlagSet("runs pending", &asJSON), args)
 	if err == nil && len(pos) != 0 {
 		err = adminUsage("usage: nself ci runs pending [--json]")
 	}
@@ -46,9 +42,9 @@ func runPending(args []string, env approveEnv) int {
 		list, err = pendingRuns(ctx, svc.St)
 	}
 	if err != nil {
-		return approveFail(env, "ci runs pending", *asJSON, err)
+		return approveFail(env, "ci runs pending", asJSON, err)
 	}
-	if *asJSON {
+	if asJSON {
 		return adminWriteData(env.adminEnv, "ci runs pending", list)
 	}
 	for _, p := range list {

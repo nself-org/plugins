@@ -13,9 +13,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -35,41 +36,31 @@ type statsArgs struct {
 	json        bool
 }
 
+// statsFlagSet declares the flags of `runs stats` into a (nil: a throwaway); since stays text until parseStats reads it.
+func statsFlagSet(a *statsArgs, since *string) *flag.FlagSet {
+	if a == nil {
+		a, since = &statsArgs{}, new(string)
+	}
+	fs := flag.NewFlagSet("runs stats", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(since, "since", "", "window to report, e.g. 7d or 24h (default 24h)")
+	fs.StringVar(&a.project, "project", "", "limit the figures to one project (owner/repo)")
+	fs.StringVar(&a.coordinator, "coordinator", "", "coordinator URL to ask instead of the local store")
+	fs.BoolVar(&a.json, "json", false, "print one v1 JSON envelope")
+	return fs
+}
+
 func parseStats(args []string) (statsArgs, error) {
 	a := statsArgs{since: stats.DefaultSince}
-	for i := 0; i < len(args); i++ {
-		name, val, hasVal := strings.Cut(args[i], "=")
-		take := func() (string, error) {
-			if hasVal {
-				return val, nil
-			}
-			if i+1 >= len(args) {
-				return "", fmt.Errorf("%s needs a value", name)
-			}
-			i++
-			return args[i], nil
-		}
-		var err error
-		var v string
-		switch name {
-		case "--json", "-json":
-			a.json = true
-		case "--since":
-			if v, err = take(); err == nil {
-				a.since, err = clientapi.ParseSince(v)
-			}
-		case "--project":
-			a.project, err = take()
-		case "--coordinator":
-			a.coordinator, err = take()
-		default:
-			err = fmt.Errorf("unexpected argument %q", args[i])
-		}
-		if err != nil {
-			return a, err
-		}
+	var since string
+	pos, err := parseMixed(statsFlagSet(&a, &since), args)
+	if err == nil && len(pos) > 0 {
+		err = fmt.Errorf("unexpected argument %q", pos[0])
 	}
-	return a, nil
+	if err == nil && since != "" {
+		a.since, err = clientapi.ParseSince(since)
+	}
+	return a, err
 }
 
 func runStats(args []string) int {
