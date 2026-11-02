@@ -1,11 +1,16 @@
 package stats
 
 // Purpose: nearest-rank percentiles and permille rates from integers.
-// Inputs:  integer-millisecond samples; a numerator and denominator.
+// Inputs:  integer-millisecond samples (a list, or distinct values with their counts); a numerator and denominator.
 // Outputs: *Pct (nil for no samples) and an integer permille.
 // Constraints: no floating point; the input slice is not modified.
 
-import "slices"
+import (
+	"cmp"
+	"slices"
+
+	"github.com/nself-org/plugins/free/ci/internal/store"
+)
 
 // pct returns the nearest-rank P50 and P95 of v, or nil when v is empty.
 func pct(v []int64) *Pct {
@@ -19,6 +24,30 @@ func pct(v []int64) *Pct {
 		return s[max(r, 1)-1]
 	}
 	return &Pct{P50: rank(50), P95: rank(95), N: len(s)}
+}
+
+// pctSamples is pct over distinct values with their counts: the same nearest-rank P50 and P95 as the list
+// that repeats each value N times, without building that list.
+func pctSamples(v []store.StatSample) *Pct {
+	var n int64
+	for _, x := range v {
+		n += x.N
+	}
+	if n == 0 {
+		return nil
+	}
+	s := slices.Clone(v)
+	slices.SortFunc(s, func(a, b store.StatSample) int { return cmp.Compare(a.Ms, b.Ms) })
+	rank := func(p int64) int64 {
+		r, seen := max((p*n+99)/100, 1), int64(0)
+		for _, x := range s {
+			if seen += x.N; seen >= r {
+				return x.Ms
+			}
+		}
+		return s[len(s)-1].Ms
+	}
+	return &Pct{P50: rank(50), P95: rank(95), N: int(n)}
 }
 
 // permille returns num/den in thousandths, rounded half up; den must be positive.

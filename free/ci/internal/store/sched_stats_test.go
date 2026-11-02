@@ -32,7 +32,7 @@ func TestStatsReadEmptyStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows.Outcomes)+len(rows.Leases)+len(rows.Nodes) != 0 || rows.OutboxPending != 0 || rows.Path == "" {
+	if len(rows.Runs)+len(rows.Jobs)+len(rows.Waits)+len(rows.Leases)+len(rows.Nodes) != 0 || rows.OutboxPending != 0 || rows.Path == "" {
 		t.Fatalf("empty store gave rows: %+v", rows)
 	}
 }
@@ -45,12 +45,12 @@ func TestStatsReadWindowAndProject(t *testing.T) {
 	statsSeed(t, s, "acme/a", "a2", now.Add(-48*time.Hour).UnixMilli()) // outside the window
 	ctx := context.Background()
 	all, err := s.StatsRead(ctx, StatsQuery{Now: now, Since: 24 * time.Hour})
-	if err != nil || len(all.Outcomes) != 2 {
-		t.Fatalf("all: %d outcomes, %v", len(all.Outcomes), err)
+	if err != nil || len(all.Runs) != 2 || len(all.Jobs) != 2 {
+		t.Fatalf("all: runs %+v, jobs %+v, %v", all.Runs, all.Jobs, err)
 	}
 	one, err := s.StatsRead(ctx, StatsQuery{Now: now, Since: 24 * time.Hour, Project: "acme/a"})
-	if err != nil || len(one.Outcomes) != 1 || one.Outcomes[0].Attempt != "a1" || one.Outcomes[0].Trigger != "push" {
-		t.Fatalf("project a: %+v, %v", one.Outcomes, err)
+	if err != nil || len(one.Runs) != 1 || one.Runs[0].N != 1 || one.Runs[0].Project != "acme/a" || len(one.Waits) != 1 || one.Waits[0].Key != "push" {
+		t.Fatalf("project a: runs %+v, waits %+v, %v", one.Runs, one.Waits, err)
 	}
 }
 

@@ -7,20 +7,37 @@ package stats
 // Constraints: only passed and failed attempts count; a failure of class infra is an infra retry, any other
 //          failure marks its job as failed-before, and a later pass of that job makes the job flaky.
 
-import (
-	"math"
+import "github.com/nself-org/plugins/free/ci/internal/store"
 
-	"github.com/nself-org/plugins/free/ci/internal/store"
-)
-
-func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options) {
+func (d *Doc) buildRuns(rows store.StatsRows, o Options) {
 	if rows.Missing["schedtel_outcome"] {
 		for _, k := range []string{"runners", "attempts", "jobs", "provisioning_ms"} {
 			d.Reasons[k] = ReasonNotInstalled
 		}
 		return
 	}
-	if len(out) == 0 {
+	var passed, failed, infra int64
+	runners := map[string]Runner{}
+	for _, x := range rows.Runs {
+		if !o.visible(x.Project) {
+			continue
+		}
+		r := runners[x.Runner]
+		r.Attempts += int(x.N)
+		r.BusyMs += x.BusyMs
+		runners[x.Runner] = r
+		switch {
+		case x.Result == "passed":
+			passed += x.N
+		case x.FailureClass == "infra":
+			failed += x.N
+			infra += x.N
+		default:
+			failed += x.N
+		}
+	}
+	total := passed + failed
+	if total == 0 {
 		for _, k := range []string{"runners", "attempts", "jobs", "provisioning_ms"} {
 			d.Reasons[k] = ReasonNoSamples
 		}
@@ -28,45 +45,14 @@ func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options
 	}
 	slots := nodeSlots(rows.Nodes)
 	window := o.Since.Milliseconds()
-	d.Runners, d.Jobs = map[string]Runner{}, map[string]Pct{}
-	runtimes := map[string][]int64{}
-	var cold []int64
-	var passed, failed, infra int64
-	// A job is flaky when a non-infra failure precedes a pass: its first such failure comes before its last pass.
-	type span struct{ firstFail, lastPass int }
-	jobs := make(map[string]span, len(out))
-	for _, x := range out {
-		s, ok := jobs[x.Job]
-		if !ok {
-			s = span{firstFail: math.MaxInt, lastPass: math.MinInt}
-		}
-		r := d.Runners[x.Runner]
-		r.Attempts++
-		if x.RuntimeMs >= 0 {
-			r.BusyMs += x.RuntimeMs
-			runtimes[x.JobKey] = append(runtimes[x.JobKey], x.RuntimeMs)
-		}
-		d.Runners[x.Runner] = r
-		if x.RunnerClass == "ephemeral" && x.ColdStartMs >= 0 {
-			cold = append(cold, x.ColdStartMs)
-		}
-		switch {
-		case x.Result == "passed":
-			passed++
-			s.lastPass = max(s.lastPass, x.N)
-		case x.FailureClass == "infra":
-			failed++
-			infra++
-		default:
-			failed++
-			s.firstFail = min(s.firstFail, x.N)
-		}
-		jobs[x.Job] = s
-	}
-	var flaky int64
-	for _, s := range jobs {
-		if s.firstFail < s.lastPass {
-			flaky++
+	d.Runners, d.Jobs = runners, map[string]Pct{}
+	// A job is flaky when a non-infra failure precedes a pass: the store counts, per project, the jobs whose
+	// first such failure comes before their last pass.
+	var jobs, flaky int64
+	for _, j := range rows.Jobs {
+		if o.visible(j.Project) {
+			jobs += j.Jobs
+			flaky += j.Flaky
 		}
 	}
 	for id, r := range d.Runners {
@@ -80,17 +66,28 @@ func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options
 		r.Slots, r.AvailableMs, r.UtilisationPermille = &s, &avail, &u
 		d.Runners[id] = r
 	}
-	total := passed + failed
 	d.Attempts = &Attempts{Finished: int(total), PassPermille: permille(passed, total), FailPermille: permille(failed, total),
-		FlakyPermille: permille(flaky, int64(len(jobs))), InfraRetryPermille: permille(infra, total)}
+		FlakyPermille: permille(flaky, max(jobs, 1)), InfraRetryPermille: permille(infra, total)}
+	runtimes := map[string][]store.StatSample{}
+	for _, x := range rows.Runtimes {
+		if o.visible(x.Project) {
+			runtimes[x.Key] = append(runtimes[x.Key], x)
+		}
+	}
 	for k, v := range runtimes {
-		d.Jobs[k] = *pct(v)
+		d.Jobs[k] = *pctSamples(v)
 	}
 	if len(d.Jobs) == 0 {
 		d.Jobs = nil
 		d.Reasons["jobs"] = ReasonNoSamples
 	}
-	if d.Provisioning = pct(cold); d.Provisioning == nil {
+	var cold []store.StatSample
+	for _, x := range rows.Colds {
+		if o.visible(x.Project) {
+			cold = append(cold, x)
+		}
+	}
+	if d.Provisioning = pctSamples(cold); d.Provisioning == nil {
 		d.Reasons["provisioning_ms"] = ReasonNoSamples
 	}
 }

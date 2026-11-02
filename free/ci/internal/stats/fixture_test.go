@@ -23,7 +23,7 @@ import (
 var fixtureNow = time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 
 type fx struct {
-	t  *testing.T
+	t  testing.TB
 	tx *sql.Tx
 }
 
@@ -34,7 +34,7 @@ func (f fx) exec(q string, args ...any) {
 	}
 }
 
-func buildFixture(t *testing.T, jobs int) *store.Store {
+func buildFixture(t testing.TB, jobs int) *store.Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "state.db")
 	st, err := store.Open(path, store.Options{})
