@@ -144,7 +144,7 @@ func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 }
 
 // policyAt reads the flat `policy:` block of .nself/ci.yaml at a commit.
-func policyAt(ctx context.Context, run Runner, root, sha string) (map[string]json.RawMessage, error) {
+func readPolicyAt(ctx context.Context, run Runner, root, sha string) (map[string]json.RawMessage, error) {
 	if !fullSHA.MatchString(sha) {
 		return nil, refuse("pinned commit %q is not a commit id", sha)
 	}

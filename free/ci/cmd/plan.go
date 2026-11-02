@@ -167,18 +167,15 @@ func planRevision(ctx context.Context, root, base string) plan.Revision {
 	for _, kv := range os.Environ() {
 		rev.Env = append(rev.Env, strings.SplitN(kv, "=", 2)[0])
 	}
-	// Six independent read-only queries: each costs a funnel spawn, so they run
-	// side by side and the revision waits for the slowest one, not their sum.
+	// The remote ref names share one listing; the other independent reads run
+	// beside it. A failed listing falls back to the original individual probes.
 	type answer struct {
 		out string
 		ok  bool
 	}
-	remotes := []string{"main", "master", "trunk"}
 	queries := [][]string{{"rev-parse", "--abbrev-ref", "HEAD"}, {"symbolic-ref", "--short", "refs/remotes/origin/HEAD"},
 		{"describe", "--exact-match", "--tags", "HEAD"}}
-	for _, n := range remotes {
-		queries = append(queries, []string{"rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + n})
-	}
+	queries = append(queries, []string{"for-each-ref", "--format=%(refname)", "refs/remotes/origin/main", "refs/remotes/origin/master", "refs/remotes/origin/trunk"})
 	answers := make([]answer, len(queries))
 	var wg sync.WaitGroup
 	for i, q := range queries {
@@ -198,11 +195,7 @@ func planRevision(ctx context.Context, root, base string) plan.Revision {
 		facts.OriginHead = strings.TrimPrefix(s.out, "origin/")
 	}
 	facts.ExactTag = answers[2].ok
-	for i, n := range remotes {
-		if answers[3+i].ok {
-			facts.Remotes = append(facts.Remotes, n)
-		}
-	}
+	facts.Remotes = planRemoteNames(answers[3].out, answers[3].ok, git)
 	rev.DefaultBranch, rev.Release = plan.ClassifyRevision(facts)
 	base = firstOf(base, os.Getenv("NSELF_CI_BASE_SHA"))
 	if def := plan.DefaultBranchName(facts); base == "" && def != "" {

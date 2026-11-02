@@ -35,6 +35,7 @@ type statusPost struct {
 }
 
 type finishIn struct {
+	Context   context.Context // preserves the invocation's protected-branch snapshot through finalizers
 	St        *store.Store
 	RunID     string
 	Rev       Revision
@@ -85,13 +86,6 @@ func (c *Coordinator) prepareStatus(ctx context.Context, st *store.Store, rev Re
 	}
 	p.Seq = seq
 	return p
-}
-
-func firstLineOf(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
-	}
-	return s
 }
 
 // StatusGate marks an AfterRun hook that finishes before the commit status is
@@ -148,7 +142,7 @@ func pipelineStatus(r model.Result) string {
 
 // conclude records the evidence and posts the status.
 func (c *Coordinator) conclude(f finishIn) Result {
-	bg, done := background(context.Background())
+	bg, done := finishBackground(f.Context)
 	defer done()
 	defer ForgetRun(f.RunID) // the admissions are read by the evidence builders below
 	trig := c.Plan.Trigger
