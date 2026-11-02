@@ -124,10 +124,10 @@ func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, 
 
 // listBinary uses a fresh probe or lets the listing establish availability before asking info.
 func (r *ExecRuntime) listBinary(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) ([]exec.Labelled, runtimeState, error) {
-	return r.listBinaryUsing(ctx, bin, kind, attempt, exec.RuntimeListLabelled)
+	return r.listBinaryUsing(ctx, bin, kind, attempt, queryListing)
 }
 
-type listingQuery func(context.Context, string, exec.ResourceKind, string) ([]exec.Labelled, error)
+type listingQuery func(context.Context, string, exec.ResourceKind, string) listingResult
 
 // listBinaryUsing applies the same probe policy to live and concurrently collected listings.
 func (r *ExecRuntime) listBinaryUsing(ctx context.Context, bin string, kind exec.ResourceKind, attempt string, query listingQuery) ([]exec.Labelled, runtimeState, error) {
@@ -135,15 +135,16 @@ func (r *ExecRuntime) listBinaryUsing(ctx context.Context, bin string, kind exec
 	if hit && state != runtimeUp {
 		return nil, state, nil
 	}
-	found, err := query(ctx, bin, kind, attempt)
+	result := query(ctx, bin, kind, attempt)
+	found, err := result.items, result.err
 	if err == nil {
 		if !hit {
 			r.recordProbe(bin, runtimeUp)
 		}
 		return found, runtimeUp, nil
 	}
-	if ctx.Err() != nil {
-		return nil, runtimeDown, ctx.Err()
+	if result.contextErr != nil {
+		return nil, runtimeDown, result.contextErr
 	}
 	if exec.IsRuntimeMissing(err) {
 		r.recordProbe(bin, runtimeAbsent)
@@ -162,7 +163,7 @@ func (r *ExecRuntime) listBinaryUsing(ctx context.Context, bin string, kind exec
 // List returns the labelled resources of every usable runtime; an installed runtime that does not
 // answer is reported as a RuntimeDownError next to what the others returned.
 func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
-	return r.listUsing(ctx, kind, attempt, exec.RuntimeListLabelled)
+	return r.listUsing(ctx, kind, attempt, queryListing)
 }
 
 // listUsing reduces listings in binary order, including short-circuiting on the first error.

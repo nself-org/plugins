@@ -23,9 +23,17 @@ func ConcurrentBatchRuntime(inner Runtime) Runtime {
 }
 
 type listingResult struct {
-	items   []exec.Labelled
-	err     error
-	queried bool
+	items      []exec.Labelled
+	err        error
+	contextErr error
+	queried    bool
+}
+
+// queryListing records cancellation when the command finishes, so later cancellation while
+// joining other workers cannot replace this listing's completed error during ordered reduction.
+func queryListing(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) listingResult {
+	items, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
+	return listingResult{items: items, err: err, contextErr: ctx.Err(), queried: true}
 }
 
 // listKinds runs one worker per binary/kind pair (six with the default binaries). Workers only
@@ -43,8 +51,7 @@ func (r *ExecRuntime) listKinds(ctx context.Context) map[exec.ResourceKind]*snap
 			workers.Add(1)
 			go func(i, j int, bin string, kind exec.ResourceKind) {
 				defer workers.Done()
-				results[i][j].items, results[i][j].err = exec.RuntimeListLabelled(ctx, bin, kind, "")
-				results[i][j].queried = true
+				results[i][j] = queryListing(ctx, bin, kind, "")
 			}(i, j, bin, kind)
 		}
 	}
@@ -59,7 +66,7 @@ func (r *ExecRuntime) reduceKinds(ctx context.Context, bins []string, results []
 	snap := make(map[exec.ResourceKind]*snapshot, len(Kinds))
 	for i, kind := range Kinds {
 		j := 0
-		query := func(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
+		query := func(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) listingResult {
 			// Cached absent/down binaries never query; skip their slots in the collected results.
 			for j < len(bins) && bins[j] != bin {
 				j++
@@ -69,9 +76,9 @@ func (r *ExecRuntime) reduceKinds(ctx context.Context, bins []string, results []
 			if !result.queried {
 				// A negative probe may expire while the other workers run. Apply the normal
 				// listing path rather than interpreting a skipped slot as an empty success.
-				return exec.RuntimeListLabelled(ctx, bin, kind, attempt)
+				return queryListing(ctx, bin, kind, attempt)
 			}
-			return result.items, result.err
+			return result
 		}
 		items, err := r.listUsing(ctx, kind, "", query)
 		snap[kind] = &snapshot{items: items, err: err}
