@@ -125,7 +125,7 @@ func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind
 	case err != nil && goneText(string(got)):
 		return nil
 	case err != nil:
-		return runtimeFailed(err)
+		return runtimeFailedOut(got, err)
 	case strings.TrimSpace(string(got)) != attempt:
 		return nil
 	}
@@ -145,10 +145,28 @@ func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind
 	cmd := runtimeCommand(ctx, binary, args)
 	cmd.Env = dockerHostEnv()
 	out, err := cmd.CombinedOutput()
-	if err != nil && !goneText(string(out)) {
-		return runtimeFailed(err)
+	if err != nil && !goneText(string(out)) && !(kind == KindContainer && removingText(string(out))) {
+		return runtimeFailedOut(out, err)
 	}
 	return nil
+}
+
+// removingText reports whether the runtime refused `rm -f` because the container's removal is already
+// under way (a second teardown racing the first): the container is going, so teardown stays idempotent.
+func removingText(out string) bool {
+	return strings.Contains(strings.ToLower(out), "already in progress")
+}
+
+// runtimeFailedOut is runtimeFailed plus the first line of the runtime's output, capped at 200 bytes.
+func runtimeFailedOut(out []byte, err error) error {
+	line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	if len(line) > 200 {
+		line = line[:200]
+	}
+	if line == "" {
+		return runtimeFailed(err)
+	}
+	return &Error{Code: "E613", Message: "container runtime: " + err.Error() + ": " + line, Err: err}
 }
 
 // goneText reports whether runtime output says the resource does not exist.
