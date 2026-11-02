@@ -30,8 +30,17 @@ for f in published/*-"${VERSION}".tar.gz; do
     echo "SKIP ${slug}: manifest version is not ${VERSION}"
     continue
   fi
-  sig="$(bash "$HERE/sign.sh" "$slug" "$VERSION" "$f")"
+  # Source archives execute on users' machines too: require this run's exact name and bytes.
+  name="$(basename "$f")"
+  case "$name" in
+    *$'\n'*|*$'\t'*) echo "ERROR: refusing a source tarball name with a line break or tab" >&2; exit 1 ;;
+  esac
   sha="$(sha256_file "$f")"
+  if ! grep -qxF -- "$sha  $name" expected/built-sha256.txt; then
+    echo "ERROR: source tarball not built by this run: $name. See Releasing.md." >&2
+    exit 1
+  fi
+  sig="$(bash "$HERE/sign.sh" "$slug" "$VERSION" "$f")"
   jq -nc --arg s "$slug" --arg sha "$sha" --argjson sig "$sig" '{($s): {sha256: $sha, release_signature: $sig}}' >> "$WORK/signatures.ndjson"
   count=$((count + 1))
 done
