@@ -59,13 +59,14 @@ v1.2.13 is the first release that signs the whole free catalogue (every `free/*/
   attestation, and the `publish` job summary says which.
   `verify-signatures.sh` counts source tarballs and binary tarballs separately, each checked for checksum and signature; on a signed row a binary tarball with a
   checksum and no platform signature fails (`unsigned platform`).
-- The `sign` job signs a platform tarball only if its `<sha256>  <name>` line is in `built-sha256.txt`, the list `publish` wrote of the tarballs this run built
-  (`scripts/release/platform-built-check.sh`). The publish job never uses `--clobber`, so a tarball already on the Release wins over this run's build; without
-  this check anyone with `contents: write` could upload a binary while the reviewer decides and receive the official platform signature. A refusal fails the job
-  with nothing more signed: delete that platform tarball AND its `.sha256` from the Release (the first run uploaded a `.sha256` from the foreign bytes, and `publish`
-  never overwrites one) and re-run, so this run's build is the one published. Two consequences to plan for: a draft-first upload of platform tarballs (the old flow) now fails `sign`,
-  so for a plugin with binaries let the workflow publish the platform tarballs (or delete the draft's platform assets before tagging); and a full re-run whose rebuild is not
-  byte-identical to the published platform tarballs (changed runner gzip or Go toolchain) fails `sign` the same way.
+- The `sign` job signs a source or platform tarball only if its `<sha256>  <name>` line is in `built-sha256.txt`, the list `publish` wrote of the tarballs this run built
+  (`scripts/release/sign-release.sh` for sources, `scripts/release/platform-built-check.sh` for platforms). The publish job never uses `--clobber`, so a tarball already
+  on the Release wins over this run's build; without this check anyone with `contents: write` could upload code before publishing and receive the official signature.
+  A refusal fails the job without publishing `signatures.json`: delete the conflicting source or platform tarball AND its `.sha256` from the Release (the first run
+  uploaded a `.sha256` from the foreign bytes, and `publish` never overwrites one) and re-run the full workflow, so this run's build is the one published.
+  For draft-first releases, let the workflow upload both source and platform tarballs, or delete the draft's tarballs and their `.sha256` assets before tagging.
+  An earlier upload is eligible only if its name and bytes match this run's build. A full re-run whose rebuild is not byte-identical to the published tarballs
+  (changed runner gzip or Go toolchain) fails `sign` the same way.
 - `release-data` writes a platform signature into `releases.json` only when the signed sha256 equals the sha256 of the published bytes in that run; a published
   platform tarball with no such signature stops the write (`UNSIGNED`), so a release never lands half-signed. Rewriting an existing row keeps a platform signature only
   while the row's version, source sha256 and that platform's sha256 are all unchanged.
@@ -82,7 +83,7 @@ v1.2.13 is the first release that signs the whole free catalogue (every `free/*/
 | `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`, `unsigned platform`, `platform signature mismatch`, `orphan platform signature`. No key discovery |
 | `platform-built-check.sh BUILT_LIST DIR` | exit 0 only if every platform tarball in DIR has its exact `<sha256>  <name>` line in BUILT_LIST (the sign job's gate); `not built by this run: <file>` otherwise |
 | `sign-release.sh TAG WORKSPACE [KEYS_DIR]` | the workflow's complete sign step: stages platform tarballs, enforces `expected/built-sha256.txt`, deep-merges signatures, reconstructs release data and verifies against committed keys before writing `signatures.json`. WORKSPACE holds `published/` and `free/`; KEYS_DIR defaults to committed `keys/` and may be a throwaway-key fixture directory in offline tests |
-| `platform-signatures-test.sh` | offline gate: platform signatures accepted only for their slug, version, platform and bytes; built-check cases; the complete workflow sign step with multiple fixture plugins, deep merge and pinned-key refusal; the committed fixture `testdata/platform-v1/` (throwaway key, made by `sign.sh`) for the cli verifier. `--regen-testdata` rebuilds the fixture |
+| `platform-signatures-test.sh` | offline gate: platform signatures accepted only for their slug, version, platform and bytes; built-check cases; source built-list table cases (matching, replaced, unlisted, renamed, malformed, empty, missing); the complete workflow sign step with multiple fixture plugins, deep merge and pinned-key refusal; the committed fixture `testdata/platform-v1/` (throwaway key, made by `sign.sh`) for the cli verifier. `--regen-testdata` rebuilds the fixture |
 | `verify-published-checksums-test.sh` | offline gate (stub `gh`) for `../verify-published-checksums.sh --write --signatures`: the publish manifest is enforced (`UNAPPROVED`), an unreadable linux-amd64 archive stops the write (`UNREADABLE`), a failed `releases.json` write is an error |
 | `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key, plus fixture binary tarballs (stub payload, all five platforms) for the first slug; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
 | `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until P7-PLUG-69 commits the production key, which must happen before the first real tag run |
