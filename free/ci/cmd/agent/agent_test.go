@@ -26,6 +26,9 @@ const rev40 = "0123456789abcdef0123456789abcdef01234567"
 // TestMain lets the test binary stand in for the agent binary in a child
 // process (cred-wrapper replaces its process, so it cannot run in-process).
 func TestMain(m *testing.M) {
+	if ciexec.GateRequested(os.Args) { // a gated job re-executes this binary as its start-gate helper
+		os.Exit(ciexec.RunGate(os.Args))
+	}
 	if os.Getenv("NSELF_AGENT_TEST_CHILD") == "1" {
 		pauseBeforeMarker()
 		os.Exit(run(context.Background(), os.Args[1:], IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}))

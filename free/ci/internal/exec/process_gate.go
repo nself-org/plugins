@@ -4,11 +4,13 @@ package exec
 // process marker (D-1531). The marker is what the orphan sweep reads; a job
 // started first and marked after could, if the agent is SIGKILLed in between,
 // run on with no marker and never be found.
-// Inputs:  a pipe whose read end the job's shell inherits as fd 3.
+// Inputs:  a pipe whose read end the job's gate helper inherits as fd 3.
 // Outputs: release (write "g\n" and close) once the marker is on disk.
-// Constraints: the shell runs the payload only after reading that line; end of
-// file with no line (the agent died, or gave up) makes it exit without running
-// the payload. The write end is close-on-exec and never reaches the job.
+// Constraints: the helper (the agent binary re-executed with GateArg as its
+// first argument, see process_gate_unix.go) execs the payload only after reading
+// that line; end of file with no line (the agent died, or gave up) makes it exit
+// 125 without running the payload. The write end is close-on-exec and never
+// reaches the job. No shell is involved and nothing is added to the environment.
 
 import (
 	"os"
@@ -27,7 +29,7 @@ type startGate struct {
 	once sync.Once
 }
 
-// newStartGate returns nil on a host that cannot gate (the job then starts ungated).
+// newStartGate returns a nil gate on a host that cannot gate (the job then starts ungated).
 func newStartGate(s JobSpec, workdir string, env []string) (*startGate, []string, error) {
 	argv, ok, err := gatedCommand(s, workdir, env)
 	if err != nil || !ok {
@@ -73,35 +75,36 @@ func (g *startGate) abandon() {
 }
 
 // resolveGatedPath finds the payload before the job starts, so a missing or non-executable binary is a start
-// error (as cmd.Start reports it) and not a failure inside the shell. A bare name is looked up on the job's
-// PATH, then the agent's; a name with a slash is checked as given (relative to the job directory).
+// error (as cmd.Start reports it) and not a failure inside the helper. A name with a slash is checked as
+// given (relative to the job directory). A bare name is looked up on the job's effective PATH only: the last
+// PATH= in env, with no fallback to the agent's PATH. Only when env has no PATH at all is the agent's used,
+// which is what a direct start of the same command does.
 func resolveGatedPath(name, dir string, env []string) (string, error) {
 	if strings.ContainsRune(name, '/') {
 		p := name
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(dir, p)
 		}
-		return name, executableFile(p)
+		return p, executableFile(p)
 	}
-	var paths []string
+	path, ok := os.LookupEnv("PATH")
 	for _, e := range env {
-		if v, ok := strings.CutPrefix(e, "PATH="); ok {
-			paths = append(paths, filepath.SplitList(v)...)
+		if v, found := strings.CutPrefix(e, "PATH="); found {
+			path, ok = v, true
 		}
 	}
-	if v, ok := os.LookupEnv("PATH"); ok {
-		paths = append(paths, filepath.SplitList(v)...)
-	}
-	for _, d := range paths {
-		if d == "" {
-			d = "."
-		}
-		if !filepath.IsAbs(d) {
-			d = filepath.Join(dir, d)
-		}
-		p := filepath.Join(d, name)
-		if executableFile(p) == nil {
-			return p, nil
+	if ok {
+		for _, d := range filepath.SplitList(path) {
+			if d == "" {
+				d = "."
+			}
+			if !filepath.IsAbs(d) {
+				d = filepath.Join(dir, d)
+			}
+			p := filepath.Join(d, name)
+			if executableFile(p) == nil {
+				return p, nil
+			}
 		}
 	}
 	return "", &osexec.Error{Name: name, Err: osexec.ErrNotFound}

@@ -32,6 +32,11 @@ import (
 )
 
 func main() {
+	// The start-gate helper (a gated job's first process) runs before anything that changes signals or the
+	// environment: both would reach the payload it execs. See internal/exec/process_gate_unix.go.
+	if ciexec.GateRequested(os.Args) {
+		os.Exit(ciexec.RunGate(os.Args))
+	}
 	signal.Ignore(syscall.SIGPIPE) // a peer that closed our stdout is a send error, not a kill
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := run(ctx, os.Args[1:], IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
