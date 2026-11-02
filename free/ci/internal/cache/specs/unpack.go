@@ -232,20 +232,28 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 		return err
 	}
 	n, err := io.Copy(f, io.LimitReader(r, h.Size))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
 	if err == nil && n != h.Size {
 		err = io.ErrUnexpectedEOF
+	}
+	byPath := false
+	if err == nil {
+		byPath, err = settleOpen(f, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
 	}
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	return settleFile(root, name, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+	if byPath {
+		_ = root.Chtimes(name, h.ModTime, h.ModTime)
+	}
+	return nil
 }
 
-// settleFile gives a written file its mode (readable by the owner at least) and time.
-func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+// filePerm is the mode a restored file gets: readable by the owner at least,
+// and by everyone when a job under another UID reads the tree.
+func filePerm(mode os.FileMode, opt UnpackOptions) os.FileMode {
 	perm := mode | 0o400
 	if opt.OtherRead {
 		perm |= 0o444
@@ -253,9 +261,20 @@ func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt 
 			perm |= 0o111
 		}
 	}
-	if err := root.Chmod(name, perm); err != nil {
-		return err
+	return perm
+}
+
+// settleOpen gives the file it just wrote its mode, and its time where the
+// platform can set it through the descriptor. The descriptor already names the
+// file the unpack created (O_EXCL, inside the pinned root), so no path is walked
+// again. byPath is true when the caller must set the time with root.Chtimes
+// after closing the file, as every restore did before.
+func settleOpen(f *os.File, mode os.FileMode, at time.Time, opt UnpackOptions) (byPath bool, err error) {
+	if err := f.Chmod(filePerm(mode, opt)); err != nil {
+		return false, err
 	}
-	_ = root.Chtimes(name, at, at)
-	return nil
+	if setTimes(f, at) != nil {
+		return true, nil
+	}
+	return false, nil
 }
