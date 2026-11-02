@@ -163,7 +163,7 @@ func TestNoRequestReachesTelemetry(t *testing.T) {
 		id := queueAttempt(t, st, "tele"+string(rune('a'+i)), "project", "job", "owner")
 		j := newJob(id, "owner", "lan")
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		a, err := d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: j, Revision: strings.Repeat("a", 40)})
+		a, err := d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: j, Revision: baseRev}) // the head queueAttempt stored (D-1360)
 		cancel()
 		if err != nil {
 			t.Fatalf("job %d: %v", i, err)
