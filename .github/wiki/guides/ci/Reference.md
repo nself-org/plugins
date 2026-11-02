@@ -250,7 +250,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--service` | - |
 | `--sha` | `runs *` |
 | `--shell` | `runs reproduce` |
-| `--since` | `serve admin audit` |
+| `--since` | `runs stats`, `serve admin audit` |
 | `--slots` | `nodes *` |
 | `--spend` | `runs *` |
 | `--stdio` | `artifacts signer` |
@@ -260,6 +260,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--systemd` | `serve *` |
 | `--tag` | `build` |
 | `--team` | `policy *`, `serve *` |
+| `--tidy` | `runs *` |
 | `--timeout` | `build`, `config *`, `nodes discover`, `run`, `runs wait`, `serve` |
 | `--trigger` | `explain`, `plan` |
 | `--trust` | - |

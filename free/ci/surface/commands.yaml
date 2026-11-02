@@ -150,7 +150,7 @@ commands:
     output: document
     json: none
     flags:
-      - {name: "runner", type: "string", usage: "Runner container name (default: <PROJECT>_forgejo_runner)"}
+      - {name: "json", type: "bool", default: "false", usage: "V15 only (NSELF_V15=1): print one v1 JSON envelope"}
       - {name: "url", type: "string", default: "http://localhost:3844", usage: "Forgejo base URL"}
   - path: logs
     summary: "Print the logs of a run attempt (-f follows)"
@@ -333,6 +333,8 @@ commands:
       - {name: "instances", type: "int", default: "1", usage: "Number of runner instances to install on this host"}
       - {name: "json", type: "bool", default: "false", usage: "V15 only (NSELF_V15=1): print one v1 JSON envelope; in v1.4 the flag is refused as today"}
       - {name: "labels", type: "stringSlice", default: "[]", usage: "Extra labels appended after self-hosted,Linux,X64"}
+      - {name: "no-deprecation-warnings", type: "bool", default: "false", usage: "Accepted for core argv parity; no effect"}
+      - {name: "no-monorepo", type: "bool", default: "false", usage: "Accepted for core argv parity; no effect"}
       - {name: "ssh-key", type: "string", usage: "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"}
       - {name: "token", type: "string", usage: "GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged."}
   - path: nodes remove
@@ -467,6 +469,8 @@ commands:
     flags:
       - {name: "host", type: "stringSlice", default: "[]", usage: "SSH target(s) user@host to verify (repeatable). Default: this machine."}
       - {name: "json", type: "bool", default: "false", usage: "Print JSON instead of the text parity matrix: raw []HostReport in v1.4, one v1 envelope in V15 (NSELF_V15=1)"}
+      - {name: "no-deprecation-warnings", type: "bool", default: "false", usage: "Accepted for core argv parity; no effect"}
+      - {name: "no-monorepo", type: "bool", default: "false", usage: "Accepted for core argv parity; no effect"}
       - {name: "ssh-key", type: "string", usage: "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"}
   - path: plan
     summary: "Plan a run without executing it"
@@ -677,6 +681,8 @@ commands:
     output: document
     json: envelope
     args: [{name: run}]
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
   - path: runs follow
     summary: "Follow the events of a run as an NDJSON stream"
     side_effect: read
@@ -701,11 +707,15 @@ commands:
     side_effect: read
     output: document
     json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
   - path: runs pending
     summary: "List runs waiting for approval"
     side_effect: read
     output: document
     json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
   - path: runs prune
     summary: "Remove old runs and logs (--dry-run previews; --tidy [--apply] also tidies cache and job roots)"
     side_effect: destructive
@@ -717,16 +727,16 @@ commands:
       - {name: "dry-run", type: "bool"}
       - {name: "json", type: "bool", cli_only: true}
       - {name: "keep", type: "int", default: "0"}
-      - {name: "limit", type: "int", default: "20"}
       - {name: "max-age-days", type: "int", default: "0"}
       - {name: "max-log-bytes", type: "int"}
-      - {name: "repo", type: "string"}
       - {name: "tidy", type: "bool"}
   - path: runs queue
     summary: "Show the run queue"
     side_effect: read
     output: document
     json: envelope
+    flags:
+      - {name: "json", type: "bool", cli_only: true}
   - path: runs reproduce
     summary: "Reproduce a job at its recorded inputs"
     side_effect: remote
@@ -774,6 +784,11 @@ commands:
     side_effect: read
     output: document
     json: envelope
+    flags:
+      - {name: "coordinator", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "project", type: "string"}
+      - {name: "since", type: "string"}
   - path: runs wait
     summary: "Wait for a run to finish and print its result"
     side_effect: read
@@ -795,6 +810,20 @@ commands:
       - {name: "allow-unsandboxed", type: "bool", default: "false", side_effect: "destructive", usage: "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse."}
       - {name: "allowed-repos", type: "stringSlice", default: "[]", usage: "Comma-separated or repeatable \"owner/repo\" allowlist. Default: empty, which rejects every job (fail-closed, no \"allow all\")."}
       - {name: "concurrency", type: "int", default: "2", usage: "Max concurrent CI jobs"}
+      - {name: "data-dir", type: "string", usage: "V15 only (NSELF_V15=1): coordinator state directory (state.db); default NSELF_CI_HOME or ~/.nself/ci"}
+      - {name: "force", type: "bool", default: "false", usage: "V15 only (NSELF_V15=1): run every accepted trigger, even when an identical pipeline is live (audited)"}
+      - {name: "agent-addr", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the agent listener (default :3864)"}
+      - {name: "api-addr", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the user-api listener (default 127.0.0.1:3865)"}
+      - {name: "api-lock", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the api-lock listener (on, off or an address)"}
+      - {name: "api-public-url", type: "string", usage: "V15 only (NSELF_V15=1): URL users reach the user API at (its host goes into the server certificate)"}
+      - {name: "api-socket", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the local-socket listener (auto, off or a path)"}
+      - {name: "api-submit-role", type: "string", usage: "V15 only (NSELF_V15=1): Role that may start a run through the user API: release (default) or member"}
+      - {name: "drain-deadline", type: "string", usage: "V15 only (NSELF_V15=1): How long running jobs may finish after SIGTERM before they are cancelled and handed back"}
+      - {name: "enroll-addr", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the enroll listener (default :3866)"}
+      - {name: "node-admin-routes", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the node-admin-routes listener (on, off or an address)"}
+      - {name: "public-url", type: "string", usage: "V15 only (NSELF_V15=1): URL agents reach this coordinator at (its host becomes a SAN of the agent certificate)"}
+      - {name: "release-routes", type: "string", usage: "V15 only (NSELF_V15=1): Listen address of the release-routes listener (on, off or an address)"}
+      - {name: "team", type: "bool", usage: "V15 only (NSELF_V15=1): Run as a TEAM coordinator (permanent for this data dir, audited)"}
       - {name: "insecure", type: "bool", default: "false", usage: "DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured."}
       - {name: "secret", type: "string", usage: "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)"}
       - {name: "timeout", type: "int", default: "600", usage: "Per-job timeout in seconds"}

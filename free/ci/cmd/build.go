@@ -42,15 +42,7 @@ type buildOpts struct {
 // parseBuildArgs parses the build argv; flags and the directory may be mixed.
 func parseBuildArgs(rawArgs []string, eh flag.ErrorHandling) (buildOpts, error) {
 	var o buildOpts
-	fs := flag.NewFlagSet("build", eh)
-	fs.StringVar(&o.artifact, "artifact", "android", "Artifact type to build (only \"android\" is supported)")
-	fs.BoolVar(&o.upload, "upload", false, "Attach the built artifact to a GitHub release via `gh release upload`")
-	fs.StringVar(&o.tag, "tag", "", "Release tag to upload to (required with --upload)")
-	fs.StringVar(&o.owner, "owner", "", "GitHub owner for --upload (default: from git remote)")
-	fs.StringVar(&o.repo, "repo", "", "GitHub repo for --upload (default: from git remote)")
-	fs.BoolVar(&o.verbose, "v", false, "Print each command before running")
-	fs.BoolVar(&o.verbose, "verbose", false, "Alias for -v (core spelling)")
-	fs.IntVar(&o.timeout, "timeout", 900, "Build step timeout in seconds (release builds are slow)")
+	fs := newBuildFlagSet(&o, eh)
 	pos, err := parseInterspersed(fs, rawArgs)
 	if err != nil {
 		return o, err
@@ -60,6 +52,20 @@ func parseBuildArgs(rawArgs []string, eh flag.ErrorHandling) (buildOpts, error) 
 		o.dir = pos[0]
 	}
 	return o, nil
+}
+
+// newBuildFlagSet declares the frozen v1.4 `build` flags into o.
+func newBuildFlagSet(o *buildOpts, eh flag.ErrorHandling) *flag.FlagSet {
+	fs := flag.NewFlagSet("build", eh)
+	fs.StringVar(&o.artifact, "artifact", "android", "Artifact type to build (only \"android\" is supported)")
+	fs.BoolVar(&o.upload, "upload", false, "Attach the built artifact to a GitHub release via `gh release upload`")
+	fs.StringVar(&o.tag, "tag", "", "Release tag to upload to (required with --upload)")
+	fs.StringVar(&o.owner, "owner", "", "GitHub owner for --upload (default: from git remote)")
+	fs.StringVar(&o.repo, "repo", "", "GitHub repo for --upload (default: from git remote)")
+	fs.BoolVar(&o.verbose, "v", false, "Print each command before running")
+	fs.BoolVar(&o.verbose, "verbose", false, "Alias for -v (core spelling)")
+	fs.IntVar(&o.timeout, "timeout", 900, "Build step timeout in seconds (release builds are slow)")
+	return fs
 }
 
 // runArtifactBuildCmd implements "nself-ci build --artifact android [dir]".

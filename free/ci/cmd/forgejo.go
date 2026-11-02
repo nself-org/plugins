@@ -20,8 +20,7 @@ func init() {
 // forgejoCmd parses the flags and runs the check.
 func forgejoCmd(args []string, eh flag.ErrorHandling) int {
 	var cfg forgejo.Config
-	fs := flag.NewFlagSet("forgejo", eh)
-	fs.StringVar(&cfg.URL, "url", forgejo.DefaultURL, "Forgejo base URL")
+	fs := newForgejoFlagSet(&cfg, eh)
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
@@ -29,4 +28,11 @@ func forgejoCmd(args []string, eh flag.ErrorHandling) int {
 		return 1
 	}
 	return 0
+}
+
+// newForgejoFlagSet declares the frozen v1.4 `forgejo` flags into cfg.
+func newForgejoFlagSet(cfg *forgejo.Config, eh flag.ErrorHandling) *flag.FlagSet {
+	fs := flag.NewFlagSet("forgejo", eh)
+	fs.StringVar(&cfg.URL, "url", forgejo.DefaultURL, "Forgejo base URL")
+	return fs
 }

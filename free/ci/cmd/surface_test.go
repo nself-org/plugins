@@ -96,14 +96,49 @@ func flagType(f *flag.Flag) string {
 	}
 }
 
+// flagCheckExempt lists the keys the flag check cannot reach, each with the reason. It stays empty: every row's
+// declared flags are compared with its handler's flag set in both directions.
+var flagCheckExempt = map[string]string{}
+
+// constructorFlags is the flag set a key's handlers accept: its v1.5 Flags constructor, its runs-subcommand
+// constructor and its frozen v1.4 set, merged (the first definition of a name wins). nil when none exists.
 func constructorFlags(key string) *flag.FlagSet {
+	var sets []*flag.FlagSet
 	if e, ok := v15Subcommands[key]; ok && e.Flags != nil {
-		return e.Flags()
+		sets = append(sets, e.Flags())
 	}
 	if sub, ok := strings.CutPrefix(key, "runs "); ok && runsSubFlags[sub] != nil {
-		return runsSubFlags[sub]()
+		sets = append(sets, runsSubFlags[sub]())
 	}
-	return nil
+	if mk := legacyFlagSets[key]; mk != nil {
+		sets = append(sets, mk())
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+	merged := flag.NewFlagSet(key, flag.ContinueOnError)
+	for _, fs := range sets {
+		fs.VisitAll(func(f *flag.Flag) {
+			if merged.Lookup(f.Name) == nil {
+				merged.Var(f.Value, f.Name, f.Usage)
+			}
+		})
+	}
+	return merged
+}
+
+// rowFlagProblems is the flag check of one row against its handlers' flag set fs (nil: no constructor feeds the check).
+func rowFlagProblems(key string, row specRow, fs *flag.FlagSet) []string {
+	if reason, ok := flagCheckExempt[key]; ok {
+		if strings.TrimSpace(reason) == "" {
+			return []string{key + ": flagCheckExempt entry has no reason"}
+		}
+		return nil
+	}
+	if fs == nil {
+		return []string{key + ": no Flags constructor feeds the flag check: give the handler one (a v1.5 table entry, runsSubFlags or legacyFlagSets) or list the key in flagCheckExempt with a reason"}
+	}
+	return checkFlags(key, row, fs, true)
 }
 
 // checkFlags compares spec flags with a constructor's flags; reverse also demands every constructor flag be declared.
@@ -125,7 +160,7 @@ func checkFlags(path string, row specRow, fs *flag.FlagSet, reverse bool) []stri
 	}
 	if reverse {
 		fs.VisitAll(func(f *flag.Flag) {
-			if !declared[f.Name] && len(f.Name) > 1 && f.Name != "help" && f.Name != "sha" { // one-letter names are shorthands (-y)
+			if !declared[f.Name] && len(f.Name) > 1 && f.Name != "help" && !(path == "root" && f.Name == "sha") { // one-letter names are shorthands (-y)
 				out = append(out, fmt.Sprintf("%s: flag --%s is in the code but not in the spec", path, f.Name))
 			}
 		})
@@ -206,9 +241,11 @@ func specProblems(s specFile) []string {
 			continue
 		}
 		problems = append(problems, classProblems(k, r)...)
-		// v1.4 rows (json none) keep the frozen v1.4 flags, which the V15 constructors need not define.
-		if fs := constructorFlags(k); fs != nil && r.JSON == "envelope" {
-			problems = append(problems, checkFlags(k, r, fs, true)...)
+		problems = append(problems, rowFlagProblems(k, r, constructorFlags(k))...)
+	}
+	for k := range flagCheckExempt {
+		if !inTable[k] {
+			problems = append(problems, k+": flagCheckExempt names a key that is not in the table")
 		}
 	}
 	for p := range rows {
@@ -305,4 +342,53 @@ func consentProblems(s specFile) []string {
 		}
 	}
 	return out
+}
+
+// TestFlagCheckFailsOnDrift proves the flag check is not vacuous: a fake row that declares a flag its handler lacks,
+// omits one the handler has, or types one differently fails, and so does a key with no constructor.
+func TestFlagCheckFailsOnDrift(t *testing.T) {
+	handler := func() *flag.FlagSet {
+		fs := flag.NewFlagSet("fake", flag.ContinueOnError)
+		fs.Bool("json", false, "")
+		fs.String("repo", "", "")
+		fs.Int("limit", 0, "")
+		return fs
+	}
+	agree := specRow{Path: "fake", Flags: []specFlag{{Name: "json", Type: "bool"}, {Name: "repo", Type: "string"}, {Name: "limit", Type: "int"}}}
+	if got := rowFlagProblems("fake", agree, handler()); len(got) != 0 {
+		t.Fatalf("a row that matches its handler reported %v", got)
+	}
+	cases := []struct {
+		name  string
+		flags []specFlag
+		want  string
+	}{
+		{"declared flag missing from the handler", append(append([]specFlag{}, agree.Flags...), specFlag{Name: "ghost", Type: "string"}), "spec flag --ghost is not defined"},
+		{"handler flag missing from the row", agree.Flags[:2], "flag --limit is in the code but not in the spec"},
+		{"type differs", []specFlag{{Name: "json", Type: "bool"}, {Name: "repo", Type: "int"}, {Name: "limit", Type: "int"}}, "flag --repo is string in the code, int in the spec"},
+	}
+	for _, c := range cases {
+		got := strings.Join(rowFlagProblems("fake", specRow{Path: "fake", Flags: c.flags}, handler()), "\n")
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: want a problem containing %q, got %q", c.name, c.want, got)
+		}
+	}
+	if got := rowFlagProblems("fake", agree, nil); len(got) != 1 || !strings.Contains(got[0], "no Flags constructor") {
+		t.Errorf("a key without a constructor must fail the check, got %v", got)
+	}
+}
+
+// TestFlagCheckReachesEveryRow: no row is skipped for its json mode or for lacking a constructor.
+func TestFlagCheckReachesEveryRow(t *testing.T) {
+	for _, k := range tableKeys() {
+		if _, exempt := flagCheckExempt[k]; !exempt && constructorFlags(k) == nil {
+			t.Errorf("%s: no Flags constructor", k)
+		}
+	}
+	for sub := range runsSubs {
+		_, v15 := v15Subcommands["runs "+sub]
+		if runsSubFlags[sub] == nil && !v15 {
+			t.Errorf("runs %s: handler registered without a Flags constructor", sub)
+		}
+	}
 }
