@@ -731,6 +731,26 @@
               },
               "rank": {
                 "type": "integer"
+              },
+              "node": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "isolation": {
+                "type": "string",
+                "enum": [
+                  "process",
+                  "container",
+                  "sandboxed-container",
+                  "vm",
+                  "ephemeral-vm",
+                  "hosted-disposable"
+                ]
               }
             },
             "required": [

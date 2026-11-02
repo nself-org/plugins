@@ -118,6 +118,11 @@ func (s *Sink) store(ctx context.Context, d dispatch.Decision, at, waited int64)
 	}
 	if d.Outcome == dispatch.OutcomeAdmitted {
 		cirun.NotePlacement(id, RefPrefix+id)
+		if d.Placement != nil {
+			if r, found := attemptRunner(d.World, d.Placement.RunnerID); found {
+				cirun.NoteRunner(id, r)
+			}
+		}
 	}
 	return nil
 }

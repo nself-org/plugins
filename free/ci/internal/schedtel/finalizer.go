@@ -29,6 +29,7 @@ func (finalizer) Finalize(ctx context.Context, info cirun.RunInfo) error {
 	s := sinkFor(info.RunID)
 	for _, j := range info.Jobs {
 		cirun.ForgetPlacement(j.AttemptID)
+		cirun.ForgetRunner(j.AttemptID)
 	}
 	if s == nil {
 		return nil
