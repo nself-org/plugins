@@ -13,7 +13,7 @@ type Match struct{ Offset, Len int }
 
 // Scan returns the registered-value occurrences in blob.
 func (r *Redactor) Scan(blob []byte) []Match {
-	spans, _ := r.snapshot().values(blob)
+	spans := r.snapshot().scanSpans(blob)
 	var out []Match
 	for _, s := range mergeSpans(spans) {
 		out = append(out, Match{Offset: s.s, Len: s.e - s.s})

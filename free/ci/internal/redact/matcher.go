@@ -37,6 +37,8 @@ type automaton struct {
 	root   [256]int32
 	nodes  []node
 	maxLen int
+	minLen int       // length of the shortest pattern
+	alpha  [256]bool // every byte that occurs in some pattern
 }
 
 // child returns the transition on c.
@@ -61,6 +63,12 @@ func build(patterns [][]byte) *automaton {
 		}
 		if len(p) > a.maxLen {
 			a.maxLen = len(p)
+		}
+		if a.minLen == 0 || len(p) < a.minLen {
+			a.minLen = len(p)
+		}
+		for _, c := range p {
+			a.alpha[c] = true
 		}
 		s := int32(0)
 		for i, c := range p {
