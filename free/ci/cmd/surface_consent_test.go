@@ -67,7 +67,7 @@ var consentCases = map[string]consentCase{
 	"serve admin roles":     {[]string{"list", "--json"}, 0, "serve admin roles", false, false},
 	"serve admin token":     {[]string{"list", "--json"}, 0, "serve admin token", false, false},
 	"serve restore":         {[]string{"--in", "{state}/none", "--kek", "{state}/none"}, 1, "E668", false, false},
-	"serve uninstall":       {[]string{"--launchd", "--user"}, 0, "", false, true},
+	"serve uninstall":       {[]string{"--launchd", "--user", "--binary", "{state}/nself"}, 0, "", false, true},
 	"serve watch":           {[]string{"--once", "--repos", "o/r"}, 1, "has no local checkout", false, false},
 }
 
