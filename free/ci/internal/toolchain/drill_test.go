@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -56,6 +57,15 @@ func mirror(t *testing.T) *httptest.Server {
 		_, _ = w.Write([]byte(`{"tag_name":"v2.0.0"}`))
 	})
 	mux.HandleFunc("/example.org/acme/demo-1.2.3.tgz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("x")) })
+	var flaky atomic.Int32
+	mux.HandleFunc("/example.org/acme/flaky-1.0.0.tgz", func(w http.ResponseWriter, _ *http.Request) { // 500 for the first two requests
+		if flaky.Add(1) <= 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte("x"))
+	})
+	mux.HandleFunc("/example.org/acme/broken-1.0.0.tgz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 	mux.HandleFunc("/auth.docker.io/token", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"token":"t"}`)) })
 	mux.HandleFunc("/registry-1.docker.io/v2/library/alpine/manifests/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/3.22") { // the tag has moved on from the pinned digest
@@ -151,6 +161,32 @@ func TestDrillFailsWhenAnArtifactIsGone(t *testing.T) {
 	}
 	if c := resultsByTool(doc)["gone"]; c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no longer downloadable") {
 		t.Errorf("gone artifact check = %v", c)
+	}
+}
+
+// TestDrillRetriesATransientServerError: a CDN 500 is not a removed asset. One that clears within the retries passes.
+func TestDrillRetriesATransientServerError(t *testing.T) {
+	t.Setenv("TOOLCHAIN_PINS_ATTEMPTS", "4")
+	t.Setenv("TOOLCHAIN_PINS_RETRY_DELAY", "0")
+	srv := mirror(t)
+	doc, _, raw := runDrill(t, fixtureTable("https://example.org/acme/flaky-1.0.0.tgz"), srv)
+	validEvidence(t, raw)
+	if c := resultsByTool(doc)["gone"]; c["result"] != "pass" {
+		t.Errorf("a 500 that clears on retry must pass, got %v", c)
+	}
+}
+
+// TestDrillReportsAPersistentServerErrorAsUnverified: still a failure (fail closed), but not worded as a removal.
+func TestDrillReportsAPersistentServerErrorAsUnverified(t *testing.T) {
+	t.Setenv("TOOLCHAIN_PINS_ATTEMPTS", "2")
+	t.Setenv("TOOLCHAIN_PINS_RETRY_DELAY", "0")
+	srv := mirror(t)
+	doc, exit, raw := runDrill(t, fixtureTable("https://example.org/acme/broken-1.0.0.tgz"), srv)
+	validEvidence(t, raw)
+	c := resultsByTool(doc)["gone"]
+	ex, _ := c["excerpt"].(string)
+	if exit != 1 || c["result"] != "fail" || !strings.Contains(ex, "could not be verified") || strings.Contains(ex, "no longer downloadable") {
+		t.Errorf("a persistent 500 must fail as unverified, got exit %d %v", exit, c)
 	}
 }
 
