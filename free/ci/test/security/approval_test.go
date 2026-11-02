@@ -228,6 +228,19 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	if d3.Reason != source.ReasonApprovalRequired {
 		t.Fatalf("decision: reason=%q, want %s", d3.Reason, source.ReasonApprovalRequired)
 	}
+	// A dirty-tree offload checks out a snapshot commit on top of the approved head. Its lease
+	// revision differs by design; Head names the head it derives from, and admission binds the
+	// approval to that. Without Head the run sat in the queue until the foreground cap.
+	id4, j4 := r.prepare(newJob("forkf", "untrusted", "restricted"), "untrusted")
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: "pipe-forkf", Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	ctx4, cancel4 := context.WithTimeout(context.Background(), settle)
+	defer cancel4()
+	a4, err4 := r.d.Submit(ctx4, dispatch.Job{AttemptID: id4, Sched: j4, Revision: wrong, Head: baseRev})
+	if got := runnerOf(t, a4, err4); got != "gv1" {
+		t.Fatalf("a snapshot checkout of the approved head was placed on %q", got)
+	}
 }
 
 // moveHead moves the stored head SHA and config digest of a run. Production starts a new run for a push (the
