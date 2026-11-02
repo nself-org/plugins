@@ -101,6 +101,7 @@ func TestNormalizeGoldens(t *testing.T) {
 		{"mr into another project", "mr_other_target", "Merge Request Hook", reasonUnsupported, "target project differs"},
 		{"job without the tag", "job_pending_untagged", "Job Hook", reasonUnsupported, "runner tag nself"},
 		{"job already running", "job_running", "Job Hook", reasonUnsupported, `job status "running"`},
+		{"running job without runner", "job_running_no_runner", "Job Hook", reasonUnsupported, "running job without a job and runner"},
 		{"unserved event", "push", "Pipeline Hook", reasonUnsupported, `event "Pipeline Hook"`},
 		{"event header differs from the body", "push", "Tag Push Hook", reasonUnsupported, "does not match"},
 	}

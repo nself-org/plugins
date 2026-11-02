@@ -16,7 +16,7 @@
   "name": "Dev One",
   "username": "dev1"
  },
- "runner": null,
+ "runner": {"id": 42},
  "tag_list": [
   "nself",
   "linux"

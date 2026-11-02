@@ -165,6 +165,8 @@ func TestGitLabRunnerSim(t *testing.T) {
 	st := useSim(t)
 	ctx := context.Background()
 	f := newFakeGL(t)
+	f.branch["main"] = true
+	f.jobs[4001] = fakeJob{Ref: "main", Status: "pending", Tags: []string{"nself"}}
 	reg := f.registrar(clock)
 	runners.UseRegistrar(func(context.Context) (*runners.Registrar, error) { return reg, nil })
 	t.Cleanup(func() { runners.UseRegistrar(nil) })
@@ -185,7 +187,7 @@ func TestGitLabRunnerSim(t *testing.T) {
 	body := f.mints[0]
 	tags := body["tag_list"].([]any)
 	if len(tags) != 2 || tags[0] != "nself" || tags[1] != body["description"] || !strings.HasPrefix(tags[1].(string), "nself-glr-") ||
-		body["run_untagged"] != false || body["locked"] != true || body["access_level"] != "not_protected" || body["project_id"] != float64(testProjectID) {
+		body["run_untagged"] != false || body["locked"] != true || body["access_level"] != "ref_protected" || body["project_id"] != float64(testProjectID) {
 		t.Fatalf("registration body %v", body)
 	}
 	if exp, err := time.Parse(time.RFC3339, got.RunnerCredential.ExpiresAt); err != nil || exp.Sub(epoch) > runners.CredentialLifetime {

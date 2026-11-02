@@ -280,7 +280,7 @@ func (f *fakeGL) client(token string) *rest.Client {
 // registrar builds a Registrar over f with the given clock.
 func (f *fakeGL) registrar(clk func() time.Time) *runners.Registrar {
 	f.t.Helper()
-	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clk})
+	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clk, Settings: runners.Settings{ProtectedRefsOnly: true}})
 	if err != nil {
 		f.t.Fatal(err)
 	}

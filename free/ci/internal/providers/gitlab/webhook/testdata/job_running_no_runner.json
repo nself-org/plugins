@@ -1,0 +1,9 @@
+{
+ "object_kind": "build",
+ "build_status": "running",
+ "build_id": 9001,
+ "project_id": 1001,
+ "runner": null,
+ "tag_list": ["nself", "linux"],
+ "repository": {"homepage": "https://gitlab.example.com/acme/app"}
+}

@@ -61,8 +61,8 @@ func TestPauseOnRunning(t *testing.T) {
 	fev := ev
 	fev.RunnerID = foreign.ID
 	f.jobs[4001] = fakeJob{Ref: "main", Status: "running", RunnerID: foreign.ID}
-	if _, err = r.OnRunning(ctx, fev); code(err) != "E707" || len(f.puts) != 1 || f.runners[1].Paused {
-		t.Fatalf("a foreign runner must be refused: %v puts %v", err, f.puts)
+	if paused, err = r.OnRunning(ctx, fev); paused || err != nil || len(f.puts) != 1 || f.runners[1].Paused {
+		t.Fatalf("a foreign runner must be declined: paused %v err %v puts %v", paused, err, f.puts)
 	}
 
 	// the run closes: deleted and proven absent

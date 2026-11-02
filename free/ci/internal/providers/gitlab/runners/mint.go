@@ -12,7 +12,8 @@ package runners
 //          list is the operator's providers.gitlab.runner.tags plus one unique nself-glr-<ulid> tag,
 //          never copied from the request or from a demand (a demand with other tags is refused by the
 //          demand handler as E708 label.not_allowed); the description is the same name. access_level is
-//          not_protected unless MintOptions.ProtectedOnly, which only a verified Restriction sets. A reply
+//          always ref_protected and requires operator opt-in through protected_refs_only: a shell job can read its runner token, so an unrestricted token must
+//          never be handed to unprotected code that could request protected work. A reply
 //          whose token is not a glrt- token (or has no runner id) is E707 and the runner it may have
 //          created is deleted again at once. The token never reaches a log, an error or the store; Minted
 //          prints without it.
@@ -35,8 +36,6 @@ const (
 
 // MintOptions are the parts of a registration a caller may choose.
 type MintOptions struct {
-	// ProtectedOnly registers the runner as ref_protected. Set it only from a verified Restriction.
-	ProtectedOnly bool
 	// Tags, when set, are the configured tags the runner carries besides its unique one (a verified subset of
 	// providers.gitlab.runner.tags, from Assess): GitLab hands a runner any pending job whose tags it holds,
 	// so a runner that carries more tags than its job can take another job meant for other hardware. Unset:
@@ -96,6 +95,9 @@ type mintReply struct {
 
 // MintRunner creates one single-job project runner and returns the credential with its teardown handle.
 func (r *Registrar) MintRunner(ctx context.Context, req providers.RunnerRequest, opt MintOptions) (Minted, error) {
+	if !r.set.ProtectedRefsOnly {
+		return Minted{}, refuse("E708", "runner.protected_refs_only_opt_in_required")
+	}
 	p, err := project(req.Scope)
 	if err != nil {
 		return Minted{}, err
@@ -115,10 +117,7 @@ func (r *Registrar) MintRunner(ctx context.Context, req providers.RunnerRequest,
 		return Minted{}, err
 	}
 	tags = append(tags, name)
-	access := AccessNotProtected
-	if opt.ProtectedOnly {
-		access = AccessRefProtected
-	}
+	access := AccessRefProtected
 	body := mintBody{RunnerType: "project_type", ProjectID: pid, Description: name, TagList: tags, RunUntagged: false, Locked: true, AccessLevel: access}
 	var out mintReply
 	if _, err = r.c.Do(ctx, "POST", userRunnersPath, nil, body, &out); err != nil {
@@ -184,8 +183,7 @@ func (r *Registrar) remove(ctx context.Context, id int64) error {
 	return nil
 }
 
-// Mint implements providers.RunnerRegistrar. The runner is not_protected: the caller that verified a
-// Restriction uses MintRunner with MintOptions.
+// Mint implements providers.RunnerRegistrar. Every token is restricted to protected refs.
 func (r *Registrar) Mint(ctx context.Context, req providers.RunnerRequest) (providers.RunnerCredential, error) {
 	m, err := r.MintRunner(ctx, req, MintOptions{})
 	return m.Credential, err

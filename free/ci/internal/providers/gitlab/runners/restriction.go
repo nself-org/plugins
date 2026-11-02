@@ -5,7 +5,7 @@ package runners
 //          (GitLab has no runner groups). Zero means no job is named, which proves nothing.
 // Outputs: Restriction{ProtectedOnly: true} only when the job's ref is a branch or tag that is protected
 //          in the project; otherwise ProtectedOnly false. A transient failure is returned as the error and
-//          the caller registers not_protected.
+//          the launcher refuses to mint until protection is proved.
 // Constraints: the answer is read from the API at the moment of the call (the job read for the ref, then
 //          protected_branches or protected_tags by that exact name); a merge request ref
 //          (refs/merge-requests/N/head, the shape of a fork's job) and a wildcard-only protection read as
