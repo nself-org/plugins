@@ -144,6 +144,7 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 		// an interrupt or an infrastructure error is not a verdict on the revision: exit 2, never the "fails" exit of a red build
 		return v, true, fail(CodeWorktree, ExitInternal, "the run for %s did not finish (%s)", short(rev), ev.Result)
 	}
+	ev = env.recordedAfter(ctx, rev, ev)
 	v = Judge(ev, rev, &current)
 	env.checkScope(ctx, &v) // a rerun is held to the same repository and policy as a stored document
 	return v, true, nil
