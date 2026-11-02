@@ -231,6 +231,9 @@ func selectPipeline(in Input, cs map[string]*cand, ids []string, trig model.Trig
 		if _, ok := cfg.Pipelines[in.Pipeline]; !ok {
 			return "", "", nil, fail(CodeUnknownName, "unknown pipeline "+in.Pipeline, []string{in.Pipeline})
 		}
+		if in.Trigger != "" && !containsTrigger(cfg.Pipelines[in.Pipeline].Triggers, trig) {
+			return "", "", nil, fail(CodeUnknownName, "pipeline "+in.Pipeline+" does not accept trigger "+string(trig), []string{in.Pipeline, string(trig)})
+		}
 		names = []string{in.Pipeline}
 	case in.Trigger != "":
 		for _, n := range sortedPipelineNames(cfg) {
@@ -267,15 +270,6 @@ func selectPipeline(in Input, cs map[string]*cand, ids []string, trig model.Trig
 		}
 	}
 	return joinNames(names), kind, members, nil
-}
-
-func sortedPipelineNames(cfg model.PipelineConfig) []string {
-	names := make([]string, 0, len(cfg.Pipelines))
-	for n := range cfg.Pipelines {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
 }
 
 func joinNames(names []string) string {

@@ -119,6 +119,12 @@ func (genCase) Generate(r *rand.Rand, _ int) reflect.Value {
 	}
 	w := World{Platform: pick(r, genPlats), Docker: r.Intn(2) == 0, Tools: []string{"go"}, CPU: 4, MemMB: 4096}
 	in := Input{Config: cfg, Revision: rev, World: w, Pipeline: pipeline, Trigger: pick(r, []model.Trigger{"", "push", "tag"})}
+	// Generate valid named selections; mismatches have focused rejection tests.
+	if pipeline != "" && in.Trigger != "" {
+		p := in.Config.Pipelines[pipeline]
+		p.Triggers = append(p.Triggers, in.Trigger)
+		in.Config.Pipelines[pipeline] = p
+	}
 	return reflect.ValueOf(genCase{in: in, sel: r.Intn(len(genSelects))})
 }
 

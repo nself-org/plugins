@@ -31,7 +31,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
-	"github.com/nself-org/plugins/free/ci/internal/serve"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -188,6 +187,10 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		if facts.Synthetic != nil { // runner-demand pipelines are P7-HOST work: fail closed rather than run the repo default
 			return coordinator.RunResult{}, errors.New("synthetic pipelines are not dispatched by this coordinator")
 		}
+		forge, err := dispatchTrustFacts(row, facts)
+		if err != nil {
+			return coordinator.RunResult{}, err
+		}
 		// a stored row is checked again here: nothing that reaches git may start with "-" or leave the project's host
 		if !coordinator.ValidProjectFor(row.Source, row.Project) || !coordinator.ValidRevision(row.Revision) || (row.Pipeline != "" && !coordinator.ValidPipeline(row.Pipeline)) {
 			return coordinator.RunResult{}, errors.New("refused: project, revision or pipeline is not valid")
@@ -196,7 +199,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		if err != nil {
 			return coordinator.RunResult{}, err
 		}
-		dir, err := serve.CloneRef(cloneURL, row.Revision, f.workdir)
+		dir, err := dispatchCloneRef(cloneURL, row.Revision, f.workdir)
 		defer func() {
 			if dir != "" {
 				_ = os.RemoveAll(dir)
@@ -205,18 +208,28 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("checkout failed: %w", err)
 		}
-		o := RunOptions{Root: dir, Home: home, Pipeline: row.Pipeline, Trigger: serveTrigger(facts.Trigger),
+		o := RunOptions{Root: dir, Home: home, Ref: forge.Ref, TeamRun: true, Pipeline: row.Pipeline, Trigger: serveTrigger(string(forge.Kind)),
 			Container: !f.unsandboxed, ProviderRepo: providerRepoFor(row.Source, row.Project), Timeout: time.Duration(f.timeout) * time.Second, Stream: f.verbose}
 		o.User, o.Team = submitterIdentity(facts.Submitter, row.Project)
-		p, digest, subst, err := preparePlan(ctx, o)
+		p, digest, subst, err := dispatchPreparePlan(ctx, o)
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("plan failed: %w", err)
+		}
+		st, err := cirun.OpenStore(filepath.Join(home, "state.db"))
+		if err != nil {
+			return coordinator.RunResult{}, err
+		}
+		o.ReleaseAuthorized, err = authorizeDispatchRelease(ctx, st, facts.Submitter, row.Project, p)
+		_ = st.Close()
+		if err != nil {
+			return coordinator.RunResult{}, fmt.Errorf("release authorization failed: %w", err)
 		}
 		out := io.Discard
 		if f.verbose {
 			out = os.Stderr
 		}
-		res, err := (&cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, Substantive: subst, Out: out}).Run(ctx)
+		hooks := cirun.Hooks{Trust: forgeDispatchTrust{facts: forge, home: home, submitter: facts.Submitter}}
+		res, err := dispatchRun(ctx, &cirun.Coordinator{Opts: o, Hooks: hooks, Plan: p, ConfigDigest: digest, Substantive: subst, Out: out})
 		if err != nil {
 			return coordinator.RunResult{}, err
 		}
