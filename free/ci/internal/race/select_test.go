@@ -127,3 +127,18 @@ func TestWidthKey(t *testing.T) {
 		t.Fatal(errs)
 	}
 }
+
+// TestRaceTargetsIgnoreTierHold: under `auto` a busy better tier holds a queued job,
+// but a race wants every raceable runner now, so Select still finds its targets.
+func TestRaceTargetsIgnoreTierHold(t *testing.T) {
+	busyVPS := runner("vps", "vps", "owned", 0)
+	free := runner("lan", "lan", "owned", 4)
+	free2 := runner("lan2", "lan", "owned", 4)
+	w := world(busyVPS, free, free2)
+	w.Policy.Preset = sched.AutoPreset
+	w.Bias = map[string]int64{"vps": sched.TierStepMs, "lan": 2 * sched.TierStepMs, "lan2": 2*sched.TierStepMs + 1}
+	c := Select(w, job(), 2, false)
+	if !c.Raceable() || len(c.Runners) != 2 {
+		t.Fatalf("a held job must still race on the free runners: %+v", c)
+	}
+}

@@ -15,8 +15,8 @@ Two operator keys tune the order:
 
 | Key | Meaning |
 |---|---|
-| `sched.auto.order` | The tiers `auto` may use, best first. You can drop tiers; you cannot add one. |
-| `sched.auto.step_sec` | How long a busy better tier is waited for before the next tier is tried. A project can only lower it. |
+| `sched.auto.order` | The tiers `auto` may use, best first. Operator and project scope only: a revision, pipeline or job cannot set it. You can drop tiers; you cannot add one. A tier you leave out is not used at all, and a lower scope keeps the order of what is left. |
+| `sched.auto.step_sec` | How long a busy better tier is waited for before the next tier is tried. A project can only lower it. The wait also ends one second before the job's `max_queue`, so it never runs a job out of its queue while a lower tier is free. |
 
 Nothing here spends money. A hosted runner is in the choice only when its provider is registered, and the paid and budget rules on the scheduling page still decide whether it may run.
 

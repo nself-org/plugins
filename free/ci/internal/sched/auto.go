@@ -11,8 +11,10 @@ package sched
 // not PlacementReason.Static: offline, draining and provider.down are not
 // static but are never waited for); under auto the local fast path is off,
 // because the tier order (local last) decides; the hold is bounded by one step_sec,
-// whatever QueuedMs says; a step_sec of 0 never waits; every other preset is
-// untouched.
+// whatever QueuedMs says, and ends AutoPollMs before the job's max_queue, so a hold
+// never runs a job into E693 while a lower tier is free; a step_sec of 0 never
+// waits; a tier that sched.auto.order leaves out is excluded (override.excluded) and
+// never waited for; every other preset is untouched.
 
 import (
 	"fmt"
@@ -39,6 +41,13 @@ const TierStepMs int64 = 60000
 
 // KeyAutoStepSec is the policy key of the tier wait, in seconds (0: never wait).
 const KeyAutoStepSec = "sched.auto.step_sec"
+
+// KeyAutoOrder is the policy key of the tier order (registered by internal/tiers).
+const KeyAutoOrder = "sched.auto.order"
+
+// AutoPollMs is the slowest dispatcher re-tick (the TEAM tick, one second). A hold
+// ends this long before max_queue so the tick that ends it still places the job.
+const AutoPollMs int64 = 1000
 
 // DefaultAutoStepSec is the registered default of KeyAutoStepSec.
 const DefaultAutoStepSec int64 = 30
@@ -82,6 +91,42 @@ func stepMs(eff trust.Effective) int64 {
 	return ms
 }
 
+// tierListed reports whether r's tier is in the effective sched.auto.order. It is
+// true outside `auto`, when the key is unset, and when the key names no known tier
+// (internal/tiers refuses to build such a world, so this only guards a direct caller).
+func tierListed(w World, r Runner) bool {
+	if w.Policy.Preset != AutoPreset {
+		return true
+	}
+	v, _, ok := w.Policy.Trust.Value(KeyAutoOrder)
+	if !ok {
+		return true
+	}
+	var listed []string
+	switch xs := v.(type) {
+	case []string:
+		listed = xs
+	case []any:
+		for _, x := range xs {
+			if s, ok := x.(string); ok {
+				listed = append(listed, s)
+			}
+		}
+	}
+	known := false
+	tier := TierOf(w, r)
+	for _, s := range listed {
+		switch s {
+		case TierHosted, TierVPS, TierLAN, TierLocal:
+			known = true
+		}
+		if s == tier {
+			return true
+		}
+	}
+	return !known
+}
+
 // placementFastPath is fastPath for every preset but auto, which never takes it.
 func placementFastPath(w World, jobs []Job, runners []Runner) model.FastPath {
 	if w.Policy.Preset == AutoPreset {
@@ -122,7 +167,11 @@ func tierHold(w World, j Job, runners []Runner, alts []model.Alternative, best i
 	if queued < 0 { // a skewed clock never adds wait
 		queued = 0
 	}
-	if step <= 0 || queued >= step {
+	limit, capped := step, false
+	if mq := w.Policy.Overrides.MaxQueueMs; mq > 0 && mq-AutoPollMs < limit {
+		limit, capped = mq-AutoPollMs, true
+	}
+	if step <= 0 || limit <= 0 || queued >= limit {
 		return model.PlacementReasonDetail{}, false
 	}
 	bestTier := tierIndex(w, runners[best])
@@ -143,7 +192,11 @@ func tierHold(w World, j Job, runners []Runner, alts []model.Alternative, best i
 	for i, q := range alts[held].Reasons {
 		codes[i] = q.Code
 	}
-	detail := fmt.Sprintf("held for %s (tier %s, bias %d, %s): %d ms left of step_sec %d s, then %s (tier %s)",
-		r.ID, TierOf(w, r), w.Bias[r.ID], strings.Join(codes, ","), step-queued, step/1000, runners[best].ID, TierOf(w, runners[best]))
+	bound := fmt.Sprintf("step_sec %d s", step/1000)
+	if capped {
+		bound = fmt.Sprintf("max_queue %d ms less one poll", w.Policy.Overrides.MaxQueueMs)
+	}
+	detail := fmt.Sprintf("held for %s (tier %s, bias %d, %s): %d ms left of %s, then %s (tier %s)",
+		r.ID, TierOf(w, r), w.Bias[r.ID], strings.Join(codes, ","), limit-queued, bound, runners[best].ID, TierOf(w, runners[best]))
 	return reason(model.TierWaiting, detail), true
 }

@@ -35,6 +35,7 @@ const (
 	TightenSuperset = trust.TightenSuperset
 	TightenOnlyOn   = trust.TightenOnlyOn
 	TightenFixed    = trust.TightenFixed
+	TightenOrdered  = trust.TightenOrdered
 )
 
 // The scopes a value can come from.

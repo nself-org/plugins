@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +44,34 @@ func TestIntakeKeepsOperatorLocationAndPoolLabels(t *testing.T) {
 				got, _, err := r.UpdateCapability(ctx, c.Identity.ID, c, "node")
 				if err != nil || !reflect.DeepEqual(got.Capability.Location, old.Capability.Location) {
 					t.Fatalf("operator location changed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestIntakeStripsSelfReportedRank: rank= decides the tier order of `auto`, so a node
+// never sets it itself, at registration or on an update.
+func TestIntakeStripsSelfReportedRank(t *testing.T) {
+	for _, phase := range []string{"register", "update"} {
+		t.Run(phase, func(t *testing.T) {
+			r, c := setup(t)
+			ctx := context.Background()
+			c.Identity.Labels = append(c.Identity.Labels, "rank=0", "rank=10")
+			var n Node
+			var err error
+			if phase == "register" {
+				c.Identity.ID += "-ranked"
+				n, err = r.Register(ctx, c, "node")
+			} else {
+				n, _, err = r.UpdateCapability(ctx, c.Identity.ID, c, "node")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, label := range n.Capability.Identity.Labels {
+				if strings.HasPrefix(label, "rank=") {
+					t.Fatalf("self-reported %s accepted", label)
 				}
 			}
 		})

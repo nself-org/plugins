@@ -84,6 +84,9 @@ func Select(w sched.World, j sched.Job, width int, release bool) Choice {
 		exclude(&w, r.ID, c.Excluded[r.ID])
 	}
 	width = min(max(width, 1), MaxWidth, free)
+	// A race wants every raceable runner now: under `auto` it must not hold for a busy
+	// better tier (the hold reads QueuedMs), so the job counts as having waited a full step.
+	j.QueuedMs = sched.AutoStepMs(w)
 	for len(c.Runners) < width {
 		res := sched.Place(w, []sched.Job{j})
 		if len(res.Placements) == 0 {

@@ -7,13 +7,17 @@ package tiers
 // Constraints: pure and deterministic (no clock, no map order in any output);
 // a rank is clamped below sched.TierStepMs so it never crosses into the next
 // tier; the effective list keeps the order it was written in, and a lower scope
-// can only drop entries (TightenSubset); a tier the order leaves out is tried
-// after every listed tier (the order is a preference: keeping a tier out is the
-// overrides' job, local_only, lan_only, private_only, providers.deny); not
-// `auto` means no output at all.
+// can only drop entries and keep the order of the rest (TightenOrdered); a tier the
+// order leaves out is not used: sched.eligibility excludes its runners
+// (override.excluded), so narrowing never reorders what is left; an order that
+// leaves no known tier is an error, never "every tier is tier 0"; a rank comes only
+// from operator-assigned labels (a node's self-reported rank= is stripped at intake
+// and when the world is built) and is read as a number, the lowest valid one wins;
+// not `auto` means no output at all.
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -54,15 +58,17 @@ func Order(eff trust.Effective) []string {
 }
 
 // Rank returns the runner's rank inside its tier: its `rank=<n>` label when it
-// has one, else position, its index in the registry list it came from.
+// has one (the lowest valid number if there are several; a label sort would put
+// rank=10 before rank=2), else position, its index in the registry list it came from.
 func Rank(r sched.Runner, position int) int64 {
-	n := int64(position)
+	n, found := int64(position), false
 	for _, l := range r.Capability.Identity.Labels {
-		if v, ok := strings.CutPrefix(l, RankLabel); ok {
-			if i, err := strconv.ParseInt(v, 10, 64); err == nil && i >= 0 {
-				n = i
-				break
-			}
+		v, ok := strings.CutPrefix(l, RankLabel)
+		if !ok {
+			continue
+		}
+		if i, err := strconv.ParseInt(v, 10, 64); err == nil && i >= 0 && (!found || i < n) {
+			n, found = i, true
 		}
 	}
 	if n < 0 {
@@ -104,7 +110,11 @@ func contribute(_ context.Context, w *sched.World) error {
 	if w.Policy.Preset != sched.AutoPreset {
 		return nil
 	}
-	if b := Bias(*w, Order(w.Policy.Trust)); len(b) > 0 {
+	order := Order(w.Policy.Trust)
+	if len(order) == 0 {
+		return fmt.Errorf("%s: no known tier is left in the effective order (one of %v)", KeyOrder, DefaultOrder())
+	}
+	if b := Bias(*w, order); len(b) > 0 {
 		w.Bias = b
 	}
 	return nil

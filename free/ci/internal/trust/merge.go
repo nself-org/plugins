@@ -40,7 +40,7 @@ func decodeValue(spec KeySpec, raw json.RawMessage) (any, error) {
 				v = spec.Order[len(spec.Order)-1]
 			}
 		}
-	case TightenSubset, TightenSuperset:
+	case TightenSubset, TightenSuperset, TightenOrdered:
 		list, ok := v.([]any)
 		if !ok {
 			return nil, fmt.Errorf("expected string list")
@@ -101,6 +101,8 @@ func stricter(spec KeySpec, old, next any) bool {
 			return y <= x
 		}
 		return y >= x
+	case TightenOrdered:
+		return orderedTighter(spec, old, next)
 	case TightenSubset, TightenSuperset:
 		a, b := setValues(old), setValues(next)
 		if spec.Kind == TightenSubset {
@@ -155,8 +157,12 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 			if err != nil {
 				return Effective{}, "", fmt.Errorf("E672 %s: %w", key, err)
 			}
-			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
-				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 spend key requires operator scope"})
+			if (spec.Spend || spec.OperatorOnly) && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
+				why := "E671 spend key requires operator scope"
+				if !spec.Spend {
+					why = "E671 key requires operator scope"
+				}
+				e.ignored = append(e.ignored, Ignored{key, scope.Kind, why})
 				continue
 			}
 			old, exists := e.values[key]

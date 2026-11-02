@@ -16,17 +16,25 @@ const (
 	TightenSuperset
 	TightenOnlyOn
 	TightenFixed
+	// TightenOrdered is a list whose order matters: a lower scope may drop entries but
+	// keeps the relative order of what is left (a subsequence). The one exception is the
+	// first setting over the registered default, which may reorder it (see ordered.go).
+	TightenOrdered
 )
 
 type KeySpec struct {
-	Key     string
-	Owner   string
-	Kind    Tightening
-	Order   []string
-	Spend   bool
-	Secret  bool
-	Decode  func(json.RawMessage) (any, error)
-	Default any
+	Key   string
+	Owner string
+	Kind  Tightening
+	Order []string
+	Spend bool
+	// OperatorOnly keeps the key out of the protected-branch, pipeline, job and revision
+	// scopes (E671) like Spend, without being a spend key: it gates who may set the key,
+	// not what the key costs.
+	OperatorOnly bool
+	Secret       bool
+	Decode       func(json.RawMessage) (any, error)
+	Default      any
 }
 type Registry struct{ specs []KeySpec }
 
