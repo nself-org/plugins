@@ -36,10 +36,24 @@ get() { # get URL: body on stdout
 	[[ "$1" == https://api.github.com/* && -n "${GITHUB_TOKEN:-}" ]] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
 	curl "${curl_opts[@]}" --fail ${auth[@]+"${auth[@]}"} "$(u "$1")"
 }
-# head_ok URL: the artifact is downloadable. Some CDNs refuse HEAD on a signed URL, so fall back to a 1-byte GET.
-head_ok() {
-	curl "${curl_opts[@]}" --fail --head --output /dev/null "$(u "$1")" ||
-		curl "${curl_opts[@]}" --fail --range 0-0 --output /dev/null "$(u "$1")"
+# probe_artifact URL: 0 = downloadable, 1 = gone (a 4xx answer), 2 = could not be verified (5xx or no answer after
+# the retries). A 5xx from a CDN is a flake, not a removed asset, so it is retried with a growing delay and reported
+# as "could not be verified" rather than "no longer downloadable". Some CDNs refuse HEAD on a signed URL, so a
+# non-2xx HEAD falls back to a 1-byte GET.
+probe_artifact() {
+	local url code attempt=1 max=${TOOLCHAIN_PINS_ATTEMPTS:-4} delay=${TOOLCHAIN_PINS_RETRY_DELAY:-15}
+	url=$(u "$1")
+	while :; do
+		code=$(curl --silent --location --max-time 60 --proto "$proto" --head --output /dev/null --write-out '%{http_code}' "$url" 2>/dev/null) || code=000
+		[[ "$code" == 2* ]] && return 0
+		code=$(curl --silent --location --max-time 60 --proto "$proto" --range 0-0 --output /dev/null --write-out '%{http_code}' "$url" 2>/dev/null) || code=000
+		[[ "$code" == 2* ]] && return 0
+		if [[ "$code" == 4* && "$code" != 408 && "$code" != 429 ]]; then return 1; fi
+		[ "$attempt" -ge "$max" ] && return 2
+		echo "toolchain-pins: HTTP $code for $1 (attempt $attempt of $max), retrying" >&2
+		sleep $((delay * attempt))
+		attempt=$((attempt + 1))
+	done
 }
 
 # latest TYPE REF: newest upstream version on stdout, empty when the feed cannot be read.
@@ -144,13 +158,21 @@ while IFS= read -r row; do
 		emit "$name" "$name" "$version" true fail 1 "tool row has no sources to verify"
 		continue
 	fi
-	gone=()
+	gone=() unverified=()
 	while IFS= read -r src; do
 		url=$(jq -r .url <<<"$src")
-		head_ok "$url" || gone+=("$(jq -r '.os + "/" + .arch' <<<"$src")")
+		rc=0
+		probe_artifact "$url" || rc=$?
+		case "$rc" in
+		1) gone+=("$(jq -r '.os + "/" + .arch' <<<"$src")") ;;
+		2) unverified+=("$(jq -r '.os + "/" + .arch' <<<"$src")") ;;
+		esac
 	done <<<"$sources"
-	if [ "${#gone[@]}" -gt 0 ]; then
-		emit "$name" "$name" "$version" true fail "${#gone[@]}" "pinned artifact no longer downloadable for: ${gone[*]}"
+	if [ "${#gone[@]}" -gt 0 ] || [ "${#unverified[@]}" -gt 0 ]; then
+		msg=""
+		[ "${#gone[@]}" -gt 0 ] && msg="pinned artifact no longer downloadable for: ${gone[*]}"
+		[ "${#unverified[@]}" -gt 0 ] && msg="${msg:+$msg; }pinned artifact could not be verified (server error or no answer after retries) for: ${unverified[*]}"
+		emit "$name" "$name" "$version" true fail $((${#gone[@]} + ${#unverified[@]})) "$msg"
 		continue
 	fi
 	new=$(latest "$(jq -r .upstream.type <<<"$row")" "$(jq -r .upstream.ref <<<"$row")" || true)
