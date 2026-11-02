@@ -1,6 +1,7 @@
 package legacy
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,6 @@ func loadPackageJSON(root string) map[string]interface{} {
 	if err != nil {
 		return nil
 	}
-	// Minimal JSON parse for scripts section — avoid pulling in dependencies.
 	scripts := extractJSONObject(string(data), "scripts")
 	result := make(map[string]interface{})
 	for k, v := range scripts {
@@ -36,60 +36,23 @@ func hasScript(pkg map[string]interface{}, key string) bool {
 	return ok
 }
 
-// extractJSONObject extracts key→value string pairs from a named JSON object
-// using simple string parsing (no external JSON library to keep zero deps).
-func extractJSONObject(json, key string) map[string]string {
-	result := make(map[string]string)
-	// Find "key":
-	search := `"` + key + `"`
-	idx := strings.Index(json, search)
-	if idx < 0 {
-		return result
+// extractJSONObject decodes string pairs from a named top-level JSON object,
+// preserving exact keys, including script names containing colons.
+func extractJSONObject(data, key string) map[string]string {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(data), &object); err != nil {
+		return nil
 	}
-	// Find the opening brace after the key.
-	start := strings.Index(json[idx:], "{")
-	if start < 0 {
-		return result
-	}
-	start += idx + 1
-
-	// Walk until matching closing brace.
-	depth := 1
-	end := start
-	for end < len(json) && depth > 0 {
-		switch json[end] {
-		case '{':
-			depth++
-		case '}':
-			depth--
-		}
-		end++
-	}
-	block := json[start : end-1]
-
-	// Extract "name": "value" pairs.
-	lines := strings.Split(block, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, `"`) {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		k := strings.Trim(strings.TrimSpace(parts[0]), `"`)
-		v := strings.Trim(strings.TrimSpace(strings.TrimRight(parts[1], ",")), `"`)
-		if k != "" {
-			result[k] = v
-		}
+	var result map[string]string
+	if err := json.Unmarshal(object[key], &result); err != nil {
+		return nil
 	}
 	return result
 }
 
 // extractJSONStringArray extracts a top-level JSON string-array field (e.g.
-// "workspaces": ["packages/*", "apps/*"]) using the same simple string
-// parsing as extractJSONObject — no external JSON library. Handles only a
+// "workspaces": ["packages/*", "apps/*"]) using simple string
+// parsing. Handles only a
 // flat array of string literals, which is the shape package.json
 // "workspaces" always takes in practice.
 func extractJSONStringArray(json, key string) []string {
