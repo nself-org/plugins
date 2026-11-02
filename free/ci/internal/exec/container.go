@@ -149,6 +149,11 @@ func writeEnvFile(home string, env []string) (string, func(), error) {
 // containerStopper returns a once-only stop-then-remove of the named container
 // through the given runtime CLI, bounded by the grace period.
 func containerStopper(binary, name string, grace time.Duration) func() {
+	return containerStopperBeforeRemove(binary, name, grace, nil)
+}
+
+// containerStopperBeforeRemove preserves host evidence after stop and before removal.
+func containerStopperBeforeRemove(binary, name string, grace time.Duration, beforeRemove func()) func() {
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -160,6 +165,9 @@ func containerStopper(binary, name string, grace time.Duration) func() {
 			stop.Env = dockerHostEnv()
 			_ = stop.Run()
 			cancelStop()
+			if beforeRemove != nil {
+				beforeRemove()
+			}
 			if remain := time.Until(deadline); remain > 0 {
 				rmCtx, cancelRM := context.WithTimeout(context.Background(), remain)
 				rm := osexec.CommandContext(rmCtx, binary, "rm", "-f", name)

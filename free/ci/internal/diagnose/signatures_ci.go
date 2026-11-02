@@ -4,13 +4,11 @@ package diagnose
 // an unreachable provider or registry (timeouts and resets, as package
 // managers and git report them) and the disk-full spellings the first row
 // misses (ENOSPC, the Windows message).
-// Also ClassifyInstall, which judges the log of a failed dependency install
-// (npm ci, pnpm/yarn/bun frozen installs): Classify's last-three-lines window
-// cannot, because package managers print the cause well above their footer.
+// Also ClassifyInstall, which offers nonretryable hints from an install log.
 // Inputs:  none (fixed rows, appended to the table at start-up); an install log.
 // Outputs: SigNetwork and rows Classify tries after the CI-40 ones; a Diagnosis.
 // Constraints: same rules as signatures.go (a row names one cause, matches an
-// executor error or the last output lines, never a bare word); a refused
+// host-collected executor error); a refused
 // connection is NOT a table row: a service that is down on localhost is the
 // project's own setup, so it counts as infrastructure only inside an install
 // and only with a registry in view. Unknown stays code.
@@ -83,13 +81,11 @@ func init() {
 		signature{
 			id:          SigNetwork,
 			errText:     re(providerNetwork),
-			output:      re(providerNetwork),
 			remediation: "A package, source or image provider could not be reached (timeout or reset). Check the runner's network and any proxy, then run it again.",
 		},
 		signature{
 			id:          SigDisk,
 			errText:     re(`(?im)(^|[\s:'"(])enospc([:\s'")]|$)|not enough space on the disk`),
-			output:      re(`(?im)(^|[\s:'"(])enospc([:\s'")]|$)|not enough space on the disk|write error: no space`),
 			remediation: remediationOf(SigDisk),
 		},
 	)
@@ -186,9 +182,10 @@ func pinDiagnosis() Diagnosis {
 	return Diagnosis{Class: "infra", Signature: SigPin, Remediation: "E811: package.json pins another major version of the package manager than the one installed. Install the pinned major (`corepack enable`), then run it again."}
 }
 
-// ClassifyInstall classifies a failed dependency install from its log: infra
-// (retryable, with the signature) for a full disk, an unreachable registry
-// (DNS or network) or a kill by memory; code for everything else, because an
+// ClassifyInstall offers nonretryable hints from an untrusted install log.
+// A disk or network message may suggest infra, but never authorizes a retry;
+// memory messages cannot establish infra.oom without host evidence. Unknown
+// failures are code, because an
 // unknown install failure is the project's. Guards read the whole log first
 // (a lockfile out of sync, a failing lifecycle script or test assertion, a
 // connection to this machine, a client error from the registry) and return
@@ -216,9 +213,9 @@ func classifyInstall(log string, localInfra bool) Diagnosis {
 	}
 	switch {
 	case installDisk.MatchString(log):
-		return infra(signatureByID(SigDisk))
+		return installHint(SigDisk)
 	case installKilled.MatchString(log):
-		return infra(signatureByID(SigOOM))
+		return named(SigCode, "code")
 	}
 	code := lastCode(installNPMCode, log)
 	if code == "" {
@@ -243,11 +240,16 @@ func classifyInstall(log string, localInfra bool) Diagnosis {
 	}
 	switch {
 	case installDNSCodes[code]:
-		return infra(signatureByID(SigDNS))
+		return installHint(SigDNS)
 	case installNetCodes[code]:
-		return infra(signatureByID(SigNetwork))
+		return installHint(SigNetwork)
 	}
 	return named(SigCode, "code")
+}
+
+// installHint preserves a possible cause without trusting log text for retries.
+func installHint(id string) Diagnosis {
+	return Diagnosis{Class: "infra", Signature: id, Remediation: remediationOf(id)}
 }
 
 var installANSI = re(`\x1b\[[0-9;?]*[A-Za-z]`)

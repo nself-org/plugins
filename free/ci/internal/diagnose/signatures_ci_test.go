@@ -17,16 +17,16 @@ func TestAutoSignatures(t *testing.T) {
 		want model.FailureClass
 		sig  string
 	}{
-		{"go module proxy timeout", Input{ExecClass: "code", ExitCode: 1, Tail: "go: github.com/x/y@v1.0.0: Get \"https://proxy.golang.org/github.com/x/y/@v/v1.0.0.mod\": dial tcp 142.250.1.1:443: i/o timeout\n"}, "infra", SigNetwork},
-		{"git cannot reach github", Input{ExecClass: "code", ExitCode: 128, Tail: "fatal: unable to access 'https://github.com/org/repo.git/': Connection timed out after 300001 milliseconds\n"}, "infra", SigNetwork},
-		{"tls handshake to the docker registry", Input{ExecClass: "code", ExitCode: 1, Tail: "Get \"https://registry-1.docker.io/v2/\": net/http: TLS handshake timeout\n"}, "infra", SigNetwork},
+		{"go module proxy timeout", Input{ExecClass: "code", ExitCode: 1, Tail: "go: github.com/x/y@v1.0.0: Get \"https://proxy.golang.org/github.com/x/y/@v/v1.0.0.mod\": dial tcp 142.250.1.1:443: i/o timeout\n"}, "code", SigCode},
+		{"git cannot reach github", Input{ExecClass: "code", ExitCode: 128, Tail: "fatal: unable to access 'https://github.com/org/repo.git/': Connection timed out after 300001 milliseconds\n"}, "code", SigCode},
+		{"tls handshake to the docker registry", Input{ExecClass: "code", ExitCode: 1, Tail: "Get \"https://registry-1.docker.io/v2/\": net/http: TLS handshake timeout\n"}, "code", SigCode},
 		{"executor error carries it", Input{ExecClass: "infra", ExitCode: -1, Err: "Get \"https://proxy.golang.org/x\": read tcp 10.0.0.2:5->10.0.0.9:443: i/o timeout"}, "infra", SigNetwork},
 		{"a test that curls its own server is code", Input{ExecClass: "code", ExitCode: 56, Tail: "curl: (56) Recv failure: Connection reset by peer\n"}, "code", SigCode},
 		{"provider name in a local path", Input{ExecClass: "code", ExitCode: 1, Tail: "Get \"http://localhost:8080/registry.npmjs.org\": read tcp 127.0.0.1:5->127.0.0.1:8080: connection reset by peer\n"}, "code", SigCode},
 		{"provider as a host suffix", Input{ExecClass: "code", ExitCode: 1, Tail: "dial tcp: github.com.evil.example i/o timeout\n"}, "code", SigCode},
 		{"a reset with no provider is code", Input{ExecClass: "code", ExitCode: 1, Tail: "read tcp 10.0.0.2:5->10.0.0.9:443: connection reset by peer\n"}, "code", SigCode},
-		{"enospc", Input{ExecClass: "code", ExitCode: 1, Tail: "npm ERR! code ENOSPC\n"}, "infra", SigDisk},
-		{"windows disk full", Input{ExecClass: "code", ExitCode: 1, Tail: "There is not enough space on the disk.\n"}, "infra", SigDisk},
+		{"enospc", Input{ExecClass: "code", ExitCode: 1, Tail: "npm ERR! code ENOSPC\n"}, "code", SigCode},
+		{"windows disk full", Input{ExecClass: "code", ExitCode: 1, Tail: "There is not enough space on the disk.\n"}, "code", SigCode},
 		{"refused on localhost is the project's setup", Input{ExecClass: "code", ExitCode: 1, Tail: "dial tcp 127.0.0.1:5432: connect: connection refused\n"}, "code", SigCode},
 		{"a failing test mentioning a timeout is code", Input{ExecClass: "code", ExitCode: 1, Tail: "--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\n"}, "code", SigCode},
 	} {
@@ -82,7 +82,7 @@ func TestClassifyInstall(t *testing.T) {
 		"ansi colours":                               {"\x1b[31mnpm error code ENOSPC\x1b[0m\n", "infra", SigDisk},
 		"pnpm progress counts are no status codes":   {"Progress: resolved 403, reused 0, downloaded 0, added 0\nProgress: resolved 404, reused 0, downloaded 0, added 0\n ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: request timed out\n", "infra", SigNetwork},
 		"http 404 in words":                          {"error An unexpected error occurred: \"https://registry.yarnpkg.com/x: Request failed \\\"404 Not Found\\\"\".\n", "code", SigCode},
-		"shell kill":                                 {"sh: line 1:  4242 Killed                  npm ci\n", "infra", SigOOM},
+		"shell kill":                                 {"sh: line 1:  4242 Killed                  npm ci\n", "code", SigCode},
 		// code: everything else
 		"nothing recognised":                        {"something broke\n", "code", SigCode},
 		"sync (npm)":                                {"npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.\nnpm error Missing: x@1.0.0 from lock file\n", "code", SigCode},
@@ -106,7 +106,7 @@ func TestClassifyInstall(t *testing.T) {
 		"a package called unauthorized, then reset": {"npm http fetch GET 200 https://registry.npmjs.org/unauthorized 9ms\nnpm error code ECONNRESET\nnpm error syscall read\n", "infra", SigNetwork},
 	} {
 		d := ClassifyInstall(c.log)
-		if d.Class != c.want || d.Signature != c.sig || (c.want == "infra") != d.Retryable {
+		if d.Class != c.want || d.Signature != c.sig || d.Retryable {
 			t.Errorf("%s: got %+v, want %s %s", name, d, c.want, c.sig)
 		}
 	}

@@ -26,8 +26,8 @@ const ExcerptMax = 4096
 type Input struct {
 	ExecClass model.FailureClass // the executor's coarse class: code, infra, timeout, cancelled; "" when unknown
 	ExitCode  int
-	Err       string // the executor, admission or prepare error text, if any
-	Reason    string // "resource_limit" when a container hit its memory or process limit
+	Err       string // host-collected executor, admission or prepare error; never job output
+	Reason    string // host-collected "resource_limit" when a container hit its memory or process limit
 	Signal    string // the signal that ended the job (SIGKILL, SIGSEGV, ...); "" when unknown or none
 	Tail      string // the end of the redacted output
 	Lost      bool   // the lease expired or the runner was revoked
@@ -53,27 +53,16 @@ func Classify(in Input) Diagnosis {
 	case in.TimedOut || in.ExecClass == "timeout":
 		return named(SigTimeout, "timeout") // a timeout kill is SIGKILL too: judged before any signature
 	}
-	if i := strings.LastIndex(in.Tail, PrepareFailed); i >= 0 && in.ExitCode == PrepareExit {
-		return classifyPrepare(in.Tail[:i]) // a Node gate's frozen install failed (P7-AUTO-16)
-	}
-	if in.ExitCode == PinExit && strings.Contains(in.Tail, PinMismatch) {
-		return pinDiagnosis()
-	}
 	if in.Reason == "resource_limit" {
 		return infra(signatures[0])
 	}
-	tail := in.Tail
-	if len(tail) > TailWindow {
-		tail = tail[len(tail)-TailWindow:]
-	}
-	if testFailure.MatchString(tail) {
-		tail = "" // a failing test in the window: any infra-looking message is the program's own
-	}
-	tail = lastLines(tail, OutputLines)
 	for _, s := range signatures {
-		if s.matches(in, tail) {
+		if s.matches(in) {
 			return infra(s)
 		}
+	}
+	if in.ExitCode == PinExit && strings.Contains(in.Tail, PinMismatch) {
+		return pinDiagnosis()
 	}
 	if in.ExecClass == "infra" {
 		return Diagnosis{Class: "infra", Signature: SigExecutor, Remediation: classRemediation[SigExecutor]} // not proven transient: never retried
@@ -93,7 +82,7 @@ func ForClass(c model.FailureClass) Diagnosis {
 	return named(SigCode, "code")
 }
 
-func (s signature) matches(in Input, tail string) bool {
+func (s signature) matches(in Input) bool {
 	for _, x := range s.exits {
 		if in.Err == "" && in.ExitCode == x && (x != -1 || externalKill(in.Signal)) {
 			return true
@@ -102,7 +91,7 @@ func (s signature) matches(in Input, tail string) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
+	return false
 }
 
 // externalKill reports whether a signal can come from outside the job (the
@@ -139,19 +128,4 @@ func Excerpt(text string, max int) string {
 		cut = cut[i+1:] // start at a whole line when that costs under a quarter
 	}
 	return cut
-}
-
-// lastLines is the last n non-empty lines of text.
-func lastLines(text string, n int) string {
-	lines := strings.Split(strings.TrimRight(text, "\r\n "), "\n")
-	var keep []string
-	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			keep = append(keep, lines[i])
-		}
-	}
-	for i, j := 0, len(keep)-1; i < j; i, j = i+1, j-1 {
-		keep[i], keep[j] = keep[j], keep[i]
-	}
-	return strings.Join(keep, "\n")
 }

@@ -4,10 +4,9 @@ package exec
 // Inputs:  the runtime binary, the container name and the instant the run began.
 // Outputs: containerFacts, the lifecycle events the runtime recorded for that container, and the
 // resource reason derived from them.
-// Constraints: planned containers run with --rm, so the container is gone by the time the exit code
-// is known and `inspect` has nothing to read; the runtime's event log (`events --since --until`) is
-// the record that outlives it. An empty or failed answer proves nothing: the callers then fall back
-// to reading the exit code alone, as before.
+// Constraints: the executor collects the final cgroup sample before explicitly removing the
+// container. The runtime's event log (`events --since --until`) outlives removal.
+// An empty or failed answer proves nothing and cannot establish a resource limit.
 
 import (
 	"context"

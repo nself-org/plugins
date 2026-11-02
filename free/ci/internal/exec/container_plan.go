@@ -114,7 +114,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err := markRuntimeUsed(s.Home, cmd.Binary); err != nil { // the orphan sweep lists only marked runtimes
 		return -1, "", err
 	}
-	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
+	// Keep the container inspectable until the final host sample has been collected.
+	cmd.Args = retainContainer(cmd.Args, run.Image)
+	var watch *pidsWatch
+	stop := containerStopperBeforeRemove(cmd.Binary, run.Name, e.Grace, func() { watch.stop() })
 	tail := &outputTail{max: 4096}
 	sink := func(b []byte) {
 		tail.write(b)
@@ -134,11 +137,17 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	}
 	began := time.Now()
 	// the container cgroup's own counters are the host's evidence of a limit; the job's output never is
-	watch := startPidsWatch(cmd.Binary, run.Name)
+	watch = startPidsWatch(cmd.Binary, run.Name)
 	code, _, err := e.runCommandFiles(ctx, cliStdin, extra, append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
+	pids := watch.stop() // final read, including discovery for jobs that exited before the first tick
+	if (pids.PidsError != "" || pids.MemError != "") && s.Output != nil {
+		s.Output([]byte("nself-ci: host counter diagnostics: " + pids.String() + "\n"))
+	}
 	if err != nil {
 		stop()
 		err = coded("E613", "container run: "+err.Error())
+	} else if removeErr := RuntimeRemove(context.Background(), cmd.Binary, run.Name); removeErr != nil && s.Output != nil {
+		s.Output([]byte("nself-ci: container removal: " + removeErr.Error() + "\n"))
 	}
 	if cleanErr := e.cleanupPlanned(s, run); cleanErr != nil && s.Output != nil {
 		// not a failure by itself: the host removes what it owns, and a workspace it cannot empty fails a clean run (E610)
@@ -151,7 +160,6 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err == nil && code == 125 && !facts.jobRan() { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
-	pids := watch.stop()
 	reason := resourceReason(ctx, code, tail.String(), facts, pids)
 	if reason == "" && err == nil && ctx.Err() == nil && silentFailure(code, tail.String()) {
 		reason = e.silentReason(s, run, began, code, tail.String(), pids)

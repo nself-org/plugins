@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeEvents sets the lifecycle events the fake runtime answers an `events` query with.
@@ -131,7 +132,7 @@ func TestPlannedForkRefusalNeedsTheHostCounter(t *testing.T) {
 				}
 			}
 			fakeRuntime(t, "sh: can't fork\n", "2")
-			for file, body := range map[string]string{"inspect": "abc 4242\n", "delay": "0.5"} {
+			for file, body := range map[string]string{"inspect": "abc 0\n", "cgroup": scope} {
 				if err := os.WriteFile(filepath.Join(fakeRuntimeDir, file), []byte(body), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -140,6 +141,49 @@ func TestPlannedForkRefusalNeedsTheHostCounter(t *testing.T) {
 			if res.Reason != tc.reason {
 				t.Fatalf("reason %q want %q (%+v)", res.Reason, tc.reason, res)
 			}
+			if _, err := os.Stat(scope); !os.IsNotExist(err) {
+				t.Fatalf("container removal must remove its cgroup, got %v", err)
+			}
 		})
+	}
+}
+
+func TestPidsWatchAcknowledgesSampleAndRetainsFinalEvidence(t *testing.T) {
+	root, proc := t.TempDir(), t.TempDir()
+	oldRoot, oldProc := cgroupRoot, procRoot
+	cgroupRoot, procRoot = root, proc
+	t.Cleanup(func() { cgroupRoot, procRoot = oldRoot, oldProc })
+	scope := fixtureCgroup(t, root, "system.slice/docker-abc.scope", "512")
+	if err := os.WriteFile(filepath.Join(scope, "memory.events"), []byte("max 0\noom_kill 0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fakeRuntime(t, "", "0")
+	if err := os.WriteFile(filepath.Join(fakeRuntimeDir, "inspect"), []byte("abc 0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	w := startPidsWatch("docker", "nself-ci-sample")
+	t.Cleanup(func() { w.stop() })
+	deadline := time.NewTimer(500 * time.Millisecond)
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for w.snapshot().Reads == 0 {
+		select {
+		case <-deadline.C:
+			t.Fatalf("no acknowledged host sample: %+v", w.snapshot())
+		case <-tick.C:
+		}
+	}
+	// Join the background worker before changing the final counter: only stop's
+	// explicit last read can observe this refusal.
+	w.cancel()
+	w.wg.Wait()
+	before := w.snapshot()
+	if err := os.WriteFile(filepath.Join(scope, "pids.events"), []byte("max 7\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	final := w.stop()
+	if final.Max != 7 || final.Reads != before.Reads+1 {
+		t.Fatalf("final host sample %+v, acknowledged sample %+v", final, before)
 	}
 }
