@@ -178,11 +178,13 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 }
 
 // TestApprovalBindsLeaseCheckout (D18, TM-34): the admission step compares the approval with the stored
-// pipeline head inside the admission transaction, the run dispatcher takes the lease's checkout revision
-// from that same stored head (the rig does what run/dispatch_hook.go does), and the delivery that goes out
-// carries exactly the approved head. A run whose head moved after the approval is held and delivers
-// nothing, for the old head or the new one. What this does not show: admission does not compare the
-// caller-supplied Job.Revision with the stored head; D-1360 files that production gap.
+// pipeline head inside the admission transaction (D-1360). The compared revision is Job.Head, falling
+// back to Job.Revision when Head is empty. Head has one in-process producer, run.queueJob, which sets it
+// from sess.Revision; a dirty-tree offload checks out a snapshot commit (Revision) on top of that head.
+// A lease whose compared revision differs from the stored head is held, in both directions below. The
+// run dispatcher takes the lease checkout revision from the stored head (the rig does what
+// run/dispatch_hook.go does) and the delivery of an approved run carries that head. A run whose head
+// moved after the approval is held and delivers nothing, for the old head or the new one.
 func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "forkc")
@@ -227,6 +229,33 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	d3 := awaitDecision(t, r, id3)
 	if d3.Reason != source.ReasonApprovalRequired {
 		t.Fatalf("decision: reason=%q, want %s", d3.Reason, source.ReasonApprovalRequired)
+	}
+	// A dirty-tree offload checks out a snapshot commit on top of the approved head. Its lease
+	// revision differs by design; Head names the head it derives from, and admission binds the
+	// approval to that. Without Head the run sat in the queue until the foreground cap.
+	id4, j4 := r.prepare(newJob("forkf", "untrusted", "restricted"), "untrusted")
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: "pipe-forkf", Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	ctx4, cancel4 := context.WithTimeout(context.Background(), settle)
+	defer cancel4()
+	a4, err4 := r.d.Submit(ctx4, dispatch.Job{AttemptID: id4, Sched: j4, Revision: wrong, Head: baseRev})
+	if got := runnerOf(t, a4, err4); got != "gv1" {
+		t.Fatalf("a snapshot checkout of the approved head was placed on %q", got)
+	}
+	// The other direction: Head decides, not Revision. A lease whose Revision is the approved head but
+	// whose Head names another commit is refused, so the Head comparison is pinned both ways.
+	id5, j5 := r.prepare(newJob("forkg", "untrusted", "restricted"), "untrusted")
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: "pipe-forkg", Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	ctx5, cancel5 := context.WithTimeout(context.Background(), settle)
+	defer cancel5()
+	if _, err5 := r.d.Submit(ctx5, dispatch.Job{AttemptID: id5, Sched: j5, Revision: baseRev, Head: wrong}); err5 == nil {
+		t.Fatal("a lease whose Head differs from the approved head must be refused even when its Revision matches")
+	}
+	if d5 := awaitDecision(t, r, id5); d5.Reason != source.ReasonApprovalRequired {
+		t.Fatalf("decision: reason=%q, want %s", d5.Reason, source.ReasonApprovalRequired)
 	}
 }
 

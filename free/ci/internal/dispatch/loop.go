@@ -36,7 +36,11 @@ type Job struct {
 	// Model is the job definition a remote driver receives.
 	Model model.Job
 	// Revision is the commit a remote runner checks out.
-	Revision   string
+	Revision string
+	// Head is the pipeline head Revision derives from, when they differ: an offload
+	// of a dirty tree checks out a snapshot commit on top of the head. Admission
+	// binds the approval to Head (D-1360); empty means Revision is the head.
+	Head       string
 	Foreground bool
 	// NoDefaultQueueCap withholds the implicit 10 minute queue cap of a Foreground
 	// job: nobody waits at a terminal for a scripted or scheduled run. The policy's
@@ -204,4 +208,12 @@ func (d *Dispatcher) Submit(ctx context.Context, j Job) (Admitted, error) {
 		case <-time.After(d.cfg.Poll):
 		}
 	}
+}
+
+// admissionRevision is the revision admission compares with the stored pipeline head.
+func (j Job) admissionRevision() string {
+	if j.Head != "" {
+		return j.Head
+	}
+	return j.Revision
 }

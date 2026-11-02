@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -52,6 +53,33 @@ func dirtyNodeRepo(t *testing.T) (*evRepo, *oflNode, string) {
 	return r, n, head
 }
 
+// oflCISettle bounds an offloaded run. A healthy one takes seconds; a run that
+// never leaves the dispatch queue (admission refused it and nobody can approve a
+// foreground run) would otherwise sit until the 10 minute queue cap and take the
+// whole package down with the go test timeout.
+const oflCISettle = 90 * time.Second
+
+// oflCI runs r.ci and fails the test, instead of hanging, when it does not return.
+func oflCI(t *testing.T, r *evRepo, args ...string) (string, string, int) {
+	t.Helper()
+	type result struct {
+		out, errOut string
+		code        int
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, errOut, code := r.ci(args...)
+		done <- result{out, errOut, code}
+	}()
+	select {
+	case res := <-done:
+		return res.out, res.errOut, res.code
+	case <-time.After(oflCISettle):
+		t.Fatalf("nself ci %v did not finish in %s: the job is stuck in the dispatch queue (admission refusal?)", args, oflCISettle)
+	}
+	return "", "", 1
+}
+
 // oflRepoState is everything about the user's repository an offload must leave alone.
 func oflRepoState(t *testing.T, dir string) string {
 	t.Helper()
@@ -74,7 +102,7 @@ func oflRepoState(t *testing.T, dir string) string {
 func TestCLIWhereNodeOffloadsDirtyTree(t *testing.T) {
 	r, n, head := dirtyNodeRepo(t)
 	before := oflRepoState(t, r.dir)
-	out, errOut, code := r.ci("--where", "n1")
+	out, errOut, code := oflCI(t, r, "--where", "n1")
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout %s\nstderr %s", code, out, errOut)
 	}
@@ -179,7 +207,7 @@ func TestCLIAutoDirtyRunStaysLocal(t *testing.T) {
 func TestCLIDirtyRunNodeWithHostedRegistered(t *testing.T) {
 	r, n, head := dirtyNodeRepo(t)
 	h := oflRegisterRunner(t, r.home, r.dir, "h1", true)
-	out, errOut, code := r.ci("--where", "n1", "--no-status")
+	out, errOut, code := oflCI(t, r, "--where", "n1", "--no-status")
 	if code != 0 {
 		t.Fatalf("exit %d\nstdout %s\nstderr %s", code, out, errOut)
 	}
@@ -205,7 +233,7 @@ func TestCLIWhereNodeTrackedSecretRefused(t *testing.T) {
 	oflRegisterNode(t, r.home, r.dir, "n1")
 	put(t, r.dir, "f.txt", "uncommitted\n")
 	before := oflRepoState2(t, r.dir)
-	out, errOut, code := r.ci("--where", "n1")
+	out, errOut, code := oflCI(t, r, "--where", "n1")
 	if code != 2 || !strings.Contains(errOut, "E807") || !strings.Contains(errOut, "deploy.pem") {
 		t.Fatalf("a tracked secret-shaped file must refuse the offload with E807 and exit 2: exit %d\nstdout %s\nstderr %s", code, out, errOut)
 	}
