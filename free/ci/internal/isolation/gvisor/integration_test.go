@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -184,7 +185,7 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
-		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
+		forkBombOnce(t, fmt.Sprintf("t05-fork%d-%d", i, time.Now().UnixNano()))
 	}
 }
 
@@ -193,13 +194,26 @@ func forkBombOnce(t *testing.T, id string) {
 	start := time.Now()
 	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	t.Logf("%s evidence: %q", id, tail(out, 600)) // the kernel counter or the runtime record that classified it
-	if res.Reason != "resource_limit" {
+	if res.Err != nil || res.ExitCode == 0 || res.Reason != "resource_limit" || res.Attempt.State != "failed" {
 		t.Fatalf("fork bomb not classified: %+v\njob output tail: %q", res, tail(out, 1500))
+	}
+	pidsEvidence := false
+	for _, signature := range []string{"the container's process limit refused forks:", "the sandbox died from the container's process limit:", "Resource temporarily unavailable", "can't fork", "Cannot fork", "pthread_create failed"} {
+		pidsEvidence = pidsEvidence || strings.Contains(out, signature)
+	}
+	if !pidsEvidence {
+		t.Fatalf("no positive pids-limit evidence (an OOM alone is insufficient): %q", tail(out, 1500))
 	}
 	if took := time.Since(start); took > 60*time.Second {
 		t.Fatalf("fork bomb ran %s", took)
 	}
 	assertGone(t, "nself-ci-"+id)
+	// Starting another host process proves the sandbox did not exhaust the host's pids.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := osexec.CommandContext(ctx, "/bin/true").Run(); err != nil {
+		t.Fatalf("host cannot start a process after the fork bomb: %v", err)
+	}
 }
 
 func TestIntegrationMemoryHogIsKilledAndClassified(t *testing.T) {

@@ -155,8 +155,12 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	}
 	pids := watch.stop()
 	reason := resourceReason(ctx, code, tail.String(), facts)
-	if reason == "" && err == nil && ctx.Err() == nil && silentFailure(code, tail.String()) {
-		reason = e.silentReason(s, run, began, code, tail.String(), pids)
+	if watch != nil && err == nil && ctx.Err() == nil && code != 0 {
+		// A sandbox can fail silently or print runtime diagnostics, depending on which
+		// thread loses the race to the limit. Both have the same trusted evidence.
+		if sandboxReason := e.sandboxReason(s, run, began, code, pids); sandboxReason != "" {
+			reason = sandboxReason
+		}
 	}
 	return code, reason, err
 }

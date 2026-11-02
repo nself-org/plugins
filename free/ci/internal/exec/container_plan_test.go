@@ -142,6 +142,31 @@ func TestPlannedContainerReasons(t *testing.T) {
 	}
 }
 
+func TestPlannedSandboxFailureUsesEvidenceDespiteRuntimeOutput(t *testing.T) {
+	for _, tc := range []struct{ name, output, code, death, reason string }{
+		{"silent", "", "2", "failed to get clone", "resource_limit"},
+		{"runtime diagnostics", "sandbox wait failed\n", "2", "failed to get clone", "resource_limit"},
+		{"plain failure with output", "boom\n", "2", "", ""},
+		{"success", "ok\n", "0", "failed to get clone", ""},
+		{"runtime never started", "daemon failure\n", "125", "failed to get clone", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeRuntime(t, tc.output, tc.code)
+			plan := deathPlanner{ContainerPlanner: hardPlanner{}, line: tc.death}
+			spec := plannedSpec(t, "sandbox-output", plan)
+			var output strings.Builder
+			spec.Output = func(b []byte) { output.Write(b) }
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
+			if res.Reason != tc.reason {
+				t.Fatalf("reason %q want %q (%+v)", res.Reason, tc.reason, res)
+			}
+			if tc.reason != "" && !strings.Contains(output.String(), tc.death) {
+				t.Fatalf("missing process-limit evidence: %q", output.String())
+			}
+		})
+	}
+}
+
 func TestPlannedContainerRuntimeFailureIsNotTheJobs(t *testing.T) {
 	fakeRuntime(t, "", "125")
 	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-125", hardPlanner{}))

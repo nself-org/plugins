@@ -13,24 +13,21 @@ type deathPlanner struct {
 
 func (d deathPlanner) SandboxFailure(ContainerRun, time.Time) string { return d.line }
 
-func TestSandboxFailureOnlyForASilentFailure(t *testing.T) {
+func TestSandboxFailureUsesRuntimeEvidenceForEveryFailedExit(t *testing.T) {
 	died := deathPlanner{line: "createStub: failed to get clone"}
 	cases := []struct {
 		name string
 		plan ContainerPlanner
 		code int
-		tail string
 		want string
 	}{
-		{"silent failure, runtime cites a death", died, 2, "", died.line},
-		{"blank output counts as silent", died, 2, " \n", died.line},
-		{"the job printed something", died, 2, "boom", ""},
-		{"exit 0", died, 0, "", ""},
-		{"runtime has no record of a death (exit 2 script)", deathPlanner{}, 2, "", ""},
-		{"planner cannot explain", nil, 2, "", ""},
+		{"runtime cites a death", died, 2, died.line},
+		{"exit 0", died, 0, ""},
+		{"runtime has no record of a death (exit 2 script)", deathPlanner{}, 2, ""},
+		{"planner cannot explain", nil, 2, ""},
 	}
 	for _, c := range cases {
-		if got := sandboxFailure(c.plan, ContainerRun{}, time.Time{}, c.code, c.tail); got != c.want {
+		if got := sandboxFailure(c.plan, ContainerRun{}, time.Time{}, c.code); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -44,7 +41,7 @@ func (notePlanner) SandboxNote(ContainerRun, time.Time) string {
 	return "runsc log: 2 boot logs, none of this attempt"
 }
 
-func TestSilentReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
+func TestSandboxReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
 	cases := []struct {
 		name     string
 		plan     ContainerPlanner
@@ -60,7 +57,7 @@ func TestSilentReasonUsesTheKernelCounterThenTheRuntimeRecord(t *testing.T) {
 	for _, c := range cases {
 		var out []byte
 		s := JobSpec{Plan: c.plan, Output: func(b []byte) { out = append(out, b...) }}
-		got := (&Executor{}).silentReason(s, ContainerRun{}, time.Time{}, 2, "", c.pids)
+		got := (&Executor{}).sandboxReason(s, ContainerRun{}, time.Time{}, 2, c.pids)
 		if got != c.want || !strings.Contains(string(out), c.contains) {
 			t.Errorf("%s: got %q out %q", c.name, got, out)
 		}
