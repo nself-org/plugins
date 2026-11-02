@@ -27,8 +27,12 @@ func TestStatsQueryPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows.Outcomes) != 100000 {
-		t.Fatalf("fixture holds %d outcomes, want 100000", len(rows.Outcomes))
+	var outcomes int64
+	for _, r := range rows.Runs {
+		outcomes += r.N
+	}
+	if outcomes != 100000 {
+		t.Fatalf("fixture holds %d outcomes, want 100000", outcomes)
 	}
 	db, err := sql.Open("sqlite", "file:"+rows.Path+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {

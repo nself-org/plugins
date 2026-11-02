@@ -64,14 +64,8 @@ func Build(rows store.StatsRows, o Options) Doc {
 		p := o.Project
 		d.Project = &p
 	}
-	out := make([]store.StatOutcome, 0, len(rows.Outcomes))
-	for _, x := range rows.Outcomes {
-		if o.visible(x.Project) && (x.Result == "passed" || x.Result == "failed") {
-			out = append(out, x)
-		}
-	}
-	d.buildQueue(rows, out, o)
-	d.buildRuns(rows, out, o)
+	d.buildQueue(rows, o)
+	d.buildRuns(rows, o)
 	d.buildCacheSpend(rows, o)
 	d.buildPlatform(rows, o)
 	return d
@@ -79,23 +73,23 @@ func Build(rows store.StatsRows, o Options) Doc {
 
 func band(trigger string) string { return fairq.For("", trigger, false).String() }
 
-func (d *Doc) buildQueue(rows store.StatsRows, out []store.StatOutcome, o Options) {
+func (d *Doc) buildQueue(rows store.StatsRows, o Options) {
 	depth := map[string]int{}
-	waits := map[string][]int64{}
+	waits := map[string][]store.StatSample{}
 	for _, g := range rows.Queued {
 		if o.visible(g.Project) {
 			depth[band(g.Key)] += int(g.N)
 		}
 	}
-	bands := map[string]string{} // a trigger's band, worked out once per trigger instead of once per attempt
-	for _, x := range out {
-		if x.WaitMs >= 0 {
-			b, ok := bands[x.Trigger]
+	bands := map[string]string{} // a trigger's band, worked out once per trigger instead of once per sample
+	for _, x := range rows.Waits {
+		if o.visible(x.Project) {
+			b, ok := bands[x.Key]
 			if !ok {
-				b = band(x.Trigger)
-				bands[x.Trigger] = b
+				b = band(x.Key)
+				bands[x.Key] = b
 			}
-			waits[b] = append(waits[b], x.WaitMs)
+			waits[b] = append(waits[b], x)
 		}
 	}
 	if rows.Missing["schedtel_outcome"] && len(depth) == 0 {
@@ -111,7 +105,7 @@ func (d *Doc) buildQueue(rows store.StatsRows, out []store.StatOutcome, o Option
 		if depth[b] == 0 && len(waits[b]) == 0 {
 			continue
 		}
-		d.Queue[b] = Band{Depth: depth[b], WaitMs: pct(waits[b])}
+		d.Queue[b] = Band{Depth: depth[b], WaitMs: pctSamples(waits[b])}
 		if len(waits[b]) == 0 {
 			d.Reasons["queue."+b+".wait_ms"] = ReasonNoSamples
 		}

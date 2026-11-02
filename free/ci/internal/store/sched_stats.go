@@ -3,18 +3,21 @@ package store
 // Purpose: the read-only queries behind `nself ci runs stats` (P7-SCHED-20, Epic D23): one read
 // transaction over the rows the scheduling, cache, lease, node and outbox sets already keep.
 // Inputs:  a StatsQuery (clock, window, optional exact project).
-// Outputs: StatsRows, the raw rows internal/stats aggregates; no aggregation happens here.
+// Outputs: StatsRows, the rows and groups internal/stats assembles the document from.
 // Constraints: read transactions only; every statement is index-assisted (the query-plan test in
 //          internal/stats explains each StatsStatements entry); a set whose table is absent
 //          reports it in Missing instead of failing; times: telemetry ts is milliseconds, every
 //          other table nanoseconds; the project filter is an index range, never a table scan, and
 //          binds the outcome, queued and lease statements; nodes carry no project and feed the
 //          runner slots of a scoped document too; outcomes and cache use read the job, trigger and
-//          project their write-time triggers keep, so no statement looks rows up one by one.
+//          project their write-time triggers keep, so no statement looks rows up one by one; the per-attempt
+//          telemetry is folded into groups while it is scanned (sched_stats_fold.go), because holding 100 000
+//          attempts of a dozen strings each cost more CPU than reading them (allocation, growth, collection).
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -25,11 +28,26 @@ type StatsQuery struct {
 	Project string
 }
 
-// StatOutcome is one finished attempt with its job and trigger.
-type StatOutcome struct {
-	Attempt, Job, Project, JobKey, Runner, RunnerClass, Result, FailureClass, Trigger string
-	N                                                                                 int
-	WaitMs, RuntimeMs, ColdStartMs                                                    int64
+// StatRun is the finished attempts of one runner with one result ("passed" or "failed") and failure class
+// ("infra" or empty, for any other class): how many there are and the runtime, in milliseconds, they kept the
+// runner busy (negative runtimes excluded).
+type StatRun struct {
+	Project, Runner, Result, FailureClass string
+	N, BusyMs                             int64
+}
+
+// StatJobs counts the distinct jobs with a finished attempt in a project and, of those, the flaky ones: a
+// non-infra failure of the job comes before a pass of it.
+type StatJobs struct {
+	Project     string
+	Jobs, Flaky int64
+}
+
+// StatSample is a millisecond value seen N times. Key is the trigger of the attempt (waits), its job key
+// (runtimes) or empty (cold starts); only non-negative values are read.
+type StatSample struct {
+	Project, Key string
+	Ms, N        int64
 }
 
 // StatGroup is one aggregated row: a project, a key (result, confidence or state), a count and a sum.
@@ -52,12 +70,16 @@ type StatNode struct {
 
 // StatsRows is everything the aggregation reads.
 type StatsRows struct {
-	Outcomes  []StatOutcome
-	Queued    []StatGroup // Key = trigger
-	Cache     []StatGroup // Key = result, Sum = bytes
-	Ledger    []StatGroup // Key = confidence, Sum = micro
-	CAS       []StatGroup // Sum = bytes
-	Artifacts []StatGroup // Sum = bytes
+	Runs      []StatRun
+	Jobs      []StatJobs
+	Waits     []StatSample // Key = trigger
+	Runtimes  []StatSample // Key = job key
+	Colds     []StatSample // ephemeral runners only
+	Queued    []StatGroup  // Key = trigger
+	Cache     []StatGroup  // Key = result, Sum = bytes
+	Ledger    []StatGroup  // Key = confidence, Sum = micro
+	CAS       []StatGroup  // Sum = bytes
+	Artifacts []StatGroup  // Sum = bytes
 	Leases    []StatLease
 	Nodes     []StatNode
 	// OutboxPending counts unposted entries; OutboxOldest is the creation time (ns) of the oldest, 0 for none.
@@ -76,6 +98,17 @@ type StatsStmt struct {
 // statsTables are the tables whose set may be absent; the rest are core.
 var statsTables = []string{"schedtel_outcome", "ledger", "cache_use", "cache_entry", "cache_artifact", "outbox", "node"}
 
+// The outcomes statements. "outcomes" reads stat_row (migration sched-telemetry 0003): one packed text per
+// finished attempt that still has its job, whose fields are, in order, attempt number, wait, runtime, cold start,
+// a flag number (passed, infra failure, ephemeral runner), project, runner, trigger, job key, job id.
+// "outcomes_cells" is the same set as separate columns, read only when a text field holds the separator.
+const (
+	outcomeRows  = "SELECT stat_row FROM schedtel_outcome WHERE project BETWEEN ? AND ? AND ts>=? AND stat_row IS NOT NULL"
+	outcomeCells = "SELECT attempt_n,wait_ms,runtime_ms,cold_start_ms,(result='passed')+2*(failure_class='infra')+4*(runner_class='ephemeral')," +
+		"project,runner,pipeline_trigger,job_key,job_id FROM schedtel_outcome " +
+		"WHERE project BETWEEN ? AND ? AND ts>=? AND job_id IS NOT NULL AND result IN ('passed','failed')"
+)
+
 // StatsStatements returns the read statements for q, in the order StatsRead runs them.
 func StatsStatements(q StatsQuery) []StatsStmt {
 	lo, hi := "", "\U0010ffff"
@@ -85,8 +118,8 @@ func StatsStatements(q StatsQuery) []StatsStmt {
 	cut := q.Now.Add(-q.Since)
 	ms, ns := cut.UnixMilli(), cut.UnixNano()
 	return []StatsStmt{
-		{"outcomes", `SELECT attempt_id,job_id,attempt_n,project,job_key,runner,runner_class,result,failure_class,pipeline_trigger,wait_ms,runtime_ms,cold_start_ms
-FROM schedtel_outcome WHERE project BETWEEN ? AND ? AND ts>=? AND job_id IS NOT NULL`, []any{lo, hi, ms}},
+		{"outcomes", outcomeRows, []any{lo, hi, ms}},
+		{"outcomes_cells", outcomeCells, []any{lo, hi, ms}},
 		{"queued", `SELECT p.project,p.trigger,count(*) FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.state='queued' AND p.project BETWEEN ? AND ? GROUP BY p.project,p.trigger`, []any{lo, hi}},
 		{"cache", `SELECT coalesce(project,''),result,count(*),sum(bytes) FROM cache_use WHERE ts>=? GROUP BY 1,2`, []any{ns}},
 		{"ledger", `SELECT project,confidence,count(*),sum(coalesce(act_micro,est_micro)) FROM ledger WHERE provider>='' AND admitted_at>=? GROUP BY project,confidence`, []any{ns}},
@@ -117,7 +150,7 @@ func (s *Store) StatsRead(ctx context.Context, q StatsQuery) (StatsRows, error) 
 	skip := map[string]bool{"outcomes": out.Missing["schedtel_outcome"], "cache": out.Missing["cache_use"], "ledger": out.Missing["ledger"],
 		"cas": out.Missing["cache_entry"], "artifacts": out.Missing["cache_artifact"], "nodes": out.Missing["node"], "outbox": out.Missing["outbox"]}
 	for _, st := range StatsStatements(q) {
-		if skip[st.Name] {
+		if skip[st.Name] || st.Name == "outcomes_cells" {
 			continue
 		}
 		rows, err := tx.QueryContext(ctx, st.SQL, st.Args...)
@@ -129,6 +162,9 @@ func (s *Store) StatsRead(ctx context.Context, q StatsQuery) (StatsRows, error) 
 		if err == nil {
 			err = rows.Err()
 		}
+		if errors.Is(err, errPacked) {
+			err = readOutcomeCells(ctx, tx, q, &out)
+		}
 		if err != nil {
 			return out, coded("E607", err.Error())
 		}
@@ -136,14 +172,33 @@ func (s *Store) StatsRead(ctx context.Context, q StatsQuery) (StatsRows, error) 
 	return out, nil
 }
 
+// readOutcomeCells reads the outcomes again as separate columns, for a store whose text fields hold the
+// separator of the packed form.
+func readOutcomeCells(ctx context.Context, tx *sql.Tx, q StatsQuery, out *StatsRows) error {
+	for _, st := range StatsStatements(q) {
+		if st.Name != "outcomes_cells" {
+			continue
+		}
+		rows, err := tx.QueryContext(ctx, st.SQL, st.Args...)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		if err = foldOutcomeCells(rows, out); err != nil {
+			return err
+		}
+		return rows.Err()
+	}
+	return nil
+}
+
 func scanStats(rows *sql.Rows, name string, out *StatsRows) error {
+	if name == "outcomes" {
+		return foldOutcomes(rows, out)
+	}
 	for rows.Next() {
 		var err error
 		switch name {
-		case "outcomes":
-			var o StatOutcome
-			err = rows.Scan(&o.Attempt, &o.Job, &o.N, &o.Project, &o.JobKey, &o.Runner, &o.RunnerClass, &o.Result, &o.FailureClass, &o.Trigger, &o.WaitMs, &o.RuntimeMs, &o.ColdStartMs)
-			out.Outcomes = append(out.Outcomes, o)
 		case "queued":
 			var g StatGroup
 			err = rows.Scan(&g.Project, &g.Key, &g.N)
