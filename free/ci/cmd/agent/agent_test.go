@@ -9,12 +9,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
@@ -24,7 +26,11 @@ const rev40 = "0123456789abcdef0123456789abcdef01234567"
 // TestMain lets the test binary stand in for the agent binary in a child
 // process (cred-wrapper replaces its process, so it cannot run in-process).
 func TestMain(m *testing.M) {
+	if ciexec.GateRequested(os.Args) { // a gated job re-executes this binary as its start-gate helper
+		os.Exit(ciexec.RunGate(os.Args))
+	}
 	if os.Getenv("NSELF_AGENT_TEST_CHILD") == "1" {
+		pauseBeforeMarker()
 		os.Exit(run(context.Background(), os.Args[1:], IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}))
 	}
 	os.Exit(m.Run())
@@ -543,5 +549,18 @@ func TestWorkBaseRefusesASymlink(t *testing.T) {
 	t.Setenv("NSELF_CI_AGENT_WORK", link)
 	if _, err := workBase(); err == nil {
 		t.Fatal("followed a symlink")
+	}
+}
+
+// pauseBeforeMarker, when NSELF_AGENT_TEST_PAUSE names a file, parks the child agent between its job's start
+// and its marker write (the D-1531 window): it writes the job pid to that file and never returns.
+func pauseBeforeMarker() {
+	path := os.Getenv("NSELF_AGENT_TEST_PAUSE")
+	if path == "" {
+		return
+	}
+	ciexec.BeforeMarkerHook = func(pid int) {
+		_ = os.WriteFile(path, []byte(strconv.Itoa(pid)), 0o600)
+		select {}
 	}
 }

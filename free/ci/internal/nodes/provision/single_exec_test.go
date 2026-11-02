@@ -56,6 +56,9 @@ var dynamicProgram = map[string]bool{
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,
+	// The start-gate helper (the agent binary re-run with GateArg) replaces itself (syscall.Exec) with the
+	// payload the executor resolved on the job's PATH once the process marker is written (D-1531); never ssh.
+	"internal/exec/process_gate_unix.go:RunGate": true,
 	// nself-ci-agent cred-wrapper replaces itself (syscall.Exec) with the runner
 	// command the lease names, so the credential lives only in that process's
 	// environment (P7-NODE-23); never ssh.
