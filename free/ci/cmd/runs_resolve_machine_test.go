@@ -62,3 +62,31 @@ func TestMachineRunsReadNeverRecovers(t *testing.T) {
 		t.Fatalf("human runs: code %d, recovery calls %d, stderr %q", code, calls, errs)
 	}
 }
+
+// TestResolveRecoversOnlyAfterConsent: a refused resolve (no --yes, no terminal) leaves the store untouched, so recovery
+// (process kills, workspace and container removal, state rewrites) has not run; a confirmed one recovers once.
+func TestResolveRecoversOnlyAfterConsent(t *testing.T) {
+	calls := 0
+	saved := recoverRuns
+	recoverRuns = func(context.Context, *store.Store, string, string) cirun.RecoverReport {
+		calls++
+		return cirun.RecoverReport{}
+	}
+	defer func() { recoverRuns = saved }()
+	home := seedStuckRelease(t, "needs-operator")
+	t.Setenv("NSELF_INVOKED_BY", "")
+	key := job.IdempotencyKey(resolveAttempt)
+	code, _, errs := capture(t, func() int { return runResolve([]string{resolveAttempt, "--idempotency-key", key, "--abandon"}) })
+	if code != 1 || !strings.Contains(errs, "nothing changed") || calls != 0 {
+		t.Fatalf("refused resolve: code %d, recovery calls %d, stderr %q", code, calls, errs)
+	}
+	if got := attemptState(t, home); got != "needs-operator" {
+		t.Fatalf("a refused resolve changed the attempt to %s", got)
+	}
+	code, _, errs = capture(t, func() int {
+		return runResolve([]string{resolveAttempt, "--idempotency-key", key, "--abandon", "--yes"})
+	})
+	if code != 0 || calls != 1 {
+		t.Fatalf("confirmed resolve: code %d, recovery calls %d, stderr %q", code, calls, errs)
+	}
+}

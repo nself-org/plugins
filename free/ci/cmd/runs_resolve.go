@@ -121,11 +121,11 @@ func runResolve(args []string) int {
 		return exitForError(err)
 	}
 	defer func() { _ = st.Close() }()
-	_ = cirun.Recover(ctx, st, "", os.Getenv("NSELF_CI_HOME")) // a dead coordinator's attempt becomes needs-operator first
-	if !confirm(a, os.Stdin, stdinIsTerminal()) {
+	if !confirm(a, os.Stdin, stdinIsTerminal()) { // recovery kills processes and rewrites run state: never before consent
 		fmt.Fprintln(os.Stderr, "nothing changed")
 		return 1
 	}
+	recoverForHuman(ctx, st) // a dead coordinator's attempt becomes needs-operator first
 	actor := "operator"
 	if u := os.Getenv("USER"); u != "" {
 		actor += ":" + u
