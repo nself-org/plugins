@@ -66,18 +66,24 @@ func askRuntime(binary, name string, began time.Time) containerFacts {
 
 func unixTime(t time.Time) string { return fmt.Sprintf("%d.%09d", t.Unix(), t.Nanosecond()) }
 
-// resourceReason reports "resource_limit" for a SIGKILLed container the runtime did not
-// contradict or output showing a refused fork (the pids limit); a deadline or cancel is never a
-// resource reason by itself. The runtime contradicts it by recording a kill request for the
-// container (an operator's docker kill or stop, or a sweep) with no oom event. Its absence is not
-// proof: the oom event can be lost when --rm removes the container first, so exit 137 with no
-// kill request on record stays "may have hit a limit", as before.
-func resourceReason(ctx context.Context, code int, tail string, f containerFacts) string {
+// resourceReason reports "resource_limit" only from evidence the host collected, never from what the job
+// printed alone: a job can print any string, so "can't fork" in its output is not proof (D-1580). It reads:
+//   - exit 137 the run's own context did not cause, with the runtime's oom event, the container cgroup's
+//     oom_kill counter, or, when the runtime recorded no kill request (an operator's docker kill or stop,
+//     a sweep), the cgroup's memory or pids limit counter;
+//   - a refused-fork message in the output backed by the cgroup's pids.events max counter.
+//
+// No evidence (the runtime did not answer, the cgroup was gone before it was read) reports "": the run keeps
+// its code class, which fails closed (no retry as infra).
+func resourceReason(ctx context.Context, code int, tail string, f containerFacts, c pidsReading) string {
 	if code == 0 {
 		return ""
 	}
-	if code == 137 && ctx.Err() == nil && (f.oomed || !f.killed) {
+	if code == 137 && ctx.Err() == nil && (f.oomed || c.OOMKill > 0 || (!f.killed && (c.MemMax > 0 || c.Hit()))) {
 		return "resource_limit"
+	}
+	if !c.Hit() {
+		return ""
 	}
 	for _, sig := range resourceSignatures {
 		if strings.Contains(tail, sig) {

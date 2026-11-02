@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -188,11 +187,13 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 // process (pids.events max rises), the memory limit kills the sandbox (137), or the Sentry refuses the
 // guest fork itself and the shell exits 2 while the host counter stays at 0 (seen on the GitHub ubuntu
 // runner, D-1580: "sh: sleep: Out of memory", pids.events max=0). The test therefore proves what holds
-// in all three, from readings the host takes itself: the container's own cgroup carries pids.max=512 and
-// never exceeds it, the host can spawn while the bomb runs and after, the bomb ends through a refused
-// fork or a kill (the loop cannot end any other way) well inside its timeout, and the container is
-// removed. The executor's class is checked for consistency, not demanded: resource_limit only comes
-// from host evidence, so a run with none stays a code failure.
+// in all three, from readings the host takes itself. The job waits at a gate the host opens only after it
+// found the container's cgroup and read its idle process count, so the proof never races --rm and never
+// counts setup. Then: the cgroup carries pids.max=512, its count rose at least pressureMargin above idle and
+// never past 512, the host spawned processes while that pressure held (bracketed by readings above it) and
+// after, the bomb ends through a refused fork or a kill well inside its timeout, and the container is
+// removed. The executor's class is checked for consistency: resource_limit only comes from host evidence,
+// so an exit 2 with none stays a code failure.
 func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 	for i := 0; i < 3; i++ { // the outcome of a fork bomb varies run to run, so one pass proves little
 		forkBombOnce(t, fmt.Sprintf("t05-fork%d", i))
@@ -201,14 +202,20 @@ func TestIntegrationForkBombStopsAtPidsLimit(t *testing.T) {
 
 func forkBombOnce(t *testing.T, id string) {
 	p, image := prerequisites(t)
-	host := watchHost("nself-ci-" + id)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 	start := time.Now()
-	out, res := runJob(t, p, "sandboxed-container", image, id, `while :; do sleep 300 & done`, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
-	took := time.Since(start)
+	host := watchHost(ctx, "nself-ci-"+id)
+	script := `until [ -e ` + gateFile + ` ]; do :; done; while :; do sleep 300 & done` // builtins only until the host opens the gate
+	out, res := runJob(t, p, "sandboxed-container", image, id, script, func(s *exec.JobSpec) { s.Timeout = 20 * time.Second })
 	seen := host.stop()
+	took := time.Since(start) // the job and every host probe
 	t.Logf("%s: exit %d reason %q in %s; host: %s; job output tail: %q", id, res.ExitCode, res.Reason, took.Round(time.Millisecond), seen, tail(out, 600))
 	if res.Err != nil || res.Attempt.State != "failed" {
 		t.Fatalf("fork bomb did not end as a failed job: %+v\n%q", res, tail(out, 1500))
+	}
+	if !seen.released {
+		t.Fatalf("the host never released the bomb: %s", seen)
 	}
 	// `while :; do sleep 300 & done` never exits by itself: 2 is the shell's refused fork, 137 a kill by a limit.
 	switch {
@@ -225,22 +232,19 @@ func forkBombOnce(t *testing.T, id string) {
 		t.Fatalf("fork bomb was stopped by its timeout, not a limit: %+v", res)
 	}
 	if took > 60*time.Second {
-		t.Fatalf("fork bomb ran %s", took)
-	}
-	if seen.cgroup == "" {
-		t.Fatalf("the host never read the container's cgroup: %s", seen)
+		t.Fatalf("fork bomb and host probes took %s", took)
 	}
 	if seen.limit != "512" {
 		t.Fatalf("container cgroup pids.max is %q, want the host limit 512: %s", seen.limit, seen)
 	}
-	if seen.peak < 1 || seen.peak > 512 {
-		t.Fatalf("container cgroup pids.current peaked at %d, outside 1..512: %s", seen.peak, seen)
+	if seen.peak < seen.idle+pressureMargin || seen.peak > 512 {
+		t.Fatalf("container cgroup pids.current peaked at %d, want %d..512 (idle %d + %d): %s", seen.peak, seen.idle+pressureMargin, seen.idle, pressureMargin, seen)
 	}
-	if seen.spawnedDuring == 0 || seen.spawnErr != "" {
-		t.Fatalf("the host could not spawn while the bomb ran: %s", seen)
+	if seen.overlapped < 3 || seen.spawnErr != "" {
+		t.Fatalf("the host did not spawn under fork pressure: %s", seen)
 	}
 	assertGone(t, "nself-ci-"+id)
-	if err := osexec.Command("/bin/true").Run(); err != nil {
+	if err := probe(context.Background(), "/bin/true"); err != nil {
 		t.Fatalf("the host cannot spawn after the fork bomb: %v", err)
 	}
 }

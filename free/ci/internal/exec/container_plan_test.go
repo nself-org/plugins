@@ -26,7 +26,7 @@ func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []str
 	t.Helper()
 	dir := t.TempDir()
 	fakeRuntimeDir = dir
-	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in events) cat \"$d/events\" 2>/dev/null; exit 0;; run) ;; *) exit 0;; esac\ncase \"$*\" in *\"--env-file /dev/fd/3\"*) cat /dev/fd/3 > \"$d/env3\";; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
+	script := "#!/bin/sh\nd=$(dirname \"$0\")\ncase \"$1\" in inspect) cat \"$d/inspect\" 2>/dev/null; exit 0;; esac\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in events) cat \"$d/events\" 2>/dev/null; exit 0;; run) ;; *) exit 0;; esac\ncase \"$*\" in *\"--env-file /dev/fd/3\"*) cat /dev/fd/3 > \"$d/env3\";; esac\ncat > \"$d/stdin\"\n[ -e \"$d/delay\" ] && sleep \"$(cat \"$d/delay\")\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
 	for name, body := range map[string]string{"docker": script, "out": out, "code": code} {
 		mode := os.FileMode(0600)
 		if name == "docker" {
@@ -127,8 +127,8 @@ func TestPlannedContainerGetsEnvOnStdinNeverOnDiskOrArgv(t *testing.T) {
 
 func TestPlannedContainerReasons(t *testing.T) {
 	for name, tc := range map[string]struct{ out, code, reason string }{
-		"killed":      {"", "137", "resource_limit"},
-		"forkfail":    {"sh: can't fork\n", "2", "resource_limit"},
+		"killed":      {"", "137", ""},               // no oom event, no cgroup counter: nothing the host saw
+		"forkfail":    {"sh: can't fork\n", "2", ""}, // printed by the job, no host evidence: not a limit (D-1580)
 		"plainfail":   {"FAIL\n", "1", ""},
 		"killedclean": {"", "0", ""},
 	} {

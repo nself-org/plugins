@@ -2,7 +2,9 @@ package exec
 
 // Purpose: read the kernel's own count of forks refused at a container's process limit (D-1580).
 // Inputs:  the runtime binary and the container name of a planned attempt.
-// Outputs: pidsReading, the highest `max` counter of the container cgroup's pids.events and what was read.
+// Outputs: pidsReading, the highest `max` counter of the container cgroup's pids.events, the `max` and
+// `oom_kill` counters of its memory.events, and what was read. Every planned container is watched: these
+// counters are the host's evidence of a limit (resourceReason), the job's output never is.
 // Constraints: planned containers run with --rm, so the cgroup is gone when the job ends; the counter is
 // sampled while the container lives and the last good reading is kept. pids.events `max` rises each time
 // a host fork or clone is refused at pids.max, so it does not depend on the runtime's log. Under gVisor a
@@ -33,6 +35,8 @@ const pidsPoll = 3 * time.Millisecond
 // pidsReading is what the sampler learned about one container.
 type pidsReading struct {
 	Max     uint64 // highest `max` counter read from pids.events
+	MemMax  uint64 // highest `max` counter read from memory.events (usage reached memory.max)
+	OOMKill uint64 // highest `oom_kill` counter read from memory.events
 	Path    string // the cgroup directory that was read ("" when none was found)
 	Limit   string // that cgroup's pids.max
 	Reads   int    // successful reads of pids.events
@@ -47,7 +51,7 @@ func (r pidsReading) String() string {
 	if r.Path == "" {
 		return "pids.events: no container cgroup read (" + r.Problem + ")"
 	}
-	return fmt.Sprintf("pids.events: max=%d after %d reads of %s (pids.max=%s)", r.Max, r.Reads, r.Path, r.Limit)
+	return fmt.Sprintf("pids.events: max=%d after %d reads of %s (pids.max=%s), memory.events max=%d oom_kill=%d", r.Max, r.Reads, r.Path, r.Limit, r.MemMax, r.OOMKill)
 }
 
 // pidsWatch samples pids.events of one container until stopped.
@@ -110,20 +114,25 @@ func (w *pidsWatch) run(ctx context.Context, binary, name string) {
 			continue // the cgroup is removed with the container: keep the last good reading
 		}
 		n := parsePidsMax(string(raw))
+		mem, _ := os.ReadFile(filepath.Join(dir, "memory.events"))
+		memMax, oomKill := parseCounter(string(mem), "max"), parseCounter(string(mem), "oom_kill")
 		w.mu.Lock()
 		w.r.Reads++
-		if n > w.r.Max {
-			w.r.Max = n
-		}
+		w.r.Max = max(w.r.Max, n)
+		w.r.MemMax = max(w.r.MemMax, memMax)
+		w.r.OOMKill = max(w.r.OOMKill, oomKill)
 		w.mu.Unlock()
 	}
 }
 
 // parsePidsMax returns the `max` counter of a pids.events body ("max 12\n").
-func parsePidsMax(body string) uint64 {
+func parsePidsMax(body string) uint64 { return parseCounter(body, "max") }
+
+// parseCounter returns the counter key of a cgroup *.events body ("key N" lines), 0 when absent.
+func parseCounter(body, key string) uint64 {
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
-		if len(f) == 2 && f[0] == "max" {
+		if len(f) == 2 && f[0] == key {
 			n, err := strconv.ParseUint(f[1], 10, 64)
 			if err == nil {
 				return n

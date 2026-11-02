@@ -2,12 +2,14 @@
 
 package gvisor
 
-// Purpose: the host's own readings of a running fork bomb (D-1580): its container cgroup's pids.max and
-// peak pids.current, and whether the host could start processes while the bomb ran.
-// Inputs:  the container name of an attempt.
+// Purpose: the host's own readings of a running fork bomb (D-1580): its container cgroup's pids.max, the
+// cgroup's process count while the job waits and while the bomb runs, and host spawns made under that pressure.
+// Inputs:  the container name of an attempt whose script waits for gateFile before it starts the bomb.
 // Outputs: hostReadings, taken until stop.
 // Constraints: every reading comes from the host (docker inspect, /proc, /sys/fs/cgroup, fork+exec of
-// /bin/true), never from the job's output, so the job cannot shape it.
+// /bin/true), never from the job's output, so the job cannot shape it. The bomb starts only when the host
+// opens the gate, after it found the cgroup and read the idle count, so discovery never races --rm and
+// setup is never mistaken for the bomb. Every probe is bounded by the watch's context and probeTimeout.
 
 import (
 	"context"
@@ -21,18 +23,31 @@ import (
 	"time"
 )
 
+const (
+	// gateFile is created inside the container by the host to release the bomb.
+	gateFile = "/tmp/nself-ci-release"
+	// pressureMargin is how many processes above the idle count make a reading "under fork pressure".
+	pressureMargin = 16
+	// probeTimeout bounds every single host probe (docker inspect, docker exec, /bin/true).
+	probeTimeout = 5 * time.Second
+)
+
 type hostReadings struct {
-	cgroup        string // the container's cgroup directory, once found
-	limit         string // its pids.max
-	peak          int    // highest pids.current read
-	reads         int    // successful pids.current reads
-	spawnedDuring int    // /bin/true runs that finished while the cgroup existed
-	spawnErr      string // the first failed host spawn
+	cgroup     string // the container's cgroup directory, once found
+	limit      string // its pids.max
+	idle       int    // pids.current while the job waited at the gate
+	released   bool   // the host opened the gate
+	peak       int    // highest pids.current read after the gate opened
+	reads      int    // successful pids.current reads after the gate opened
+	spawns     int    // host /bin/true runs after the gate opened
+	overlapped int    // host spawns bracketed by two readings of at least idle+pressureMargin
+	spawnErr   string // the first failed host spawn
+	problem    string // why the watch stopped short
 }
 
 func (r hostReadings) String() string {
-	return fmt.Sprintf("cgroup %q pids.max=%s peak pids.current=%d over %d reads, %d host spawns during the bomb, spawn error %q",
-		r.cgroup, r.limit, r.peak, r.reads, r.spawnedDuring, r.spawnErr)
+	return fmt.Sprintf("cgroup %q pids.max=%s idle=%d released=%v peak=%d over %d reads, %d host spawns, %d under fork pressure, spawn error %q, problem %q",
+		r.cgroup, r.limit, r.idle, r.released, r.peak, r.reads, r.spawns, r.overlapped, r.spawnErr, r.problem)
 }
 
 type hostWatch struct {
@@ -42,8 +57,9 @@ type hostWatch struct {
 	r      hostReadings
 }
 
-func watchHost(name string) *hostWatch {
-	ctx, cancel := context.WithCancel(context.Background())
+// watchHost watches container name until stop or until parent ends.
+func watchHost(parent context.Context, name string) *hostWatch {
+	ctx, cancel := context.WithCancel(parent)
 	w := &hostWatch{cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(w.done)
@@ -52,6 +68,7 @@ func watchHost(name string) *hostWatch {
 	return w
 }
 
+// stop ends the watch. It returns within probeTimeout plus the probe's WaitDelay: every probe honours the context.
 func (w *hostWatch) stop() hostReadings {
 	w.cancel()
 	<-w.done
@@ -60,57 +77,88 @@ func (w *hostWatch) stop() hostReadings {
 	return w.r
 }
 
+func (w *hostWatch) set(f func(*hostReadings)) {
+	w.mu.Lock()
+	f(&w.r)
+	w.mu.Unlock()
+}
+
 func (w *hostWatch) run(ctx context.Context, name string) {
-	tick := time.NewTicker(5 * time.Millisecond)
-	defer tick.Stop()
-	var dir string
-	lastSpawn := time.Time{}
-	for {
+	dir := ""
+	for dir == "" { // the job waits at the gate, so the container stays up until it is found
+		if dir = containerCgroup(ctx, name); dir != "" {
+			break
+		}
 		select {
 		case <-ctx.Done():
+			w.set(func(r *hostReadings) { r.problem = "container cgroup never found" })
 			return
-		case <-tick.C:
+		case <-time.After(20 * time.Millisecond):
 		}
-		if dir == "" {
-			dir = containerCgroup(ctx, name)
-			if dir == "" {
-				continue
-			}
-			w.mu.Lock()
-			w.r.cgroup, w.r.limit = dir, readField(filepath.Join(dir, "pids.max"))
-			w.mu.Unlock()
-		}
-		cur, err := strconv.Atoi(readField(filepath.Join(dir, "pids.current")))
-		if err != nil {
-			continue // the cgroup goes with the container: keep what was read
-		}
-		w.mu.Lock()
-		w.r.reads++
-		if cur > w.r.peak {
-			w.r.peak = cur
-		}
-		w.mu.Unlock()
-		if time.Since(lastSpawn) < 100*time.Millisecond {
-			continue
-		}
-		lastSpawn = time.Now()
-		spawnErr := osexec.Command("/bin/true").Run()
-		_, alive := os.Stat(filepath.Join(dir, "pids.current"))
-		w.mu.Lock()
-		if spawnErr != nil && w.r.spawnErr == "" {
-			w.r.spawnErr = spawnErr.Error()
-		}
-		if spawnErr == nil && alive == nil { // the bomb's cgroup still existed when the spawn finished
-			w.r.spawnedDuring++
-		}
-		w.mu.Unlock()
 	}
+	idle, err := pidsCurrent(dir)
+	if err != nil {
+		w.set(func(r *hostReadings) { r.cgroup, r.problem = dir, "idle pids.current: "+err.Error() })
+		return
+	}
+	w.set(func(r *hostReadings) {
+		r.cgroup, r.limit, r.idle = dir, readField(filepath.Join(dir, "pids.max")), idle
+	})
+	if err := probe(ctx, "docker", "exec", name, "touch", gateFile); err != nil {
+		w.set(func(r *hostReadings) { r.problem = "open the gate: " + err.Error() })
+		return
+	}
+	w.set(func(r *hostReadings) { r.released = true })
+	floor := idle + pressureMargin
+	for ctx.Err() == nil {
+		before, err := pidsCurrent(dir)
+		if err != nil {
+			return // the cgroup goes with the container: the bomb is over
+		}
+		spawnErr := probe(ctx, "/bin/true")
+		after, afterErr := pidsCurrent(dir)
+		w.set(func(r *hostReadings) {
+			r.reads++
+			r.peak = max(r.peak, before)
+			if afterErr == nil {
+				r.reads++
+				r.peak = max(r.peak, after)
+			}
+			if ctx.Err() != nil { // a probe cut short by stop says nothing about the host
+				return
+			}
+			r.spawns++
+			if spawnErr != nil && r.spawnErr == "" {
+				r.spawnErr = spawnErr.Error()
+			}
+			if spawnErr == nil && afterErr == nil && before >= floor && after >= floor {
+				r.overlapped++
+			}
+		})
+	}
+}
+
+// probe runs one host command bounded by ctx and probeTimeout.
+func probe(ctx context.Context, name string, args ...string) error {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	cmd := osexec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd.Run()
+}
+
+func pidsCurrent(dir string) (int, error) {
+	return strconv.Atoi(readField(filepath.Join(dir, "pids.current")))
 }
 
 // containerCgroup finds the running container's cgroup v2 directory: the one its init process lives in,
 // else docker's systemd scope. Only a directory with a numeric pids.max (the container's own limit) counts.
 func containerCgroup(ctx context.Context, name string) string {
-	out, err := osexec.CommandContext(ctx, "docker", "inspect", "--format", "{{.Id}} {{.State.Pid}}", name).Output()
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	cmd := osexec.CommandContext(ctx, "docker", "inspect", "--format", "{{.Id}} {{.State.Pid}}", name)
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
