@@ -16,6 +16,7 @@ package sim
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/netip"
 	"runtime"
@@ -71,6 +72,35 @@ func explainJob(t *testing.T, f *fixture, runID, job string) string {
 	return strings.Join(planview.ExplainLines(plan, "decision-record"), "\n")
 }
 
+// requireRunnerEvidence: the recorded run evidence names the paired node that ran the job (not "local"),
+// the platform it declared, a valid isolation level, and holds one attempt record for that node
+// (P7-NODE-17: evidence names node, platform, isolation).
+func requireRunnerEvidence(t *testing.T, f *fixture, runID string, byID map[string]*node) {
+	t.Helper()
+	st, err := store.Open(f.home+"/state.db", store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	body, ok, err := st.RunEvidence(context.Background(), runID)
+	if err != nil || !ok {
+		t.Fatalf("run evidence: found %v, %v", ok, err)
+	}
+	var ev model.Evidence
+	if err = json.Unmarshal(body, &ev); err != nil {
+		t.Fatal(err)
+	}
+	if n := byID[ev.Runner.ID]; n == nil || len(n.ran()) != 1 {
+		t.Errorf("evidence names runner %q, which is not the one node that ran the job", ev.Runner.ID)
+	}
+	if want := runtime.GOOS + "/" + runtime.GOARCH; ev.Runner.Platform != want || !ev.Runner.Isolation.Valid() {
+		t.Errorf("evidence runner platform %q (want %q) isolation %q", ev.Runner.Platform, want, ev.Runner.Isolation)
+	}
+	if len(ev.Attempts) != 1 || ev.Attempts[0].Runner.Node != ev.Runner.ID || ev.Attempts[0].Runner.Kind == "local" {
+		t.Errorf("evidence attempts %+v, want one record naming %q", ev.Attempts, ev.Runner.ID)
+	}
+}
+
 func TestScenario2(t *testing.T) {
 	pass := passRunner("lan job")
 	ids := []string{"lan-a", "lan-b", "lan-other-arch", "cand-unpaired", "deploy-host"}
@@ -115,6 +145,7 @@ func TestScenario2(t *testing.T) {
 			t.Fatalf("the job ran %d times on the paired nodes, want 1", ran)
 		}
 		requireNever(t)
+		requireRunnerEvidence(t, f, res.RunID, byID)
 		for _, want := range []string{"lan-a", "lan-b", "lan-other-arch", "cand-unpaired", "deploy-host",
 			string(model.PlatformMismatch), string(model.NodeDiscovered), string(model.NodeDeployHost)} {
 			if !strings.Contains(lines, want) {

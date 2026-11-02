@@ -5,7 +5,8 @@ package model
 // v1 and experimental.
 
 // RunnerKinds are the placement kinds an attempt can record.
-var RunnerKinds = []string{"local", "ssh", "agent", "hosted"}
+// "unknown" is an attempt the coordinator admitted on a runner it knows only by id.
+var RunnerKinds = []string{"local", "ssh", "agent", "hosted", "unknown"}
 
 // AttemptRunner is where one attempt ran, from its recorded placement.
 type AttemptRunner struct {
@@ -13,6 +14,13 @@ type AttemptRunner struct {
 	Tier string `json:"tier"`
 	Pool string `json:"pool"`
 	Rank int    `json:"rank"` // position of the chosen runner in the placement ranking (0 is first)
+	// Node, Provider, Platform and Isolation name the runner that actually ran the attempt
+	// (additive keys: a document written before them has none). Node is the runner id of the
+	// placement, Platform is "os/arch", Isolation is the level the runner declares.
+	Node      string    `json:"node,omitempty"`
+	Provider  string    `json:"provider,omitempty"`
+	Platform  string    `json:"platform,omitempty"`
+	Isolation Isolation `json:"isolation,omitempty"`
 }
 
 // AttemptTimings splits an attempt's wall time from its state transitions.

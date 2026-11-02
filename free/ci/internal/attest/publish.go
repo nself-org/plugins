@@ -32,10 +32,21 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 	// structured fields use the plain profile; the runner id is also replaced
 	// inside free text, where a host name tends to surface
 	structured, p := p, p.withRunner(ev.Runner.ID)
+	for _, a := range ev.Attempts { // the other runners of the run surface in free text as well
+		p = p.withRunner(a.Runner.Node)
+	}
 	out := ev
-	out.Runner.ID = p.RunnerID(ev.Runner.ID)
-	out.Runner.Provider = structured.Text(ev.Runner.Provider)
-	out.Runner.Platform = structured.Text(ev.Runner.Platform)
+	// the runner records are scrubbed field by field through the walk, so a field added to them cannot be missed:
+	// a node id is a host name and becomes its pseudonym, every other string is text
+	scrub := func(field, s string) string {
+		if field == "ID" || field == "Node" {
+			return p.RunnerID(s)
+		}
+		return structured.Text(s)
+	}
+	out.Runner = scrubCopy(ev.Runner, scrub)
+	out.Attempts = scrubCopy(ev.Attempts, scrub)
+	out.Errors = scrubCopy(ev.Errors, scrub)
 	out.Pipeline.Name = structured.Text(ev.Pipeline.Name)
 	if ev.Binding.Reason != nil {
 		reason := model.BindingReason(p.Text(string(*ev.Binding.Reason)))

@@ -26,6 +26,16 @@ Read it with:
 
 `--file <path>` verifies a document you were given. A file alone proves nothing about where it came from, so a file with no local record of its run is refused with exit 11 when it would otherwise pass. A document signed by a remote runner goes through the registered verifier, and its repository and policy digest are checked.
 
+### Which runner ran it
+
+`runner` names the runner that ran the checks: its node id, provider, platform (`os/arch`) and the isolation level that runner declares. A run that was placed on one node (`nself ci --where <node>`, or a paired agent) names that node. A run that ran on this machine without a placement says `local`, `local`, this machine's platform and `process`.
+
+When more than one runner executed anything in the run, there is no single runner to name, so `runner` stays the machine that recorded the document. This counts every attempt the run admitted: a retry that moved to another runner and a `--confirm-flaky` rerun count as much as the final attempt. The `attempts` list then holds one entry per admitted attempt, and each entry names its own runner (`node`, `provider`, `platform`, `isolation`, besides `kind`, `tier`, `pool`, `rank`). The document of a single attempt always names the runner of that attempt. A run whose attempts all ran on this machine without a placement has no `attempts` list.
+
+What the coordinator does not know is written as `unknown`, never as `local`: an attempt granted to a node whose details the scheduler did not record has `kind` `unknown`, and its `provider` and `platform` read `unknown`. A runner that does not declare its isolation reads `process`, the weakest claim.
+
+The runner fields are part of the document that is recorded and verified: editing them makes `evidence verify` report the document as invalid.
+
 ## Machine output
 
 Add `--json` to any command and it prints one envelope on stdout:
@@ -334,6 +344,10 @@ The tables below are generated from the schema. Change the model, then regenerat
 | `tier` | string | yes |  |
 | `pool` | string | yes |  |
 | `rank` | integer | yes |  |
+| `node` | string | no |  |
+| `provider` | string | no |  |
+| `platform` | string | no |  |
+| `isolation` | string | no | `process`, `container`, `sandboxed-container`, `vm`, `ephemeral-vm`, `hosted-disposable` |
 
 #### `AttemptTimings`
 

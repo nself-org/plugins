@@ -138,6 +138,7 @@ func (rs *runState) runAttemptN(ctx context.Context, i int, pj plan.PlannedJob, 
 	rs.mu.Lock()
 	rs.attempts[adm.AttemptID] = pj.ID
 	rs.mu.Unlock()
+	NoteAdmission(rs.sess.RunID, pj.ID, n, adm) // every admission counts for the evidence, a retried or confirming one too
 	if !adm.Local {
 		return rs.runRemote(jctx, pj, *job, adm, o, n) // a node the dispatcher delivered the lease to (P7-AUTO-28)
 	}

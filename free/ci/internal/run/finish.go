@@ -150,6 +150,7 @@ func pipelineStatus(r model.Result) string {
 func (c *Coordinator) conclude(f finishIn) Result {
 	bg, done := background(context.Background())
 	defer done()
+	defer ForgetRun(f.RunID) // the admissions are read by the evidence builders below
 	trig := c.Plan.Trigger
 	if trig == "" {
 		trig = "local"

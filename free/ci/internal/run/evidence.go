@@ -14,7 +14,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"runtime"
 	"sort"
 	"time"
 
@@ -85,11 +84,15 @@ func runResult(checks []model.Check) model.Result {
 // BuildEvidence assembles the ci.evidence/v1 document of a run.
 func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
+	attempts, runner := placedRunners(in.RunID)
+	if len(in.Attempts) == 0 {
+		in.Attempts = attempts
+	}
 	e := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: in.Revision, RepoID: shortDigest(in.Project), RunID: in.RunID,
 		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "owner")), PolicyDigest: in.PolicyDigest,
 		InputDigests: model.InputDigests{Config: in.ConfigDigest, Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
-		Runner:       model.RunnerRef{ID: "local", Provider: "local", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
+		Runner:       runner,
 		Producer:     model.Producer{Kind: "coordinator-recorded", Version: "1"},
 		ToolVersions: map[string]string{}, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
 		Selection: in.Selection, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
