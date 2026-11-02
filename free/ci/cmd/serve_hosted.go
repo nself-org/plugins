@@ -8,6 +8,7 @@ package main
 // Outputs: serveHosted installs serveGitLab's wiring (D-1346), runtime.UseStore, runtime.UsePolicy, hosted.UsePolicy, hosted.UseStore,
 //          hosted.UseAttempts and the contributor targets (GitHub-hosted only, each allowlisted repository
 //          once, lookups cached for hostedDescribeTTL); the returned func removes them.
+//          GitHub webhook and reconciliation share that policy; reconciliation also receives the store.
 // Constraints: call once at coordinator start, before the first dispatch. The policy is the operator's own
 //          (store rows and user files): the coordinator reads no repository's policy file. An unreadable policy
 //          is an error to the provider, never a default that widens trust. An attempt the store does not know
@@ -24,6 +25,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/reconcile"
+	ghwebhook "github.com/nself-org/plugins/free/ci/internal/providers/github/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/health"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
@@ -51,6 +54,9 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	health.UseStore(st)
 	runtime.UseStore(st)
 	runtime.UsePolicy(src)
+	ghwebhook.UsePolicy(src)
+	reconcile.Use(st)
+	reconcile.UsePolicy(src) // Demand.Every reads policy when the coordinator starts its loops.
 	hosted.UsePolicy(src)
 	webhook.UsePolicy(src) // D-1363: GitLab webhook secrets reach the source at coordinator start
 	hosted.UseStore(st)
@@ -74,6 +80,9 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 		c.SetTargetsFor(nil)
 		c.SetDescribeTTL(0)
 		undoGitLab()
+		reconcile.UsePolicy(nil)
+		reconcile.Use(nil)
+		ghwebhook.UsePolicy(nil)
 		hosted.UseAttempts(nil)
 		hosted.UsePolicy(nil)
 		webhook.UsePolicy(nil)
