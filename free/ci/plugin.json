@@ -139,6 +139,9 @@
             "name": "name"
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "cli_only": true,
@@ -149,8 +152,8 @@
         "json": "envelope",
         "name": "artifacts",
         "output": "document",
-        "side_effect": "read",
-        "summary": "List, show, fetch and prune stored run artifacts"
+        "side_effect": "destructive",
+        "summary": "List, show, fetch, sign and prune stored run artifacts"
       },
       {
         "args": [
@@ -297,6 +300,7 @@
             "type": "bool"
           },
           {
+            "cli_only": true,
             "name": "alert",
             "type": "bool"
           },
@@ -681,6 +685,9 @@
             "name": "label"
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "name": "coordinator",
@@ -699,7 +706,7 @@
         "json": "envelope",
         "name": "nodes label",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Set or remove node labels (key=value)"
       },
       {
@@ -834,6 +841,9 @@
             "name": "project"
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "name": "all",
@@ -852,7 +862,7 @@
         "json": "envelope",
         "name": "nodes projects add",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Authorize projects on a node"
       },
       {
@@ -891,6 +901,9 @@
             "name": "project"
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "name": "all",
@@ -909,7 +922,7 @@
         "json": "envelope",
         "name": "nodes projects remove",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Remove project authorizations from a node"
       },
       {
@@ -1205,6 +1218,7 @@
       {
         "flags": [
           {
+            "cli_only": true,
             "name": "cmd",
             "type": "string"
           },
@@ -2061,6 +2075,10 @@
             "type": "bool"
           },
           {
+            "name": "post-status",
+            "type": "bool"
+          },
+          {
             "name": "repo",
             "type": "string"
           },
@@ -2081,10 +2099,46 @@
             "name": "run"
           }
         ],
+        "confirm": {
+          "flags": [
+            "yes"
+          ]
+        },
+        "flags": [
+          {
+            "name": "abandon",
+            "type": "bool"
+          },
+          {
+            "name": "force",
+            "type": "bool"
+          },
+          {
+            "name": "idempotency-key",
+            "type": "string"
+          },
+          {
+            "cli_only": true,
+            "name": "json",
+            "type": "bool"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          },
+          {
+            "name": "rerun",
+            "type": "bool"
+          },
+          {
+            "name": "yes",
+            "type": "bool"
+          }
+        ],
         "json": "envelope",
         "name": "runs resolve",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "destructive",
         "summary": "Resolve a pending run decision"
       },
       {

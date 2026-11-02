@@ -34,8 +34,8 @@ const rerunUsage = "nself ci runs rerun <run|sha> [--where local|<node>|<pool>|h
 var fullSHARe = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 
 type rerunFlags struct {
-	json            bool
-	repo, job, here string
+	json, postStatus bool
+	repo, job, here  string
 }
 
 func newRerunFlagSet(f *rerunFlags) *flag.FlagSet {
@@ -43,6 +43,7 @@ func newRerunFlagSet(f *rerunFlags) *flag.FlagSet {
 	fs.BoolVar(&f.json, "json", false, "print one v1 JSON envelope")
 	fs.StringVar(&f.repo, "repo", "", "repository root (env NSELF_CI_REPO; default: current directory)")
 	fs.StringVar(&f.job, "job", "", "run only this job and its dependencies")
+	fs.BoolVar(&f.postStatus, "post-status", false, "post the nself-ci commit status even when a machine caller (MCP, HTTP) started the rerun")
 	whereFlagSet(fs, &f.here)
 	return fs
 }
@@ -101,8 +102,7 @@ func runRunsRerun(args []string) int {
 	if _, err = rerunRevision(pos[0], rerunLookup(ctx), exists, head); err != nil {
 		return exitForError(err)
 	}
-	o := RunOptions{Root: root, Home: os.Getenv("NSELF_CI_HOME"), Job: f.job, JSON: f.json, Record: true}
-	o.Interactive = interactiveRun(o.Trigger, os.Getenv)
+	o := rerunOptions(f, root, os.Getenv)
 	if o.PolicyRun, err = schedRevisionValues(); err != nil {
 		return exitForError(err)
 	}
@@ -132,6 +132,15 @@ func runRunsRerun(args []string) int {
 	}
 	fmt.Fprintln(os.Stderr, "run "+res.RunID)
 	return res.Exit
+}
+
+// rerunOptions are the options of the new run of record: the same D29 machine default as a bare run, so a rerun
+// started through MCP or HTTP posts no commit status unless --post-status is given.
+func rerunOptions(f rerunFlags, root string, getenv func(string) string) RunOptions {
+	o := RunOptions{Root: root, Home: getenv("NSELF_CI_HOME"), Job: f.job, JSON: f.json, Record: true}
+	o.Interactive = interactiveRun(o.Trigger, getenv)
+	applyMachineStatus(&o, f.postStatus, getenv("NSELF_INVOKED_BY"))
+	return o
 }
 
 // rerunLookup finds the revision a recorded run was made for.

@@ -40,10 +40,11 @@ root:
 
 commands:
   - path: artifacts
-    summary: "List, show, fetch and prune stored run artifacts"
-    side_effect: read
+    summary: "List, show, fetch, sign and prune stored run artifacts"
+    side_effect: destructive
     output: document
     json: envelope
+    confirm: {flags: []}
     args: [{name: subcommand}, {name: name}]
     flags:
       - {name: "json", type: "bool", cli_only: true}
@@ -99,7 +100,7 @@ commands:
     json: envelope
     flags:
       - {name: "json", type: "bool", cli_only: true}
-      - {name: "alert", type: "bool"}
+      - {name: "alert", type: "bool", cli_only: true}
       - {name: "nodes", type: "bool"}
       - {name: "providers", type: "bool"}
       - {name: "repo", type: "string"}
@@ -230,9 +231,10 @@ commands:
     args: [{name: project-root}]
   - path: nodes label
     summary: "Set or remove node labels (key=value)"
-    side_effect: write
+    side_effect: remote
     output: document
     json: envelope
+    confirm: {flags: []}
     args: [{name: node}, {name: label}]
     flags:
       - {name: "coordinator", type: "string"}
@@ -288,9 +290,10 @@ commands:
       - {name: "project", type: "string"}
   - path: nodes projects add
     summary: "Authorize projects on a node"
-    side_effect: write
+    side_effect: remote
     output: document
     json: envelope
+    confirm: {flags: []}
     args: [{name: node}, {name: project}]
     flags:
       - {name: "all", type: "bool"}
@@ -308,9 +311,10 @@ commands:
       - {name: "json", type: "bool", cli_only: true}
   - path: nodes projects remove
     summary: "Remove project authorizations from a node"
-    side_effect: write
+    side_effect: remote
     output: document
     json: envelope
+    confirm: {flags: []}
     args: [{name: node}, {name: project}]
     flags:
       - {name: "all", type: "bool"}
@@ -425,7 +429,7 @@ commands:
     output: document
     json: envelope
     flags:
-      - {name: "cmd", type: "string"}
+      - {name: "cmd", type: "string", cli_only: true}
       - {name: "dry-run", type: "bool"}
       - {name: "from", type: "string"}
       - {name: "json", type: "bool", cli_only: true}
@@ -746,14 +750,24 @@ commands:
     flags:
       - {name: "job", type: "string"}
       - {name: "json", type: "bool", cli_only: true}
+      - {name: "post-status", type: "bool"}
       - {name: "repo", type: "string"}
       - {name: "where", type: "string"}
   - path: runs resolve
     summary: "Resolve a pending run decision"
-    side_effect: write
+    side_effect: destructive
     output: document
     json: envelope
+    confirm: {flags: ["yes"]}
     args: [{name: run}]
+    flags:
+      - {name: "abandon", type: "bool"}
+      - {name: "force", type: "bool"}
+      - {name: "idempotency-key", type: "string"}
+      - {name: "json", type: "bool", cli_only: true}
+      - {name: "reason", type: "string"}
+      - {name: "rerun", type: "bool"}
+      - {name: "yes", type: "bool"}
   - path: runs stats
     summary: "Show run statistics"
     side_effect: read

@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,20 @@ type resolveArgs struct {
 	attempt, key, reason string
 	action               job.Action
 	yes, asJSON, force   bool
+}
+
+// resolveFlagSet declares the flags parseResolve accepts; the surface test compares it with commands.yaml and runs
+// every declared flag through parseResolve, so the hand parser and the declaration cannot drift apart.
+func resolveFlagSet() *flag.FlagSet {
+	fs := flag.NewFlagSet("runs resolve", flag.ContinueOnError)
+	fs.String("idempotency-key", "", "key that makes the resolution run at most once")
+	fs.String("reason", "", "why the attempt is resolved this way")
+	fs.Bool("rerun", false, "run the release attempt again")
+	fs.Bool("abandon", false, "abandon the release attempt")
+	fs.Bool("yes", false, "consent without a prompt")
+	fs.Bool("force", false, "resolve even when the attempt looks live")
+	fs.Bool("json", false, "print one v1 JSON envelope")
+	return fs
 }
 
 func parseResolve(args []string) (resolveArgs, error) {
