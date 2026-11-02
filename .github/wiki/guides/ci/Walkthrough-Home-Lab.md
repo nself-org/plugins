@@ -8,11 +8,11 @@ Names used below: `desk` is the Mac Studio, `mini1` and `mini2` are the Minis, `
 
 ## The desk Mac runs the coordinator
 
-The coordinator keeps the run store, the node registry and the keys. In personal mode it starts with no extra flag. Its webhook and user API listeners stay on loopback by default; only the agent listener needs to be reachable from the Minis. The listener ports are described in [Nodes and Runners](./Nodes-and-Runners.md#team).
+The coordinator keeps the run store, the node registry and the keys. In personal mode it starts without `--team`. Configure a webhook secret before starting: replace `<webhook-secret>` below with your secret, or set `GITHUB_WEBHOOK_SECRET` and omit `--secret`. Its webhook and user API listeners stay on loopback by default; only the agent listener needs to be reachable from the Minis. The listener ports are described in [Nodes and Runners](./Nodes-and-Runners.md#team).
 
-<!-- proven-by: TestServeModeFlagAndStart -->
+<!-- proven-by: TestServeStartsUserAPIAndLocalSocket -->
 ```text
-nself ci serve
+nself ci serve --secret <webhook-secret>
 ```
 
 A coordinator started without `--team` stays personal. Do not add `--team` here: the switch is permanent for that data directory, and a home lab used by one person does not need it.
@@ -25,7 +25,7 @@ There are two ways to add a Mac. Use `nodes add --system` when you can reach the
 
 <!-- proven-by: TestMacOSNode -->
 ```text
-nself ci nodes add ci@mini1 --system --slots 2 --host-key <fingerprint> --agent-binary <path-to-nself-ci-agent> --project <owner/repo> --name mini1 --json
+nself ci nodes add ci@mini1.example.com --system --slots 2 --host-key <fingerprint> --agent-binary <path-to-nself-ci-agent> --project <owner/repo> --name mini1 --json
 ```
 
 The bootstrap checks every account and folder it creates. Until jobs actually run through the job shim, the node is recorded as not UID-separated, and installing it grants no secret or signing rights. See [provisioning versus bootstrap](./Nodes-and-Runners.md#vps).
@@ -34,7 +34,7 @@ The bootstrap checks every account and folder it creates. Until jobs actually ru
 
 <!-- proven-by: TestNodesPairEndToEnd -->
 ```text
-nself ci nodes pair --label mini2 --agent-url https://desk.example:3864 --cert-ttl 30m
+nself ci nodes pair --label mini2 --agent-url https://desk.example.com:3864 --cert-ttl 30m
 ```
 
 A paired Mini runs the same agent in pull mode: it only makes outbound connections to the coordinator. Never put the pairing code in a command line or a shared log.
@@ -75,7 +75,14 @@ The reasons (`labels.mismatch`, `tools.missing` and others) are listed in [Sched
 
 ## Reservations on the desk machine
 
-If the desk Mac also takes jobs, keep part of it for yourself. Reservations are scheduler limits: CI work never uses the reserved CPU or memory. `--interactive protect` holds new work back while you are using the machine. `--on-battery` matters only for laptops; a desk machine can leave it at `allow`.
+If the desk Mac also takes jobs, register its agent before setting reservations. Use the same SSH bootstrap as for a Mini, with SSH enabled on the desk Mac and a user with passwordless sudo. Replace `desk.example.com` with its address and verify its host-key fingerprint.
+
+<!-- proven-by: TestMacOSNode -->
+```text
+nself ci nodes add ci@desk.example.com --system --slots 2 --host-key <fingerprint> --agent-binary <path-to-nself-ci-agent> --project <owner/repo> --name desk --json
+```
+
+Keep part of the desk Mac for yourself. Reservations are scheduler limits: CI work never uses the reserved CPU or memory. `--interactive protect` holds new work back while you are using the machine. `--on-battery` matters only for laptops; a desk machine can leave it at `allow`.
 
 <!-- proven-by: TestNodesSetFlagsMayFollowOrPrecedeTheNodeAndKeepWhatIsNotGiven -->
 ```text
@@ -91,7 +98,7 @@ A VPS is added the same way as a Mini, with its host key pinned. The SSH carrier
 
 <!-- proven-by: TestSystemInstallBootstrapsAndKeepsTheNodeUnseparated -->
 ```text
-nself ci nodes add root@203.0.113.20 --system --slots 3 --host-key <fingerprint> --agent-binary <path-to-nself-ci-agent> --json
+nself ci nodes add root@203.0.113.20 --system --slots 3 --host-key <fingerprint> --agent-binary <path-to-nself-ci-agent> --name vps1 --json
 ```
 
 Never add a machine that serves your deployed apps. Deploy hosts are not eligible for CI; see [deploy hosts are ineligible](./Nodes-and-Runners.md#vps).
@@ -132,12 +139,16 @@ nself ci serve restore --data-dir <new-data-dir> --in <archive> --kek <saved-kek
 
 Stop the coordinator before a restore. What restore keeps and resets is in [backup/restore and the KEK](./Nodes-and-Runners.md#team).
 
+For GitHub jobs and outbound polling, see [Hosted Providers](./Hosted-Providers.md#required-check-with-your-own-nodes). For cached work and run outputs on these machines, see [Cache and Artifacts](./Cache-and-Artifacts.md#remote-nodes).
+
 ## Proven by
 
 | Step | Test |
 |---|---|
-| Personal coordinator start, no `--team` | `TestServeModeFlagAndStart` |
-| Add a Mac with `--system` (LaunchDaemon, users, layout) | `TestMacOSNode` |
+| Personal mode selection, no `--team` | `TestServeModeFlagAndStart` |
+| Webhook secret required unless explicitly insecure | `TestCheckSecretKeepsTheV14Refusal` |
+| Coordinator starts its user API and local socket | `TestServeStartsUserAPIAndLocalSocket` |
+| Add a Mini or desk Mac with `--system` (LaunchDaemon, users, layout) | `TestMacOSNode` |
 | Pair a node and run the printed join | `TestNodesPairEndToEnd` |
 | Labels and the placement they cause | `TestSeveralProjects` |
 | Placement plan in JSON | `TestPlanPlacementJSON` |

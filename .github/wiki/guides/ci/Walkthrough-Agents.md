@@ -38,7 +38,7 @@ The document shapes are in [Evidence and Machine Output](./Evidence-and-Machine-
 
 Start the MCP server with `nself mcp` inside the project directory. The agent needs only three tools for the loop:
 
-1. `nself_ci` starts a run. Pass `{"args": ["--detach"]}`.
+1. `nself_ci` starts a run. Pass `{"flags": {"detach": true}}`.
 2. `nself_ci_runs_wait` waits for it. Pass `{"args": ["<run-id>"]}`.
 3. `nself_ci_evidence` returns the evidence. Pass `{"args": ["<run-id>"]}`.
 
@@ -46,12 +46,12 @@ Every other tool is listed in the machine-surface table. Commands that only make
 
 ## Confirmations
 
-A bare run executes code, so it needs a confirmation. The first `nself_ci` call does not run anything. It returns a request with a `confirm` value. The agent shows the request to its user and, once approved, calls `nself_ci` again with the same arguments plus that `confirm` value. Only the second call starts the run. Destructive commands, such as revoking a node, work the same way. The confirmation column of the machine-surface table says which commands need it.
+A bare run executes code, so it needs a confirmation. The first `nself_ci` call does not run anything. It returns a request with a `confirm` value. The agent shows the request to its user and, once approved, calls `nself_ci` again with the same flags plus that `confirm` value. Only the second call starts the run. Destructive commands, such as revoking a node, work the same way. The confirmation column of the machine-surface table says which commands need it.
 
 ```text
-first call:  {"args": ["--detach"]}
+first call:  {"flags": {"detach": true}}
 reply:       {"kind": "request", "confirm": "<64 hex characters>", ...}
-second call: {"args": ["--detach"], "confirm": "<the same value>"}
+second call: {"flags": {"detach": true}, "confirm": "<the same value>"}
 ```
 
 ## The HTTP routes
@@ -104,6 +104,7 @@ The isolation levels are in [Trust, Security and Privacy](./Trust-Security-and-P
 | Wait for a run | `TestRunsWait` |
 | Evidence as one JSON document | `TestBareJSONIsOneEvidenceEnvelope` |
 | Follow replays from a sequence number | `TestFollowReplayFromSeq` |
+| Root MCP tool declares the detach flag | `TestCommittedManifestHasDetachRootFlag` |
 | MCP tools, HTTP routes, same output on CLI, MCP and HTTP, confirmation round trip | `scripts/ci/ci-machine-surface.sh` |
 | No status from machine-invoked runs unless `--post-status` | `TestMachineDefaults` |
 | Trust cap key, lower but never raise | `TestPolicyMachineInvokedCap` |

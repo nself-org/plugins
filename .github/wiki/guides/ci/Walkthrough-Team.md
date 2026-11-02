@@ -2,15 +2,17 @@
 
 This page walks a small team that shares CI. One box runs the team coordinator. Two other boxes run jobs. Members submit runs and read results from their own machines. Each member may also keep personal nodes at home.
 
-Names used below: `ci.example` is the coordinator box, `runner1` and `runner2` are the job boxes, `example-org/example-repo` is a team repository. Commands that need real machines are shown as text, each with the test that runs it. The command and flag tables are in the generated [Reference](./Reference.md#commands).
+Names used below: `ci.example.com` is the coordinator box, `runner1` and `runner2` are the job boxes, `example-org/example-repo` is a team repository. Commands that need real machines are shown as text, each with the test that runs it. The command and flag tables are in the generated [Reference](./Reference.md#commands).
 
 ## A team coordinator on its own box
 
 Start the coordinator with `--team` as soon as anyone besides you will hold a role, a token or a certificate. The switch is permanent and audited; starting the same data directory without the flag later does not make it personal again.
 
-<!-- proven-by: TestServeModeFlagAndStart -->
+Replace `<webhook-secret>` with a long random webhook secret. Startup refuses an empty secret unless `GITHUB_WEBHOOK_SECRET` supplies one.
+
+<!-- proven-by: TestServeStartsUserAPIAndLocalSocket -->
 ```text
-nself ci serve --team
+nself ci serve --team --secret <webhook-secret>
 ```
 
 Pick the box with care:
@@ -43,15 +45,15 @@ A member's commands go to the team coordinator when they name it with `--coordin
 
 <!-- proven-by: TestNodesRemoteMemberReadsButCannotRevoke -->
 ```text
-nself ci nodes list --coordinator https://ci.example:3865 --json
+nself ci nodes list --coordinator https://ci.example.com:3865 --json
 ```
 
 <!-- proven-by: TestDetach -->
 ```text
-nself ci --detach --json --coordinator https://ci.example:3865
+nself ci --detach --json --coordinator https://ci.example.com:3865
 ```
 
-Without the flag, commands stay on the member's own machine, even when a coordinator is configured. Adding and pairing nodes happen on the coordinator box only.
+Omitting `--coordinator` does not force a bare run to stay local. Its destination resolves in this order: the flag, `NSELF_CI_COORDINATOR`, `ci.coordinator` in user configuration, a live local `ci serve`, then the in-process engine. Check the environment and user configuration before starting personal work. Adding and pairing nodes happen on the coordinator box only.
 
 ## Personal nodes stay personal
 
@@ -68,9 +70,9 @@ The pool rules are in [Auto Placement and Pools](./Auto-Placement-and-Pools.md#p
 
 The coordinator holds the organization's GitHub credentials, not each member. Write the dispatch workflow into each repository with `providers github init`.
 
-<!-- proven-by: TestGithubInitStdout -->
+<!-- proven-by: TestGithubInitWrite -->
 ```text
-nself ci providers github init --stdout --agent-source source
+nself ci providers github init --agent-source source
 ```
 
 Scopes and which token does what are in [credentials and scopes](./Hosted-Providers.md#credentials-and-scopes).
@@ -108,6 +110,8 @@ If the branch pins the required check to a GitHub App, the watcher posts the adv
 | Step | Test |
 |---|---|
 | Team mode flag, permanent switch | `TestServeModeFlagAndStart` |
+| Webhook secret required unless explicitly insecure | `TestCheckSecretKeepsTheV14Refusal` |
+| Daemon starts its user API and local socket | `TestServeStartsUserAPIAndLocalSocket` |
 | Coordinator mode rules | `TestCoordinatorMode` |
 | Grant, list and revoke roles | `TestServeAdminRolesGrantListRevoke` |
 | Issue a token once | `TestServeAdminTokenIssueOnce` |
@@ -115,9 +119,10 @@ If the branch pins the required check to a GitHub App, the watcher posts the adv
 | Member reads, cannot change nodes | `TestNodesRemoteMemberReadsButCannotRevoke` |
 | Add and pair stay on the coordinator box | `TestNodesRemoteAddAndPairAreLocalOnly` |
 | Detached run sent to a coordinator | `TestDetach` |
+| Bare run destination precedence | `TestCoordinatorClientTargetOrder` |
 | Personal pool excluded from team work | `TestScopePersonalVsTeamPool` |
 | Commit of record stays on the record pool | `TestRecordPoolTransportExclusion` |
-| Dispatch workflow rendering | `TestGithubInitStdout` |
+| Dispatch workflow written to the repository | `TestGithubInitWrite` |
 | Hosted result decisions | `TestHostedDecisionMatrix` |
 | Hosted capacity is never metered | `TestEconomicsGitHubHostedIsNeverMetered` |
 | Required check dry run | `TestPolicyProtectDryRunChangesNothing` |
