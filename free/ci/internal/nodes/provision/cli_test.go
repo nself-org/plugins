@@ -54,7 +54,7 @@ func TestProvision_RefusalsInCoreOrder(t *testing.T) {
 	}{
 		{"no url", nil, nil, "--github-url is required (the repo or org runners register against)"},
 		{"no url wins over no token", nil, []string{"--host", "a", "--host", "b"}, "--github-url is required"},
-		{"no token", nil, []string{"--github-url", "https://x"}, "a runner registration token is required: pass --token or set GITHUB_RUNNER_TOKEN"},
+		{"no token", nil, []string{"--github-url", "https://x"}, "a runner registration token is required: set GITHUB_RUNNER_TOKEN"},
 		{"two hosts", nil, []string{"--github-url", "u", "--token", "t", "--host", "a", "--host", "b"}, "provision takes at most one --host per invocation; run it once per host"},
 		{"two hosts csv", nil, []string{"--github-url", "u", "--token", "t", "--host", "a,b"}, "provision takes at most one --host"},
 		{"json", nil, []string{"--json"}, "does not support --json"},
@@ -63,7 +63,7 @@ func TestProvision_RefusalsInCoreOrder(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := &harness{env: tc.env, fakes: []*fakeExecutor{okFake()}}
 			code, out, errs := h.run(RunProvision, tc.args...)
-			if code != 1 || out != "" || !strings.HasPrefix(errs, "Error: ") || !strings.Contains(errs, tc.want) {
+			if code != 1 || out != "" || !strings.Contains(errs, "Error: ") || !strings.Contains(errs, tc.want) {
 				t.Fatalf("code=%d out=%q err=%q, want exit 1, empty stdout, Error: ...%s", code, out, errs, tc.want)
 			}
 			if len(h.built) != 0 || len(h.fakes[0].commands) != 0 {
@@ -112,7 +112,7 @@ func TestProvision_FailureStopsAndExitsOne(t *testing.T) {
 	if code != 1 || !strings.Contains(out, "  [install-packages] apt said no\n") || strings.Contains(out, "Provision complete.") {
 		t.Fatalf("code=%d out=%q", code, out)
 	}
-	if errs != "Error: runner provision: step \"install-packages\": exit 100\n" {
+	if !strings.HasSuffix(errs, "Error: runner provision: step \"install-packages\": exit 100\n") {
 		t.Fatalf("err = %q", errs)
 	}
 	if strings.Contains(strings.Join(f.commands, "\n"), "config.sh") {
@@ -208,5 +208,28 @@ func TestHelp_PrintedAndNoHostTouched(t *testing.T) {
 				t.Fatalf("%s %s: code=%d out=%q err=%q", tc.name, flag, code, out, errs)
 			}
 		}
+	}
+}
+
+func TestProvision_TokenFlagDeprecationWarning(t *testing.T) {
+	h := &harness{fakes: []*fakeExecutor{okFake()}}
+	code, _, errs := h.run(RunProvision, "--github-url", "https://github.com/o/r", "--token", "FAKE-TOK-D-0512", "--host", "ci@h1")
+	if code != 0 {
+		t.Fatalf("exit %d; stderr=%q", code, errs)
+	}
+	want := "warning: --token is deprecated and exposes the registration token in process listings and shell history; set GITHUB_RUNNER_TOKEN instead"
+	if !strings.Contains(errs, want) {
+		t.Fatalf("stderr lacks deprecation warning: %q", errs)
+	}
+}
+
+func TestProvision_NoTokenWarningWhenEnvUsed(t *testing.T) {
+	h := &harness{env: map[string]string{"GITHUB_RUNNER_TOKEN": "FAKE-ENV-D-0512"}, fakes: []*fakeExecutor{okFake()}}
+	code, _, errs := h.run(RunProvision, "--github-url", "https://github.com/o/r", "--host", "ci@h1")
+	if code != 0 {
+		t.Fatalf("exit %d; stderr=%q", code, errs)
+	}
+	if strings.Contains(errs, "--token is deprecated") {
+		t.Fatalf("deprecation warning printed when env var used: %q", errs)
 	}
 }

@@ -23,7 +23,7 @@ Flags:
       --instances int         Number of runner instances to install on this host (default 1)
       --labels strings        Extra labels appended after self-hosted,Linux,X64
       --ssh-key string        SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)
-      --token string          GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged.
+      --token string          DEPRECATED: exposes the token in process listings; set GITHUB_RUNNER_TOKEN instead.
 
 Global Flags:
       --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)

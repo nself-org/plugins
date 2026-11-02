@@ -120,6 +120,9 @@ func RunProvision(args []string, d Deps) int {
 		return finish(d, err)
 	}
 	tok := token.str
+	if token.changed {
+		fmt.Fprintln(d.Err, "warning: --token is deprecated and exposes the registration token in process listings and shell history; set GITHUB_RUNNER_TOKEN instead")
+	}
 	if tok == "" {
 		tok = d.Getenv("GITHUB_RUNNER_TOKEN")
 	}
@@ -127,7 +130,7 @@ func RunProvision(args []string, d Deps) int {
 		return fail(usageError{"--github-url is required (the repo or org runners register against)"})
 	}
 	if tok == "" {
-		return fail(usageError{"a runner registration token is required: pass --token or set GITHUB_RUNNER_TOKEN"})
+		return fail(usageError{"a runner registration token is required: set GITHUB_RUNNER_TOKEN"})
 	}
 	if len(host.list) > 1 {
 		return fail(usageError{"provision takes at most one --host per invocation; run it once per host"})
