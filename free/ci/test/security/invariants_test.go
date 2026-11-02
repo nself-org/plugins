@@ -104,7 +104,8 @@ func checkDispatcherInvariant(t *testing.T, kind string) {
 		jq.Key = id
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		a, serr := d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: jq, Revision: "rev"})
+		// Revision is the head queueAttempt stored: admission refuses a lease revision that differs from it (D-1360).
+		a, serr := d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: jq, Revision: baseRev})
 		if serr != nil || a.RunnerID != res.Placements[0].RunnerID {
 			return fmt.Errorf("a placed case was not admitted on its runner: %+v err=%v", a, serr)
 		}
