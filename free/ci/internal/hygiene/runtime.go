@@ -84,13 +84,28 @@ func (r *ExecRuntime) binaries() []string {
 	return []string{"docker", "podman"}
 }
 
+// cachedProbe returns a runtime's state only while its probe window is fresh.
+func (r *ExecRuntime) cachedProbe(bin string) (runtimeState, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cached, hit := r.usable[bin]
+	return cached.state, hit && time.Since(cached.at) < probeTTL
+}
+
+// recordProbe starts a probe window after a listing or info establishes the runtime's state.
+func (r *ExecRuntime) recordProbe(bin string, state runtimeState) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.usable == nil {
+		r.usable = map[string]probeResult{}
+	}
+	r.usable[bin] = probeResult{state: state, at: time.Now()}
+}
+
 // available reports whether the binary is installed and its daemon answers `info`.
 func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, error) {
-	r.mu.Lock()
-	cached, hit := r.usable[bin]
-	r.mu.Unlock()
-	if hit && time.Since(cached.at) < probeTTL {
-		return cached.state, nil
+	if state, hit := r.cachedProbe(bin); hit {
+		return state, nil
 	}
 	_, err := exec.RuntimeQuery(ctx, bin, "info")
 	state := runtimeUp
@@ -103,13 +118,38 @@ func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, 
 	default:
 		state = runtimeDown
 	}
-	r.mu.Lock()
-	if r.usable == nil {
-		r.usable = map[string]probeResult{}
-	}
-	r.usable[bin] = probeResult{state: state, at: time.Now()}
-	r.mu.Unlock()
+	r.recordProbe(bin, state)
 	return state, nil
+}
+
+// listBinary uses a fresh probe or lets the listing establish availability before asking info.
+func (r *ExecRuntime) listBinary(ctx context.Context, bin string, kind exec.ResourceKind, attempt string) ([]exec.Labelled, runtimeState, error) {
+	state, hit := r.cachedProbe(bin)
+	if hit && state != runtimeUp {
+		return nil, state, nil
+	}
+	found, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
+	if err == nil {
+		if !hit {
+			r.recordProbe(bin, runtimeUp)
+		}
+		return found, runtimeUp, nil
+	}
+	if ctx.Err() != nil {
+		return nil, runtimeDown, ctx.Err()
+	}
+	if exec.IsRuntimeMissing(err) {
+		r.recordProbe(bin, runtimeAbsent)
+		return nil, runtimeAbsent, nil
+	}
+	if !hit {
+		var probeErr error
+		state, probeErr = r.available(ctx, bin)
+		if probeErr != nil || state != runtimeUp {
+			return nil, state, probeErr
+		}
+	}
+	return nil, runtimeUp, err
 }
 
 // List returns the labelled resources of every usable runtime; an installed runtime that does not
@@ -119,7 +159,7 @@ func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt 
 	var down []string
 	present := 0
 	for _, bin := range r.binaries() {
-		state, err := r.available(ctx, bin)
+		found, state, err := r.listBinary(ctx, bin, kind, attempt)
 		if err != nil {
 			return nil, err
 		}
@@ -131,10 +171,6 @@ func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt 
 			continue
 		}
 		present++
-		found, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
-		if err != nil {
-			return nil, err
-		}
 		for _, f := range found {
 			f.ID = bin + ":" + f.ID
 			out = append(out, f)
