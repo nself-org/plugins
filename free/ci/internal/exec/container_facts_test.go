@@ -30,8 +30,8 @@ func TestExit137IsVerifiedAgainstTheRuntime(t *testing.T) {
 		"oom":           {[]string{"create", "start", "oom", "die"}, "resource_limit"},
 		"operatorkill":  {[]string{"create", "start", "kill", "die"}, ""},
 		"oomthenkill":   {[]string{"create", "start", "oom", "kill", "die"}, "resource_limit"},
-		"nokillrecord":  {[]string{"create", "start", "die"}, "resource_limit"}, // the oom event can be lost under --rm
-		"runtimesilent": {nil, "resource_limit"},                                // no answer proves nothing: the exit code is read as before
+		"nokillrecord":  {[]string{"create", "start", "die"}, ""}, // the exit code alone is no host evidence
+		"runtimesilent": {nil, ""},                                // no answer proves nothing, so no limit is claimed
 	} {
 		t.Run(name, func(t *testing.T) {
 			fakeRuntime(t, "", "137")
@@ -68,23 +68,77 @@ func TestResourceReasonWithFacts(t *testing.T) {
 	ctx := context.Background()
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
+	none := pidsReading{Path: "/c", Limit: "512", Reads: 9}
+	refused := pidsReading{Max: 3, Path: "/c", Limit: "512", Reads: 9}
+	memFull := pidsReading{MemMax: 4, Path: "/c", Limit: "512", Reads: 9}
+	oomKill := pidsReading{MemMax: 4, OOMKill: 1, Path: "/c", Limit: "512", Reads: 9}
+	ran := containerFacts{known: true, started: true}
+	opKill := containerFacts{known: true, started: true, killed: true}
 	for name, tc := range map[string]struct {
 		ctx    context.Context
 		code   int
 		tail   string
 		facts  containerFacts
+		cg     pidsReading
 		reason string
 	}{
-		"137 oom":               {ctx, 137, "", containerFacts{known: true, started: true, oomed: true}, "resource_limit"},
-		"137 unknown":           {ctx, 137, "", containerFacts{}, "resource_limit"},
-		"137 cancelled":         {cancelled, 137, "", containerFacts{known: true, oomed: true}, ""},
-		"fork refused, no oom":  {ctx, 2, "sh: can't fork", containerFacts{known: true, started: true}, "resource_limit"},
-		"137 no oom, fork tail": {ctx, 137, "Cannot fork", containerFacts{known: true, started: true, killed: true}, "resource_limit"},
-		"clean exit":            {ctx, 0, "", containerFacts{known: true, oomed: true}, ""},
+		"137 oom event":                           {ctx, 137, "", containerFacts{known: true, started: true, oomed: true}, none, "resource_limit"},
+		"137 nothing known":                       {ctx, 137, "", containerFacts{}, pidsReading{Problem: "container not seen"}, ""},
+		"137 cgroup read, no counter":             {ctx, 137, "", ran, none, ""},
+		"137 memory limit counter":                {ctx, 137, "", ran, memFull, "resource_limit"},
+		"137 pids limit counter":                  {ctx, 137, "", ran, refused, "resource_limit"},
+		"137 operator kill, memory counter":       {ctx, 137, "", opKill, memFull, ""},
+		"137 operator kill, oom_kill":             {ctx, 137, "", opKill, oomKill, "resource_limit"},
+		"137 cancelled":                           {cancelled, 137, "", containerFacts{known: true, oomed: true}, oomKill, ""},
+		"job prints can't fork, no host evidence": {ctx, 2, "sh: can't fork", ran, none, ""},
+		"job prints can't fork, no cgroup read":   {ctx, 2, "sh: can't fork", ran, pidsReading{Problem: "container not seen"}, ""},
+		"job prints can't fork, memory only":      {ctx, 2, "sh: can't fork", ran, memFull, ""},
+		"refused fork with pids counter":          {ctx, 2, "sh: can't fork", ran, refused, "resource_limit"},
+		"pids counter, ordinary failure output":   {ctx, 1, "FAIL: TestX", ran, refused, ""},
+		"137 operator kill, fork tail":            {ctx, 137, "Cannot fork", opKill, refused, "resource_limit"},
+		"clean exit":                              {ctx, 0, "", containerFacts{known: true, oomed: true}, oomKill, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if got := resourceReason(tc.ctx, tc.code, tc.tail, tc.facts); got != tc.reason {
+			if got := resourceReason(tc.ctx, tc.code, tc.tail, tc.facts, tc.cg); got != tc.reason {
 				t.Fatalf("reason %q want %q", got, tc.reason)
+			}
+		})
+	}
+}
+
+// The executor reads the container cgroup itself: a refused fork is a limit only when the host's
+// pids.events counter rose, whatever the job printed (D-1580).
+func TestPlannedForkRefusalNeedsTheHostCounter(t *testing.T) {
+	for name, tc := range map[string]struct {
+		id, events string
+		reason     string
+	}{
+		"host counter rose":   {"rose", "max 7\n", "resource_limit"},
+		"job forged the line": {"forged", "max 0\n", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, proc := t.TempDir(), t.TempDir()
+			oldRoot, oldProc := cgroupRoot, procRoot
+			cgroupRoot, procRoot = root, proc
+			t.Cleanup(func() { cgroupRoot, procRoot = oldRoot, oldProc })
+			scope := filepath.Join(root, "system.slice", "docker-abc.scope")
+			if err := os.MkdirAll(scope, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for file, body := range map[string]string{"pids.max": "512\n", "pids.events": tc.events, "memory.events": "max 0\noom_kill 0\n"} {
+				if err := os.WriteFile(filepath.Join(scope, file), []byte(body), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			fakeRuntime(t, "sh: can't fork\n", "2")
+			for file, body := range map[string]string{"inspect": "abc 4242\n", "delay": "0.5"} {
+				if err := os.WriteFile(filepath.Join(fakeRuntimeDir, file), []byte(body), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-fork-"+tc.id, hardPlanner{}))
+			if res.Reason != tc.reason {
+				t.Fatalf("reason %q want %q (%+v)", res.Reason, tc.reason, res)
 			}
 		})
 	}

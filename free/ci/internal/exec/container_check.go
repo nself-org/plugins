@@ -34,7 +34,8 @@ const minJobUID = 65532
 
 var (
 	runtimeBinary = regexp.MustCompile(`^(docker|podman)$`)
-	// resourceSignatures are what a job prints when the kernel refuses a fork.
+	// resourceSignatures are what a job prints when the kernel refuses a fork. The job can print them at will,
+	// so they count only beside the cgroup's pids.events evidence (resourceReason).
 	resourceSignatures = []string{"Resource temporarily unavailable", "can't fork", "Cannot fork", "pthread_create failed"}
 	jobUser            = regexp.MustCompile(`^([1-9][0-9]*):([1-9][0-9]*)$`)
 	attemptNetwork     = regexp.MustCompile(`^nself-ci-[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)

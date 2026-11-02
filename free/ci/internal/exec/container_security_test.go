@@ -15,7 +15,7 @@ import (
 func fakeDocker(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\n"+body), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\ncase \"$1\" in inspect) exit 0;; esac\n"+body), 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
