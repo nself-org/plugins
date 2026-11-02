@@ -17,6 +17,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 	"os"
 	"regexp"
 	"sort"
@@ -185,7 +186,7 @@ func planRevision(ctx context.Context, root, base string) plan.Revision {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			answers[i].out, answers[i].ok = git(q...)
+			answers[i].out, answers[i].ok = planQuery(ctx, root, q, git)
 		}()
 	}
 	wg.Wait()
@@ -258,4 +259,15 @@ func planRun(ctx context.Context, argv ...string) (string, bool) {
 		Output:  func(b []byte) { buf.Write(b) },
 	})
 	return buf.String(), res.Err == nil && res.ExitCode == 0
+}
+
+// planQuery runs one of the revision probes: the ref existence checks go to the run's batch session when
+// it has one (their answer is only whether the ref resolves), the rest to git.
+func planQuery(ctx context.Context, root string, q []string, git func(...string) (string, bool)) (string, bool) {
+	if len(q) == 4 && q[0] == "rev-parse" && q[1] == "--verify" && q[2] == "--quiet" {
+		if oid, ok, used := gitbatch.RevParse(ctx, root, q[3]); used {
+			return oid, ok
+		}
+	}
+	return git(q...)
 }

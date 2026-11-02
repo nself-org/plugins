@@ -129,7 +129,7 @@ func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	ref := "refs/remotes/origin/" + b.Name
 	// The scrub keeps a credential prompt from blocking the run; the Capture timeout bounds the rest.
 	_, fetched := g.raw(ctx, "fetch", "--no-tags", "--no-recurse-submodules", "origin", "+refs/heads/"+b.Name+":"+ref)
-	out, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	out, ok := g.verifyCommit(ctx, ref+"^{commit}")
 	tip := lastLine(out)
 	if !ok || !fullSHA.MatchString(tip) {
 		b.Fetch, b.Fetched = FetchNone, fetched // fetched but unreadable is told apart from never fetched
@@ -150,7 +150,7 @@ func policyAt(ctx context.Context, run Runner, root, sha string) (map[string]jso
 	}
 	g := gitRunner{run: run, root: root}
 	// Paths are relative to root, which may be a subdirectory of the repository.
-	listed, ok := g.git(ctx, "ls-tree", sha, "--", config.FileName)
+	listed, ok := g.lsTree(ctx, sha, config.FileName)
 	if !ok {
 		return nil, refuse("cannot list %s at %s", config.FileName, sha[:12])
 	}
@@ -163,7 +163,7 @@ func policyAt(ctx context.Context, run Runner, root, sha string) (map[string]jso
 	if !strings.HasPrefix(listed, "100644 blob ") && !strings.HasPrefix(listed, "100755 blob ") {
 		return nil, refuse("%s at %s is not a regular file", config.FileName, sha[:12])
 	}
-	out, ok := g.raw(ctx, "show", "--no-textconv", sha+":./"+config.FileName)
+	out, ok := g.showBlob(ctx, sha, config.FileName, listed)
 	if !ok {
 		return nil, refuse("cannot read %s at %s", config.FileName, sha[:12])
 	}

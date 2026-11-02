@@ -10,6 +10,7 @@ package evidence
 import (
 	"context"
 	"fmt"
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 	"io"
 	"io/fs"
 	"path"
@@ -65,6 +66,9 @@ func GitVersion(ctx context.Context, c Capture, root string) string {
 
 // CommitExists reports whether rev names a commit object in the repository.
 func CommitExists(ctx context.Context, c Capture, root, rev string) bool {
+	if typ, ok, used := gitbatch.ObjectType(ctx, root, rev); used {
+		return ok && typ == "commit"
+	}
 	out, ok := git(ctx, c, root, "cat-file", "-t", rev) // a tag object or a tree id is not a commit
 	return ok && strings.TrimSpace(out) == "commit"
 }
@@ -142,6 +146,12 @@ func (t *treeFS) Open(name string) (fs.File, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.ctx), 60*time.Second)
 	defer cancel()
+	if data, ok, used := gitbatch.ReadBlob(ctx, t.root, b.oid); used {
+		if !ok || int64(len(data)) != b.size {
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fmt.Errorf("git blob %s unreadable", short(b.oid))}
+		}
+		return &memFile{name: name, r: strings.NewReader(string(data)), size: b.size}, nil
+	}
 	out, ok := git(ctx, t.c, t.root, "cat-file", "blob", b.oid)
 	if !ok || int64(len(out)) != b.size {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fmt.Errorf("git blob %s unreadable", short(b.oid))}

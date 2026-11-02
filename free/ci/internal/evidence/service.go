@@ -15,6 +15,7 @@ package evidence
 
 import (
 	"context"
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 	"io"
 	"os"
 	"path/filepath"
@@ -198,6 +199,9 @@ func VerifyFile(ctx context.Context, env Env, doc []byte, atRev string) (Verdict
 	want := atRev
 	if want == "" {
 		out, ok := git(ctx, env.Git, env.Root, "rev-parse", "HEAD")
+		if oid, found, used := gitbatch.RevParse(ctx, env.Root, "HEAD"); used {
+			out, ok = oid, found
+		}
 		want = strings.TrimSpace(out)
 		if !ok || env.Root == "" {
 			return Verdict{}, fail(CodeUsage, ExitFails, "not inside a repository: pass --at-revision <sha>")

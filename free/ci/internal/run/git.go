@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 )
 
 // Capture runs a process and returns merged output and its exit code.
@@ -23,6 +25,14 @@ type Revision struct {
 }
 
 var fullSHA = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+
+// headSHA is `rev-parse HEAD`: the batch session answers it when the run has one (D-1008), else git.
+func headSHA(ctx context.Context, root string, git func(...string) (string, bool)) (string, bool) {
+	if oid, ok, used := gitbatch.RevParse(ctx, root, "HEAD"); used {
+		return oid, ok
+	}
+	return git("rev-parse", "HEAD")
+}
 
 // GitRevision reads HEAD and the worktree state of root. The two questions are
 // independent, so they run side by side: each is a funnel spawn on the start
@@ -42,7 +52,7 @@ func GitRevision(ctx context.Context, root string, capture Capture) Revision {
 		defer wg.Done()
 		status, statusOK = git("status", "--porcelain", "--untracked-files=normal")
 	}()
-	sha, ok := git("rev-parse", "HEAD")
+	sha, ok := headSHA(ctx, root, git)
 	wg.Wait()
 	if !ok || !fullSHA.MatchString(sha) {
 		return rev

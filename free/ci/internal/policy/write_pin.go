@@ -39,7 +39,7 @@ func (w *Writer) pin(ctx context.Context, actor roles.Actor, c Change, t target)
 			return Result{}, refuse("no fetched origin default branch to pin against")
 		}
 		g := gitRunner{run: w.Run, root: c.Root}
-		if out, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", c.SHA+"^{commit}"); !ok || lastLine(out) != c.SHA {
+		if out, ok := g.verifyCommit(ctx, c.SHA+"^{commit}"); !ok || lastLine(out) != c.SHA {
 			return Result{}, refuse("%s is not a commit id", c.SHA)
 		}
 		if c.SHA != b.Tip && !reachable(ctx, w.Run, c.Root, c.SHA, b.Tip) {

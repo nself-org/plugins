@@ -18,7 +18,23 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 )
+
+// headEntry is `ls-tree HEAD -- rel` as its three fields (mode, type, id); none when HEAD has no such
+// path. The batch session answers when the run has one, else git.
+func headEntry(ctx context.Context, root, rel string, git func(...string) (string, bool)) ([]string, bool) {
+	if e, found, ok, used := gitbatch.LsTree(ctx, root, "HEAD", rel); used {
+		if !ok || !found {
+			return nil, ok
+		}
+		return []string{e.Mode, e.Type, e.OID}, true
+	}
+	tree, ok := git("ls-tree", "HEAD", "--", rel)
+	meta, _, _ := strings.Cut(tree, "\t")
+	return strings.Fields(meta), ok
+}
 
 // ConfigOutsideTree reports whether the config at path is not the regular file
 // rel of commit HEAD in root, byte for byte.
@@ -43,9 +59,7 @@ func ConfigOutsideTree(ctx context.Context, root, path, rel string, capture Capt
 		out, exit, err := capture(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
 		return strings.TrimSpace(out), err == nil && exit == 0
 	}
-	tree, ok := git("ls-tree", "HEAD", "--", rel)
-	meta, _, _ := strings.Cut(tree, "\t")
-	fields := strings.Fields(meta)
+	fields, ok := headEntry(ctx, root, rel, git)
 	if !ok || len(fields) != 3 || (fields[0] != "100644" && fields[0] != "100755") || fields[1] != "blob" {
 		return true
 	}

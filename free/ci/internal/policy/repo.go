@@ -70,7 +70,7 @@ func inRepository(dir string) bool {
 // tree (a symlink there reads as "no policy" to ls-tree).
 func (g gitRunner) configDirIsPlain(ctx context.Context, sha string) error {
 	dir := filepath.Dir(config.FileName)
-	out, ok := g.git(ctx, "ls-tree", sha, "--", dir)
+	out, ok := g.lsTree(ctx, sha, dir)
 	if !ok {
 		return refuse("cannot list %s at %s", dir, sha[:12])
 	}

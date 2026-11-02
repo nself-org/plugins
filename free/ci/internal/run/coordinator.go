@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 	"io"
 	"os"
 	"path/filepath"
@@ -175,6 +176,11 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	}
 	if err = requireRunnable(c.Plan, keep); err != nil {
 		return Result{}, err
+	}
+	if c.Capture == nil && !gitbatch.Has(ctx) { // the default funnel only: a custom Capture answers its own reads
+		set := gitbatch.NewSet(ctx, gitbatch.Options{})
+		defer set.Close()
+		ctx = gitbatch.WithSet(ctx, set)
 	}
 	ciexec.WarmRuntimeInfo() // the first job's orphan sweep asks the daemon: let the answer arrive while git and policy run
 	rev := GitRevision(ctx, c.Opts.Root, c.capture())

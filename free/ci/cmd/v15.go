@@ -15,6 +15,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/nself-org/plugins/free/ci/internal/gitbatch"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -266,6 +267,9 @@ func runBare(args []string) int {
 		}
 		return code
 	}
+	set := gitbatch.NewSet(ctx, gitbatch.Options{}) // one git cat-file per repository for the start-of-run object reads
+	defer set.Close()
+	ctx = gitbatch.WithSet(ctx, set)
 	outside := make(chan bool, 1) // two git reads, independent of the plan: they run beside it (P7-CI-46)
 	go func() { outside <- configOutside(ctx, o.Root) }()
 	p, digest, subst, err := preparePlan(ctx, o)
