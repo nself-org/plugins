@@ -295,3 +295,139 @@ func TestGateHelperExitsWithoutRunningOnEOF(t *testing.T) {
 		t.Fatal("the payload ran without a go-ahead")
 	}
 }
+
+// An environment entry with a NUL byte is refused by a direct start; the gated start refuses it the same way
+// (it must not run the payload with the entry silently missing).
+func TestGatedStartRejectsNULInTheEnvironment(t *testing.T) {
+	ran := filepath.Join(t.TempDir(), "ran")
+	var errs [2]error
+	for i, gated := range []bool{false, true} {
+		_, res := probeJob(t, gated, []string{"PATH=" + os.Getenv("PATH"), "BAD=a\x00b", "OK=1"}, "", "/bin/sh", "-c", "echo x > "+ran)
+		errs[i] = res.Err
+	}
+	if errs[0] == nil || errs[1] == nil || errs[0].Error() != errs[1].Error() {
+		t.Fatalf("direct err=%v, gated err=%v", errs[0], errs[1])
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("the payload ran with a NUL in its environment")
+	}
+}
+
+// The payload holds neither the go-ahead pipe (fd 3) nor the environment pipe (fd 4).
+func TestGatedPayloadHasNoGateDescriptors(t *testing.T) {
+	script := `for fd in 3 4; do if (: <&$fd) 2>/dev/null; then echo open$fd; else echo closed$fd; fi; done`
+	out, res := probeJob(t, true, []string{"PATH=" + os.Getenv("PATH")}, "1h", "/bin/sh", "-c", script)
+	if res.Err != nil || res.ExitCode != 0 {
+		t.Fatalf("%+v", res)
+	}
+	if strings.Fields(out)[0] != "closed3" || strings.Fields(out)[1] != "closed4" {
+		t.Fatalf("the payload inherited a gate descriptor: %q", out)
+	}
+}
+
+// runHelper starts the gate helper by hand with the given environment bytes and go-ahead bytes, closes both
+// writers, and returns whether the payload ran and the helper's exit error.
+func runHelper(t *testing.T, envBytes, goAhead string) (bool, error) {
+	t.Helper()
+	ran := filepath.Join(t.TempDir(), "ran")
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	er, ew, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := osexec.Command(selfExe(t), GateArg, "0", "0", "/bin/sh", "sh", "-c", "echo x > "+ran)
+	cmd.ExtraFiles = []*os.File{r, er}
+	if err = cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Close()
+	_ = er.Close()
+	_, _ = ew.WriteString(envBytes)
+	_ = ew.Close()
+	_, _ = w.WriteString(goAhead)
+	_ = w.Close()
+	err = cmd.Wait()
+	_, statErr := os.Stat(ran)
+	return statErr == nil, err
+}
+
+// A truncated environment transfer never runs the payload, whether or not a go-ahead follows.
+func TestGateHelperRefusesATruncatedEnvironment(t *testing.T) {
+	for name, tc := range map[string]struct{ env, goAhead string }{
+		"cut mid-entry, go-ahead sent": {"A=1\x00B=2", "g\n"},
+		"cut mid-entry, no go-ahead":   {"A=1\x00B=2", ""},
+		"no go-ahead":                  {"A=1\x00", ""},
+		"partial go-ahead":             {"A=1\x00", "g"},
+	} {
+		ran, err := runHelper(t, tc.env, tc.goAhead)
+		var ee *osexec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() != 125 || ran {
+			t.Errorf("%s: err=%v ran=%v, want exit 125 and no run", name, err, ran)
+		}
+	}
+	// And the control: a whole transfer with a go-ahead runs.
+	if ran, err := runHelper(t, "A=1\x00", "g\n"); err != nil || !ran {
+		t.Errorf("control: err=%v ran=%v", err, ran)
+	}
+}
+
+// The helper dying while a large environment is still being written fails the write instead of hanging the
+// agent: release reports the error and no go-ahead is sent.
+func TestGateWriterSurvivesAHelperThatDiesMidTransfer(t *testing.T) {
+	g := &startGate{blob: []byte(strings.Repeat("BIG=vvvvvvvvvvvvvvvvvvvv\x00", 400000)), sent: make(chan error, 1)}
+	var err error
+	if g.r, g.w, err = os.Pipe(); err != nil {
+		t.Fatal(err)
+	}
+	if g.er, g.ew, err = os.Pipe(); err != nil {
+		t.Fatal(err)
+	}
+	g.begin() // blocks on the full pipe: nobody reads
+	time.Sleep(50 * time.Millisecond)
+	_ = g.er.Close() // the helper is gone
+	_ = g.r.Close()
+	done := make(chan error, 1)
+	go func() { done <- g.release() }()
+	select {
+	case err = <-done:
+		if err == nil {
+			t.Fatal("release succeeded although the environment was never delivered")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent hung on a dead helper")
+	}
+}
+
+// End to end: the helper is killed after it started and before the marker, with an environment larger than a
+// pipe buffer. Run returns, with an error, and the payload never ran.
+func TestGatedJobWithAHelperKilledDuringALargeEnvironment(t *testing.T) {
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	for i := 0; i < 150; i++ {
+		env = append(env, "BIG"+strconv.Itoa(i)+"="+strings.Repeat("v", 4000))
+	}
+	BeforeMarkerHook = func(pid int) {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		time.Sleep(100 * time.Millisecond)
+	}
+	defer func() { BeforeMarkerHook = nil }()
+	ran := filepath.Join(t.TempDir(), "ran")
+	done := make(chan AttemptResult, 1)
+	go func() {
+		_, res := probeJob(t, true, env, "1h", "/bin/sh", "-c", "echo x > "+ran)
+		done <- res
+	}()
+	select {
+	case res := <-done:
+		if res.Err == nil && res.ExitCode == 0 {
+			t.Fatalf("a job whose helper was killed succeeded: %+v", res)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the agent hung on a killed helper")
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("the payload ran although its helper was killed")
+	}
+}

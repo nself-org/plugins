@@ -15,12 +15,12 @@ package exec
 // environment, and the helper itself runs with a fixed environment of its own.
 
 import (
+	"errors"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // BeforeMarkerHook is a test seam: when set it runs in the agent after the job
@@ -44,11 +44,16 @@ func newStartGate(s JobSpec, workdir string, env []string) (*startGate, []string
 	if err != nil || !ok {
 		return nil, argv, err
 	}
+	// Validate the environment as a direct start does before building it: os/exec refuses an entry with a NUL
+	// byte (its Environ drops such entries without a word, so the check must come first), and the gated job
+	// must fail with that same error, not run with variables missing.
+	for _, e := range env {
+		if strings.IndexByte(e, 0) >= 0 {
+			return nil, nil, errors.New("exec: environment variable contains NUL")
+		}
+	}
 	var blob []byte
 	for _, e := range (&osexec.Cmd{Dir: workdir, Env: env}).Environ() {
-		if strings.IndexByte(e, 0) >= 0 {
-			return nil, nil, &os.PathError{Op: "fork/exec", Path: argv[0], Err: syscall.EINVAL}
-		}
 		blob = append(append(blob, e...), 0)
 	}
 	g := &startGate{blob: blob, sent: make(chan error, 1)}
