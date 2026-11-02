@@ -52,6 +52,10 @@ type Host struct {
 	// the executor's `<job row>.a<N>` names only. The agent, whose Base holds nothing else, may
 	// accept every safe name.
 	IsAttempt func(name string) bool
+	// Live, when set, names the attempts that are live right now. A sweep that runs beside a run reads it
+	// again immediately before it removes an attempt, so an attempt that started after the sweep took its
+	// first snapshot of liveLeases is still spared.
+	Live func() []string
 	// Jobs runs removal and kill as the job user of a separated attempt (job-shim, userns); nil means
 	// the attempt ran under the caller's UID.
 	Jobs JobRunner
