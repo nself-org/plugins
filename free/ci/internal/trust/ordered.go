@@ -4,14 +4,12 @@ package trust
 // Inputs:  two list values (old, next) and the key spec; an Effective.
 // Outputs: orderedTighter (is next a legal tightening of old) and Effective.Snapshot.
 // Constraints: pure. A list is tighter when every entry of next is in old and, unless
-// old is still the registered default, next keeps the relative order of old (a
-// subsequence). The first setting over the default may reorder, because that is the
-// operator choosing the order; every later scope can only drop entries.
+// old still comes from the registry default (SourceDefault), next keeps the relative
+// order of old (a subsequence). The first scope to set the key may reorder the bare
+// default, because that is the operator choosing the order; once any scope has set it,
+// even to a value equal to the default, every later scope can only drop entries.
 
-import (
-	"reflect"
-	"sort"
-)
+import "sort"
 
 // orderedList returns v as an ordered string list (nil when it is not one).
 func orderedList(v any) []string {
@@ -33,7 +31,8 @@ func orderedList(v any) []string {
 }
 
 // orderedTighter reports whether next may replace old for a TightenOrdered key.
-func orderedTighter(spec KeySpec, old, next any) bool {
+// fromDefault is true when no scope has set the key (provenance, not value equality).
+func orderedTighter(old, next any, fromDefault bool) bool {
 	a, b := orderedList(old), orderedList(next)
 	if a == nil || b == nil {
 		return false
@@ -41,7 +40,7 @@ func orderedTighter(spec KeySpec, old, next any) bool {
 	if !setSubset(a, b) {
 		return false
 	}
-	if spec.Default != nil && reflect.DeepEqual(a, orderedList(spec.Default)) {
+	if fromDefault {
 		return true
 	}
 	i := 0

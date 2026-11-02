@@ -108,3 +108,24 @@ func TestEmptyOrderIsAnError(t *testing.T) {
 		}
 	}
 }
+
+// TestExplicitDefaultOrderStillBindsLowerScopes: an operator who sets the order to a
+// value equal to the registered default has set it; a lower scope cannot reorder it.
+func TestExplicitDefaultOrderStillBindsLowerScopes(t *testing.T) {
+	reg := registry(t)
+	explicit := scope(trust.SourceUser, KeyOrder, `["hosted","vps","lan","local"]`)
+	for _, raw := range []string{`["local","lan","vps","hosted"]`, `["vps","hosted"]`, `["lan","vps"]`} {
+		if _, _, err := reg.Merge("", explicit, scope(trust.SourceProject, KeyOrder, raw)); err == nil || !strings.Contains(err.Error(), "E670") {
+			t.Errorf("%s over an explicit default order: want E670, got %v", raw, err)
+		}
+	}
+	eff, _, err := reg.Merge("", explicit, scope(trust.SourceProject, KeyOrder, `["vps","local"]`))
+	if err != nil || strings.Join(Order(eff), ",") != "vps,local" {
+		t.Fatalf("a subsequence is still allowed: %v %v", Order(eff), err)
+	}
+	// only the bare default may be reordered by the first scope.
+	eff, _, err = reg.Merge("", scope(trust.SourceProject, KeyOrder, `["local","lan"]`))
+	if err != nil || strings.Join(Order(eff), ",") != "local,lan" {
+		t.Fatalf("first setting over the bare default: %v %v", Order(eff), err)
+	}
+}
