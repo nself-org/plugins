@@ -152,6 +152,15 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 	}
 	add(sec)
 	add(b.compressMW())
+	add(b.varyAcceptEncodingMW())
+	if l.WebSocket {
+		for _, ln := range ls {
+			if ln.secure {
+				add(b.hstsMW())
+				break
+			}
+		}
+	}
 	if lr := l.RateLimit; lr != nil {
 		add(b.rateMW(r.ID, field+".rate_limit", lr.Zone, lr.Burst, lr.Nodelay))
 	} else if rl := r.RateLimit; rl != nil && l.Path == "/" && l.Match == "prefix" {

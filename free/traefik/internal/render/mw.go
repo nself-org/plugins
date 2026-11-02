@@ -87,6 +87,21 @@ func (b *builder) compressMW() string {
 	return b.mw("compress", map[string]any{"encodings": []string{"gzip"}, "includedContentTypes": uniq, "minResponseBodyBytes": min})
 }
 
+// varyAcceptEncodingMW adds Vary: Accept-Encoding so caches distinguish compressed and
+// uncompressed responses. nginx sets this via gzip_vary; Traefik's compress middleware does
+// not add it automatically. The middleware is shared across all compressible routes.
+func (b *builder) varyAcceptEncodingMW() string {
+	return b.mw("headers", map[string]any{"customResponseHeaders": map[string]string{"Vary": "Accept-Encoding"}})
+}
+
+// hstsMW adds Strict-Transport-Security for HTTPS websocket (upgraded) routes. Browsers ignore
+// CSP and X-Frame-Options on a 101 handshake, so HSTS is the one security header that still
+// protects the upgrade. max-age matches common practice; includeSubDomains is omitted because
+// the route model cannot express per-subdomain policy.
+func (b *builder) hstsMW() string {
+	return b.mw("headers", map[string]any{"customResponseHeaders": map[string]string{"Strict-Transport-Security": "max-age=31536000"}})
+}
+
 var stdReq = map[string]string{"Host": "$host", "X-Real-IP": "$remote_addr", "X-Forwarded-For": "$proxy_add_x_forwarded_for",
 	"X-Forwarded-Proto": "$scheme", "Upgrade": "$http_upgrade", "Connection": "$connection_upgrade"}
 
