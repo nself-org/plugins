@@ -6,8 +6,8 @@ package sim
 //          foreground run (the run.Coordinator `nself ci` builds, V15 dispatch, the real ssh driver and the node
 //          session over pipes) places a job on one of two paired LAN nodes while a paired node of another
 //          architecture, a discovered-unpaired candidate and a deploy-inventory host are registered and online.
-// Inputs:  INTEGRATION=1. No Docker. The NAT'd pull-agent leg is TestAgentPull (internal/transport/agent), whose
-//          subtests run a real agent in a Docker node that publishes no port.
+// Inputs:  INTEGRATION=1. No Docker. The NAT'd pull-agent leg is the last subtest (scenario2_nat_test.go); the Docker
+//          variant, a real agent in a node that publishes no port, is TestAgentPull (internal/transport/agent).
 // Outputs: metrics node.dispatch_ms (run start to the first job process on a node, 20 runs),
 //          node.heartbeat_cpu_pct and node.discovery_cpu_pct (see each metric's context).
 // Constraints: the candidate, the deploy host and the other-architecture node run nothing and receive no session;
@@ -208,4 +208,6 @@ func TestScenario2(t *testing.T) {
 		}
 		recordPerf("scenario2", "node.discovery_cpu_pct", "%", "process CPU during one real mDNS browse of 2 s on this host, one core = 100", []float64{cpuPct(c0, cpuTime(), time.Since(w0))})
 	})
+
+	t.Run("a NAT'd paired agent is reached through the bare run", natBareRun)
 }
