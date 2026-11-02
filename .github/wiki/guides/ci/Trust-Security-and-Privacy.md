@@ -8,7 +8,7 @@ Commands in `bash` blocks on this page are run by `bash .github/scripts/check-do
 
 **The model.** Every run has a source trust class (`owner`, `internal`, `collaborator`, `untrusted`). Every job asks for an isolation level, a network scope and secret classes. Every runner declares what it accepts and what it can prove. A job runs only where all three agree. When nothing agrees the job waits with a reason (`E678`). It is never moved to a weaker level.
 
-**Policy sources.** The effective policy is merged from the defaults, your operator rows, the protected default branch, the revision and one run's flags. Each later source can only tighten. See [Policy sources](#policy-sources-and-nself-ci-policy).
+**Policy sources.** The effective policy is merged from the defaults, your operator rows, the protected default branch, the revision and one run's flags. Later sources follow each key's tightening rule; the first setting of an ordered default may choose its order, and a run may choose its placement preset. See [Policy sources](#policy-sources-and-nself-ci-policy).
 
 **Provenance.** The class comes from facts the forge API gave or from git history, never from a payload field or `.nself/ci.yaml`. See [Source trust](#source-trust-who-made-the-code).
 
@@ -73,6 +73,8 @@ Every container gets:
 - One bind mount, the attempt workspace at `/repo`. A cache restore may add read-only binds. Read-write host mounts, runtime sockets, `/var/run`, `/run` and system directories are refused.
 - The labels `nself.ci.attempt`, `role=ci-ephemeral` and `coordinator_id`, so an orphan sweep can find them.
 - The job environment through the runtime's stdin env file. No value reaches an argv or a file on disk.
+
+The orphan sweep checks every installed container runtime until one full sweep succeeds for this CI home. After that it checks only runtimes the home has marked as used. The executor writes the runtime marker before starting a labelled job or cleanup container; if that write fails, the container does not start (`E613`). A missing full-sweep stamp or an error reading the markers keeps the sweep from skipping a runtime.
 
 ### What it does not block
 
@@ -203,6 +205,8 @@ A tool that ignores proxy variables fails under `restricted` and `internet`. Tha
 #### What a runner proves
 
 A scope is offered only where it is enforced. The probe builds the same network and sidecar a job gets, then runs one container on it that tries to connect to the host's own addresses (on a port where the probe listens), to `169.254.169.254` and to a raw public address. If any connection succeeds, or the listener sees one, `restricted` and `internet` are withheld. The result is the capability fact `network.enforced_scopes`; the scheduler derives `NoLANRoute` from it, so a runner cannot declare it. Where the network or the sidecar cannot be created the scope is unavailable (`E679`), never approximated. The sidecar runs the host's own binary in a Linux container, so `restricted` and `internet` are Linux-host features (Docker or Podman, rootless included); on macOS they report unavailable.
+
+For a run, the local proof starts in the background only when the class used for admission is `untrusted` (an empty or unknown class is treated as untrusted). Only that class's admission reads `NoLANRoute`. Until the probe has a result the fact stays absent and proves nothing. An `owner`, `internal` or `collaborator` run starts no proof and publishes none; `ci plan` uses the same rule. A job's network scope remains enforced when it runs.
 
 #### Known limits
 
@@ -468,7 +472,15 @@ Handoff for later Tickets: the coordinator calls `run.UseAttestStore(st)` at sta
 
 ### Policy sources and `nself ci policy`
 
-The effective policy of a repository is merged from, loosest first: the defaults, your operator rows (scopes `user`, `team`, `project`, kept in the CI store), the protected default branch's `.nself/ci.yaml` `policy:` block read at the fetched `origin/<default>` tip (or at an admin pin), the checked-out revision's own `policy:` block, and the flags of one run. Every later scope can only tighten. A widening in the revision, and any Spend key (`economics.*`, `burst.*`) in the branch or the revision, is ignored and listed. A `policy:` block in a pull request therefore never loosens anything.
+The effective policy of a repository is merged from, loosest first: the defaults, your operator rows (scopes `user`, `team`, `project`, kept in the CI store), the protected default branch's `.nself/ci.yaml` `policy:` block read at the fetched `origin/<default>` tip (or at an admin pin), the checked-out revision's own `policy:` block, and the flags of one run. The merge also orders pipeline and job scopes after the protected branch and before the revision. Later scopes follow each key's tightening rule, with the ordered-default and run-preset exceptions below. A widening in the revision is ignored and listed with `E671`; this includes changing an existing free-form (`TightenAny`) value. A revision cannot introduce an unset key unless it has a registered default and the new value tightens it (a free-form value must equal that default). A `policy:` block in a pull request therefore never loosens anything.
+
+Spend keys (`economics.*`, `burst.*`) and `OperatorOnly` keys such as `sched.auto.order` are ignored with `E671` in protected-branch, pipeline, job and revision scopes, even if the proposed value is tighter. `OperatorOnly` controls who may set a key without making it a spend key. Operator rows can set it; the final run scope has operator authority too, but must still tighten it. Run-scope spend and secret keys, and other refused run widenings, are ignored with `E819`. A run may choose `sched.preset` freely from its allowed values; that preference does not widen eligibility.
+
+`sched.auto.order` uses `TightenOrdered`: the first scope that replaces the untouched registry default may reorder its entries or drop some. Once any scope has set the key, every later accepted value must be a subsequence, keeping the relative order of the entries left. This is decided by provenance (`SourceDefault`), not value equality: explicitly setting the default list still fixes its order for later scopes. Other scope widenings fail the merge with `E670`; revision widenings are ignored with `E671`. The order accepts only a non-empty list of unique known tiers (`hosted`, `vps`, `lan`, `local`); an invalid value is `E672`, and building an `auto` world with no known tier left fails.
+
+Under `auto`, a tier omitted from the order is excluded (`override.excluded`), never tried later or waited for. A runner's `rank=<n>` is an operator-assigned fact: node-reported ranks are stripped at intake and again when the world is built. The lowest valid non-negative numeric rank wins; without one, registry position supplies the rank. Rank is clamped below the next tier. The tier hold waits only for busy or not-yet-ready better tiers, for at most `sched.auto.step_sec` (default 30 seconds, 0 means no wait), and ends at least one dispatcher poll (one second) before a positive `max_queue`. A race skips this hold. These choices still pass the trust and eligibility checks. See [Auto placement and pools](Auto-Placement-and-Pools.md).
+
+Every world digest, for every preset, includes `Effective.Snapshot()`: all effective policy keys sorted by key, each value and source, and the hosted-public and hosted-project authorization flags. Changes to `sched.auto.order` or `sched.auto.step_sec` therefore change the world digest, even when the runner facts stay the same. The policy digest remains a separate hash of effective values, hosted authorization and the pinned commit.
 
 ```
 nself ci policy show [--effective] [--json] [--team <id>]
@@ -492,7 +504,7 @@ When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can
 - `pin` needs a fetched origin; with no origin there is nothing to pin against.
 - The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). A `set` is also checked against the rows of every stored project and team (the store lists the subjects of a scope), not only the current repository's, so a user, team or project write cannot make `Resolve` fail with `E670` in another repository; the refusal names the other project.
 
-The scheduler requires a `World.Network` proof for the effective scope even when the map is nil. A runner declaration cannot supply that proof. Placement and the network planner share the same predicate.
+For untrusted admission outside `hosted-disposable`, the scheduler requires a `World.Network` proof for the effective scope even when the map is nil. A runner declaration cannot supply that proof. Placement and the network planner share the same predicate.
 
 ### Node gate registry preparation
 
@@ -623,6 +635,8 @@ A node granted a `release` or `deploy` file must be dedicated-trusted (operator-
 | `hosted-allowed` | Any provider you authorized for the project |
 
 A hosted send needs two things: the project is authorized for the provider (an admin runs `nself ci providers authorize`), and the zone allows it. A public repository's untrusted job can go to hosted capacity without a project authorization; a private repository cannot. `authorize --allow-private` writes the zone first and prints the ceiling command for you to review. It does not run it.
+
+A one-shot run with no provider repository cannot place a hosted runner. Its world contributor emits no hosted runners and performs no provider credential lookup (including `gh auth token`) or provider `Describe` call.
 
 **What leaves the machine, per zone.** A hosted send carries the source of the revision and the job's command, environment (no secret values) and artifacts. The provider sees all of it. nSelf cannot verify what a provider does with it (residual risk 11). Under `local-only` and `private-infrastructure` nothing goes to a provider, but a commit status post goes to your forge unless you pass `--no-status`.
 
