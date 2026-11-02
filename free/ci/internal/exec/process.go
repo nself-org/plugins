@@ -40,14 +40,15 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 			return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)
 		}, s.AttemptID)
 	}
-	// The job starts gated: its shell waits on fd 3 until the marker below is written, so no payload
+	// The job starts gated: its helper waits on fd 3 until the marker below is written, so no payload
 	// runs unmarked (D-1531).
 	gate, argv, err := newStartGate(s, workdir, env)
 	if err != nil {
 		return -1, "", err
 	}
 	defer gate.abandon()
-	return e.runCommandFiles(ctx, s.Stdin, gate.extra(), argv, workdir, env, s.Output, nil, func(pid int) error {
+	return e.runCommandFiles(ctx, s.Stdin, gate.extra(), argv, workdir, gate.helperEnv(env), s.Output, nil, func(pid int) error {
+		gate.begin()
 		if BeforeMarkerHook != nil {
 			BeforeMarkerHook(pid)
 		}

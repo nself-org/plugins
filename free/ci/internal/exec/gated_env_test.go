@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -49,46 +50,91 @@ func nulEnv(dump string) []string {
 	return entries
 }
 
+// perlDumper is a payload that is not a Go program: it prints its environment NUL-delimited.
+func perlDumper(t *testing.T) []string {
+	t.Helper()
+	perl, err := osexec.LookPath("perl")
+	if err != nil {
+		t.Fatalf("this test needs perl as a non-Go payload: %v", err)
+	}
+	return []string{perl, "-e", `print join("\0", map { "$_=$ENV{$_}" } keys %ENV)`}
+}
+
 // The gated payload's environment is exactly the one a direct start gives it (the ungated, unlimited path is
 // the oracle): same entries, byte for byte, with nothing added by a shell and nothing dropped, including keys
-// a shell would reject, duplicate keys, an exported g and a value with a newline.
+// a shell would reject, duplicate keys, an exported g and a value with a newline. The Go runtime variables
+// belong to the payload only: the helper is a Go program and must neither fail nor log because of them.
+// Run with a Go payload and with a non-Go one (a Go payload would hide a helper that leaked them to it).
 func TestGatedStartKeepsTheEnvironmentExact(t *testing.T) {
 	exe := selfExe(t)
 	path := os.Getenv("PATH")
+	payloads := map[string][]string{"go": {exe, "--dump-env-nul"}, "perl": perlDumper(t)}
 	for name, env := range map[string][]string{
-		"plain":               {"PATH=" + path, "ONLY=this"},
-		"caller shell vars":   {"PATH=" + path, "PWD=/not/the/cwd", "OLDPWD=it's a 'quote'", "SHLVL=7", "_=x"},
-		"empty value":         {"PATH=" + path, "PWD="},
-		"exported g":          {"PATH=" + path, "g=caller-value"},
-		"odd keys":            {"PATH=" + path, "BAD-NAME=dash", "1NUM=digit", "a.b=dot"},
-		"newline value":       {"PATH=" + path, "NL=line one\nline two\n", "Q=\"'$`\\"},
-		"duplicate PATH":      {"PATH=/nonexistent", "PATH=" + path, "K=1", "K=2"},
-		"different PATH":      {"PATH=/nonexistent"},
-		"no PATH":             {"ONLY=this"},
-		"hostile PATH":        {"PATH=/nonexistent:" + path},
-		"empty environment":   {},
-		"unicode and equals":  {"U=héllo=wörld", "E==x"},
-		"bad entry, no equal": {"PATH=" + path, "NOEQUALS"},
+		"plain":                {"PATH=" + path, "ONLY=this"},
+		"caller shell vars":    {"PATH=" + path, "PWD=/not/the/cwd", "OLDPWD=it's a 'quote'", "SHLVL=7", "_=x"},
+		"empty value":          {"PATH=" + path, "PWD="},
+		"exported g":           {"PATH=" + path, "g=caller-value"},
+		"odd keys":             {"PATH=" + path, "BAD-NAME=dash", "1NUM=digit", "a.b=dot"},
+		"newline value":        {"PATH=" + path, "NL=line one\nline two\n", "Q=\"'$`\\"},
+		"duplicate PATH":       {"PATH=/nonexistent", "PATH=" + path, "K=1", "K=2"},
+		"different PATH":       {"PATH=/nonexistent"},
+		"no PATH":              {"ONLY=this"},
+		"hostile PATH":         {"PATH=/nonexistent:" + path},
+		"empty environment":    {},
+		"unicode and equals":   {"U=héllo=wörld", "E==x"},
+		"bad entry, no equal":  {"PATH=" + path, "NOEQUALS"},
+		"bad GOMEMLIMIT":       {"PATH=" + path, "GOMEMLIMIT=invalid"},
+		"bad GOGC, GOMAXPROCS": {"PATH=" + path, "GOGC=bogus", "GOMAXPROCS=abc"},
+		"GODEBUG inittrace":    {"PATH=" + path, "GODEBUG=inittrace=1"},
+		"GOTRACEBACK crash":    {"PATH=" + path, "GOTRACEBACK=crash", "GORACE=halt_on_error=1"},
+		"GODEBUG nonsense":     {"PATH=" + path, "GODEBUG=nosuchsetting=1,,=", "GOFLAGS=-nope"},
 	} {
-		want, res := probeJob(t, false, env, "", exe, "--dump-env-nul")
-		if res.Err != nil || res.ExitCode != 0 {
-			t.Fatalf("%s: direct run: %+v", name, res)
-		}
-		for _, timeout := range []string{"", "1h"} {
-			got, res := probeJob(t, true, env, timeout, exe, "--dump-env-nul")
-			if res.Err != nil || res.ExitCode != 0 {
-				t.Fatalf("%s (timeout %q): gated run: %+v", name, timeout, res)
+		for pname, payload := range payloads {
+			if pname == "go" && strings.Contains(name, "GO") {
+				continue // a Go payload would itself fail on a malformed Go runtime variable
 			}
-			if g, w := nulEnv(got), nulEnv(want); strings.Join(g, "\x00") != strings.Join(w, "\x00") {
-				t.Errorf("%s (timeout %q): the payload's environment is not the direct one\n--- direct %q\n--- gated  %q", name, timeout, w, g)
+			want, res := probeJob(t, false, env, "", payload...)
+			if res.Err != nil || res.ExitCode != 0 {
+				t.Fatalf("%s/%s: direct run: %+v", name, pname, res)
+			}
+			for _, timeout := range []string{"", "1h"} {
+				got, res := probeJob(t, true, env, timeout, payload...)
+				if res.Err != nil || res.ExitCode != 0 {
+					t.Fatalf("%s/%s (timeout %q): gated run: %+v out %q", name, pname, timeout, res, got)
+				}
+				if g, w := nulEnv(got), nulEnv(want); strings.Join(g, "\x00") != strings.Join(w, "\x00") {
+					t.Errorf("%s/%s (timeout %q): the payload's environment is not the direct one\n--- direct %q\n--- gated  %q", name, pname, timeout, w, g)
+				}
 			}
 		}
 	}
 	// The cases above must actually carry what they claim to.
-	got, _ := probeJob(t, true, []string{"BAD-NAME=dash", "g=caller-value", "NL=a\nb"}, "", exe, "--dump-env-nul")
-	for _, need := range []string{"BAD-NAME=dash", "g=caller-value", "NL=a\nb"} {
+	got, _ := probeJob(t, true, []string{"BAD-NAME=dash", "g=caller-value", "NL=a\nb", "GOMEMLIMIT=invalid"}, "", perlDumper(t)...)
+	for _, need := range []string{"BAD-NAME=dash", "g=caller-value", "NL=a\nb", "GOMEMLIMIT=invalid"} {
 		if !strings.Contains(got, need) {
 			t.Errorf("the gated payload lost %q: %q", need, got)
+		}
+	}
+}
+
+// An environment far larger than a pipe buffer reaches the payload whole: no argv limit, no deadlock between
+// the agent writing it and the helper reading it.
+func TestGatedStartHugeEnvironment(t *testing.T) {
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	for i := 0; i < 150; i++ {
+		env = append(env, "BIG"+strconv.Itoa(i)+"="+strings.Repeat("v", 4000+i))
+	}
+	for pname, payload := range map[string][]string{"go": {selfExe(t), "--dump-env-nul"}, "perl": perlDumper(t)} {
+		want, res := probeJob(t, false, env, "", payload...)
+		if res.Err != nil || res.ExitCode != 0 {
+			t.Fatalf("%s: direct run: %+v", pname, res)
+		}
+		got, res := probeJob(t, true, env, "1h", payload...)
+		if res.Err != nil || res.ExitCode != 0 {
+			t.Fatalf("%s: gated run: %+v", pname, res)
+		}
+		if strings.Join(nulEnv(got), "\x00") != strings.Join(nulEnv(want), "\x00") || len(got) < 600000 {
+			t.Errorf("%s: the large environment did not arrive intact (%d bytes, direct %d)", pname, len(got), len(want))
 		}
 	}
 }
@@ -187,12 +233,18 @@ func TestGateHelperEnforcesTheCPULimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	er, ew, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := osexec.Command(selfExe(t), GateArg, "1", "0", "/bin/sh", "sh", "-c", "while :; do :; done")
-	cmd.ExtraFiles = []*os.File{r}
+	cmd.ExtraFiles = []*os.File{r, er}
 	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	_ = r.Close()
+	_ = er.Close()
+	_ = ew.Close() // an empty payload environment
 	t.Cleanup(func() { _ = cmd.Process.Kill() })
 	if _, err = w.Write([]byte("g\n")); err != nil {
 		t.Fatal(err)
@@ -221,12 +273,18 @@ func TestGateHelperExitsWithoutRunningOnEOF(t *testing.T) {
 		t.Fatal(err)
 	}
 	ran := filepath.Join(t.TempDir(), "ran")
+	er, ew, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := osexec.Command(selfExe(t), GateArg, "0", "0", "/bin/sh", "sh", "-c", "echo x > "+ran)
-	cmd.ExtraFiles = []*os.File{r}
+	cmd.ExtraFiles = []*os.File{r, er}
 	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	_ = r.Close()
+	_ = er.Close()
+	_ = ew.Close()
 	_ = w.Close() // the agent died
 	err = cmd.Wait()
 	var ee *osexec.ExitError

@@ -7,19 +7,23 @@ package exec
 // go-ahead (sent only once the process marker is on disk), applies the job's
 // rlimits, then replaces itself with the payload.
 // Inputs:  argv = [exe, GateArg, cpuSeconds, dataKiB, path, payload argv...]
-// ("0" means no such limit); fd 3 is the gate pipe; the environment is the
-// payload's environment and is handed on untouched.
+// ("0" means no such limit); fd 4 carries the payload's environment (NUL-
+// terminated entries, read to end of file); fd 3 carries the go-ahead line. The
+// helper's own environment is fixed and holds nothing from the job.
 // Outputs: the payload, in this same process (same pid), or exit 125 when the
 // gate closed without a go-ahead or a limit could not be set, 126 when the
 // payload could not be executed.
-// Constraints: the helper must not touch signals or the environment before the
-// exec (an ignored signal or a changed variable would reach the payload), and
-// must be the first thing the agent's main runs.
+// Constraints: the helper must not touch signals before the exec (an ignored
+// signal would reach the payload) and must be the first thing the agent's main
+// runs. The environment comes before the go-ahead, so a go-ahead implies a
+// complete environment.
 
 import (
+	"io"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -74,6 +78,19 @@ func RunGate(args []string) int {
 		return 2
 	}
 	path, argv := args[4], args[5:]
+	// The payload environment first, to end of file: a parent that died mid-write leaves a short read and no go-ahead.
+	blob, err := io.ReadAll(os.NewFile(4, "env"))
+	if err != nil {
+		return 125
+	}
+	_ = syscall.Close(4)
+	var env []string
+	if len(blob) > 0 {
+		if blob[len(blob)-1] != 0 {
+			return 125
+		}
+		env = strings.Split(string(blob[:len(blob)-1]), "\x00")
+	}
 	// The go-ahead is one line. End of file before it (the agent died, or gave up) or a closed fd 3: run nothing.
 	var b [1]byte
 	gate := os.NewFile(3, "gate")
@@ -97,7 +114,7 @@ func RunGate(args []string) int {
 			return 125
 		}
 	}
-	err := syscall.Exec(path, argv, os.Environ())
+	err = syscall.Exec(path, argv, env)
 	_, _ = os.Stderr.WriteString("error: exec " + path + ": " + err.Error() + "\n")
 	return 126
 }
