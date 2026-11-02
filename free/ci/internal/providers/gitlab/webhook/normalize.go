@@ -2,8 +2,8 @@ package webhook
 
 // Purpose: turn an authenticated GitLab delivery into model.TriggerFacts (Epic D11). Served events:
 // Push Hook (branch), Tag Push Hook, Merge Request Hook (open, reopen, and update that carries new
-// commits) and Job Hook (pending, with the runner tag nself: a runner demand). Everything else is
-// acknowledged and dropped.
+// commits) and Job Hook (pending, with the runner tag nself: a runner demand; running: verify and pause
+// the runner). Running hooks and unsupported events are acknowledged without enqueuing.
 // Inputs:  the auth class, the event name, the delivery id and the verified raw body.
 // Outputs: facts with payload-sourced fields and, for push, tag, merge request and job, HeadCurrent
 //          from one API call; a *Decline for anything not served or stale.
@@ -158,6 +158,9 @@ func (s *Source) fromMergeRequest(ctx context.Context, f model.TriggerFacts, p g
 }
 
 func (s *Source) fromJob(ctx context.Context, f model.TriggerFacts, p glPayload) (model.TriggerFacts, error) {
+	if p.BuildStatus == "running" {
+		return s.fromRunning(ctx, f, p)
+	}
 	if p.BuildStatus != "pending" {
 		return f, unsupported("job status \"" + clip(p.BuildStatus) + "\": skip")
 	}

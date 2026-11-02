@@ -8,7 +8,7 @@ package runners
 
 // Purpose: the providers.gitlab.runner.* policy keys and their typed view (Epic D11, Epic X1).
 // Inputs:  *policy.Effective from the operator's resolver (UsePolicy installs the source).
-// Outputs: Settings{Tags, MaxPending, Hosts}; the keys register from init().
+// Outputs: Settings{Tags, MaxPending, Hosts, ProtectedRefsOnly}; the keys register from init().
 // Constraints: operator scope only. Every key is Spend: true and TightenFixed, so a repository can never
 //          pick the tags nSelf runners answer to or raise the number of runners nSelf hardware carries for
 //          it. The registered Default is nil on purpose (a non-nil default on a Fixed key could never be
@@ -35,10 +35,11 @@ import (
 
 // The policy keys.
 const (
-	KeyTags       = "providers.gitlab.runner.tags"
-	KeyMaxPending = "providers.gitlab.runner.max_pending"
-	KeyHosts      = "providers.gitlab.runner.hosts"
-	keyOwner      = "P7-HOST-07"
+	KeyTags              = "providers.gitlab.runner.tags"
+	KeyMaxPending        = "providers.gitlab.runner.max_pending"
+	KeyHosts             = "providers.gitlab.runner.hosts"
+	KeyProtectedRefsOnly = "providers.gitlab.runner.protected_refs_only"
+	keyOwner             = "P7-HOST-07"
 )
 
 // Limits and defaults.
@@ -68,7 +69,7 @@ func RegistrationErrors() []error { return append([]error(nil), registrationErro
 
 func init() { registrationErrors = RegisterKeys() }
 
-// RegisterKeys adds the two keys to the process-wide set and returns what failed.
+// RegisterKeys adds the runner keys to the process-wide set and returns what failed.
 func RegisterKeys() []error {
 	var errs []error
 	for _, spec := range Keys() {
@@ -84,7 +85,19 @@ func Keys() []policy.KeySpec {
 	k := func(key string, dec func(json.RawMessage) (any, error)) policy.KeySpec {
 		return policy.KeySpec{Key: key, Owner: keyOwner, Kind: policy.TightenFixed, Spend: true, Decode: dec}
 	}
-	return []policy.KeySpec{k(KeyTags, decodeTags), k(KeyMaxPending, decodeMaxPending), k(KeyHosts, decodeHosts)}
+	return []policy.KeySpec{k(KeyTags, decodeTags), k(KeyMaxPending, decodeMaxPending), k(KeyHosts, decodeHosts), k(KeyProtectedRefsOnly, decodeProtectedRefsOnly)}
+}
+
+func decodeProtectedRefsOnly(raw json.RawMessage) (any, error) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, fail(KeyProtectedRefsOnly, "expected a boolean")
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return nil, fail(KeyProtectedRefsOnly, "expected a boolean")
+	}
+	return b, nil
 }
 
 func fail(key, format string, a ...any) error {
@@ -180,6 +193,8 @@ type Settings struct {
 	MaxPending int
 	// Hosts are the extra hosts a runner may reach besides the instance host (providers.gitlab.runner.hosts); none by default.
 	Hosts []string
+	// ProtectedRefsOnly opts in to runner issuance for protected refs only; false refuses all mints.
+	ProtectedRefsOnly bool
 }
 
 // DefaultSettings is what an operator who set nothing gets.
@@ -194,6 +209,13 @@ func SettingsFrom(eff *policy.Effective) (Settings, error) {
 		return Settings{}, fmt.Errorf("runners: no effective policy")
 	}
 	s := DefaultSettings()
+	if v, _, ok := eff.Value(KeyProtectedRefsOnly); ok {
+		b, isBool := v.(bool)
+		if !isBool {
+			return Settings{}, fail(KeyProtectedRefsOnly, "effective value is not a boolean")
+		}
+		s.ProtectedRefsOnly = b
+	}
 	if v, _, ok := eff.Value(KeyTags); ok {
 		tags, isList := v.([]string)
 		if !isList || checkTags(tags) != nil {

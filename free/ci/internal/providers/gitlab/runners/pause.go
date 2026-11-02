@@ -2,19 +2,20 @@ package runners
 
 // Purpose: Pause and OnRunning, the review F6 defence: a runner is paused as soon as a Job Hook reports its
 // job running, so a token that job reads (the shell executor runs the job on the same user as the runner)
-// cannot take a second job. The runner is deleted when the run closes (runnerjob.Finalize).
+// has a narrower window to take another job. Protected-only registration separately isolates protected
+// work from tokens exposed by unprotected jobs. The runner is deleted when the run closes.
 // Inputs:  a Job Hook body (ParseJobHook) or a RunningEvent; the numeric runner id.
 // Outputs: PUT /runners/:id {"paused": true}; OnRunning reports whether it paused one.
 // Constraints: nothing in the event is trusted. OnRunning reads the job from the API and requires it to be
 //          running on the runner the event names, and Pause reads the runner and requires the nself-glr-
 //          description, so a forged hook can at most pause a runner of ours that is running that very job.
-//          Both are idempotent (a 404 means the runner is already gone). The Job Hook source (HOST-21)
-//          skips jobs that are not pending, so the ingress calls OnRunning from the coordinator wiring
-//          (P7-NODE-20); the hook source is not changed here.
+//          Both are idempotent (a 404 means the runner is already gone). The verified webhook source
+//          calls OnRunning through HandleRunning; a bound project id takes priority over its path.
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/api"
@@ -84,12 +85,13 @@ func (r *Registrar) pause(ctx context.Context, ref providers.RunnerRef) (bool, e
 // OnRunning pauses the runner of a job that has started; paused is false when the event does not describe
 // a running job on a runner of ours (nothing is changed then).
 func (r *Registrar) OnRunning(ctx context.Context, ev RunningEvent) (paused bool, err error) {
-	p, ok := api.ParseProject(ev.Project)
-	if !ok {
-		if ev.ProjectID <= 0 {
+	p := api.Project{Path: itoa(ev.ProjectID)}
+	if ev.ProjectID <= 0 {
+		var ok bool
+		p, ok = api.ParseProject(ev.Project)
+		if !ok {
 			return false, e702("scope.repo")
 		}
-		p = api.Project{Path: itoa(ev.ProjectID)}
 	}
 	if ev.JobID <= 0 || ev.RunnerID <= 0 {
 		return false, e702("runner.id")
@@ -104,5 +106,10 @@ func (r *Registrar) OnRunning(ctx context.Context, ev RunningEvent) (paused bool
 	if job.Status != "running" || job.Runner == nil || job.Runner.ID != ev.RunnerID {
 		return false, nil
 	}
-	return r.pause(ctx, providers.RunnerRef{ID: itoa(ev.RunnerID), Scope: providers.RunnerScope{Repo: ev.Project}})
+	paused, err = r.pause(ctx, providers.RunnerRef{ID: itoa(ev.RunnerID), Scope: providers.RunnerScope{Repo: ev.Project}})
+	var pe *providers.Error
+	if errors.As(err, &pe) && pe.Code == "E707" && pe.Reason == "pause.not_ours" {
+		return false, nil
+	}
+	return paused, err
 }

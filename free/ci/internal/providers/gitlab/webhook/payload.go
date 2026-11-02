@@ -63,7 +63,10 @@ type glPayload struct {
 	ProjectID   int64    `json:"project_id"`
 	SHA         string   `json:"sha"`
 	TagList     []string `json:"tag_list"`
-	Repository  struct {
+	Runner      *struct {
+		ID int64 `json:"id"`
+	} `json:"runner"`
+	Repository struct {
 		Homepage string `json:"homepage"`
 	} `json:"repository"`
 }
@@ -113,7 +116,7 @@ func probeBody(body []byte) glProbe {
 
 // tags are the runner tags a job asks for, when the payload says (the Jobs API is the other source). The
 // payload's runner object lists the tags of the runner that took the job, which say nothing about what the
-// job asked for, so it is not read.
+// job asked for, so the runner's tags are not read.
 func (p glPayload) tags() []string { return p.TagList }
 
 // visibilityOf maps GitLab's numeric visibility_level; an absent or unknown value is unknown.

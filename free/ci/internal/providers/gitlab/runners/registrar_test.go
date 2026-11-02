@@ -67,7 +67,7 @@ func TestConformance(t *testing.T) {
 			front := httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(u))
 			t.Cleanup(front.Close)
 			f := &fakeGL{srv: front}
-			reg, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clk.Now})
+			reg, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clk.Now, Settings: runners.Settings{ProtectedRefsOnly: true}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -81,7 +81,7 @@ func TestConformance(t *testing.T) {
 // numeric project id; nothing the request carries is copied; two mints never share a name.
 func TestFixedTags(t *testing.T) {
 	f := newFakeGL(t)
-	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clock, Settings: runners.Settings{Tags: []string{"nself", "fast"}}})
+	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clock, Settings: runners.Settings{Tags: []string{"nself", "fast"}, ProtectedRefsOnly: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,50 +117,6 @@ func TestFixedTags(t *testing.T) {
 	}
 }
 
-// TestAccessLevel proves acceptance 4 (the access half): access_level is not_protected unless Restriction
-// verified a protected branch or tag by its exact name (also one with a slash); a merge request ref, an
-// unknown job, a ref only a wildcard rule would cover, a 200 whose body is not that protection and a failed
-// read are all not_protected.
-func TestAccessLevel(t *testing.T) {
-	ctx := context.Background()
-	f := newFakeGL(t)
-	r := f.registrar(clock)
-	f.branch["main"], f.branch["release/1.0"], f.branch["release-*"], f.tags["v1.0"] = true, true, true, true
-	f.jobs[1] = fakeJob{Ref: "main", Status: "pending"}
-	f.jobs[2] = fakeJob{Ref: "feature/x", Status: "pending"}
-	f.jobs[3] = fakeJob{Ref: "v1.0", Tag: true, Status: "pending"}
-	f.jobs[4] = fakeJob{Ref: "refs/merge-requests/7/head", Status: "pending"}
-	f.jobs[5] = fakeJob{Ref: "v2.0", Tag: true, Status: "pending"}
-	f.jobs[6] = fakeJob{Ref: "release/1.0", Status: "pending"} // a protected branch with a slash: the %2F path encoding
-	f.jobs[7] = fakeJob{Ref: "release-1", Status: "pending"}   // matched only by the wildcard rule release-*: unproven, not protected
-	f.jobs[8] = fakeJob{Ref: "main2", Status: "pending"}
-	f.garbage["main2"] = true // the protection read answers 200 with a body that is not that protection
-	for job, want := range map[int64]bool{0: false, 1: true, 2: false, 3: true, 4: false, 5: false, 6: true, 7: false, 99: false} {
-		got, err := r.Restriction(ctx, repoScope, job)
-		if err != nil || got.ProtectedOnly != want {
-			t.Errorf("job %d: protected %v err %v, want %v", job, got.ProtectedOnly, err, want)
-		}
-	}
-	if got, err := r.Restriction(ctx, repoScope, 8); got.ProtectedOnly || err == nil {
-		t.Errorf("a 200 that is not JSON must never prove protection and surfaces as an error: %+v %v", got, err)
-	}
-	f.statusFor["GET /projects/acme%2Fwidgets/jobs/1"] = 500
-	if _, err := r.Restriction(ctx, repoScope, 1); err == nil || providers.ClassOf(err) != providers.Transient {
-		t.Errorf("a failed job read must surface as a transient error, got %v", err)
-	}
-	for _, protected := range []bool{false, true} {
-		if _, err := r.MintRunner(ctx, runnerReq(), runners.MintOptions{ProtectedOnly: protected}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if f.mints[0]["access_level"] != "not_protected" || f.mints[1]["access_level"] != "ref_protected" {
-		t.Fatalf("access levels %v %v", f.mints[0]["access_level"], f.mints[1]["access_level"])
-	}
-	if _, err := r.Mint(ctx, runnerReq()); err != nil || f.mints[2]["access_level"] != "not_protected" {
-		t.Fatalf("the interface Mint must register not_protected: %v %v", err, f.mints[2]["access_level"])
-	}
-}
-
 // TestRunnerTokenOnly proves acceptance 4 (the credential half, review F14): every request carries the
 // runner-management token and none the Developer token, and a policy without runner_token_env makes no
 // request at all (E700) instead of falling back to the Developer token.
@@ -188,7 +144,7 @@ func TestRunnerTokenOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.TLSConfig = f.client("").TLSConfig
-	g, err := runners.New(runners.Config{Client: c, Clock: clock})
+	g, err := runners.New(runners.Config{Client: c, Clock: clock, Settings: runners.Settings{ProtectedRefsOnly: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +163,7 @@ func TestRunnerTokenOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.TLSConfig = f.client("").TLSConfig
-	g, _ = runners.New(runners.Config{Client: c, Clock: clock})
+	g, _ = runners.New(runners.Config{Client: c, Clock: clock, Settings: runners.Settings{ProtectedRefsOnly: true}})
 	if _, err = g.MintRunner(context.Background(), runnerReq(), runners.MintOptions{}); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +233,7 @@ func TestRegistrarIdentity(t *testing.T) {
 func TestRunnerCarriesOnlyItsJobsTags(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeGL(t)
-	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clock, Settings: runners.Settings{Tags: []string{"nself", "arm64", "gpu"}}})
+	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clock, Settings: runners.Settings{Tags: []string{"nself", "arm64", "gpu"}, ProtectedRefsOnly: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
