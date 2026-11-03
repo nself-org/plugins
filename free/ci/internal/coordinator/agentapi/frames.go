@@ -4,7 +4,8 @@ package agentapi
 //          renew leases, the first heartbeat of a session reconciles the leases the agent kept across the
 //          gap, lease-scoped frames are fenced by epoch before they reach the sink.
 // Inputs:  a decoded protocol.Message; the lease engine and the sink of the Config.
-// Outputs: acks and stale-epoch cancels on the stream's response flow; nil or a *fatal that ends the stream.
+// Outputs: acks and stale-epoch cancels on the stream's response flow; nil or a *fatal that ends the stream; the slot use of
+//          the last heartbeat (ActiveJobs).
 // Constraints: running -> renewed (first heartbeat: Reconnect) and self_fenced -> lost with reason
 //          agent.self_fenced are the lease engine's; a result is fenced, handed to the sink, then
 //          committed with Leases.Result, in that order, so a stale or failed result never half-applies;
@@ -214,6 +215,7 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 	if len(hb.Leases) > maxHeartbeatLeases {
 		return &fatal{protocol.CodeInvalid, "too_many_leases"}
 	}
+	s.noteSlots(q.node, hb.Slots.Used)
 	for _, ls := range hb.Leases {
 		epoch, ok := epochArg(ls.Epoch)
 		if !ok {

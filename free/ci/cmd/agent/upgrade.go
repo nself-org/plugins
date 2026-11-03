@@ -10,6 +10,7 @@ package main
 //          release of the version), --allow-downgrade; the state dir (slots, coordinators.json).
 // Outputs: one line on stdout; "E666: ..." or "E656: ..." on stderr. Exit 0 swapped (restart the agent to run it: the service
 //          manager restarts a pull agent, the next ssh session starts the new binary), 1 refused or failed, 2 usage.
+//          The coordinator's `upgrade` frame runs the same swap through upgrade_frame.go.
 // Constraints: the trusted keys are the compiled-in set only; nothing is executed before it verified (the version run comes
 //          after the signature and digest checks); the downgrade
 //          rules and the ceiling are internal/agent/update's.
@@ -51,26 +52,17 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent upgrade --version X.Y.Z [--manifest-url URL] [--allow-downgrade]")
 		return 2
 	}
-	target := verify.Target(runtime.GOOS, runtime.GOARCH)
-	base := ""
-	if *manifestURL != "" {
-		u, err := url.Parse(*manifestURL)
-		if err != nil || path.Base(u.Path) != install.BinaryName+"-"+target+".manifest.json" {
-			_, _ = fmt.Fprintf(sio.Stderr, "E651: --manifest-url must name %s-%s.manifest.json\n", install.BinaryName, target)
-			return 2
-		}
-		u.Path = path.Dir(u.Path)
-		base = u.String()
+	base, err := manifestBase(*manifestURL)
+	if err != nil {
+		_, _ = fmt.Fprintln(sio.Stderr, err)
+		return 2
 	}
 	state, err := stateDir()
 	if err != nil {
 		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
-	exe, err := os.Executable()
-	if err == nil {
-		exe, err = filepath.EvalSymlinks(exe)
-	}
+	exe, err := agentBinary()
 	if err != nil {
 		_, _ = fmt.Fprintln(sio.Stderr, "error: agent binary:", err)
 		return 1
@@ -96,4 +88,28 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 	}
 	_, _ = fmt.Fprintf(sio.Stdout, "nself-ci-agent %s -> %s installed; the previous binary is kept as %s%s; restart the agent to run it\n", res.From, res.To, exe, update.PrevSuffix)
 	return 0
+}
+
+// manifestBase turns a manifest URL into the release base it lives under; "" is the default (the GitHub release). The URL must
+// name this platform's manifest (E651).
+func manifestBase(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	target := verify.Target(runtime.GOOS, runtime.GOARCH)
+	u, err := url.Parse(raw)
+	if err != nil || path.Base(u.Path) != install.BinaryName+"-"+target+".manifest.json" {
+		return "", fmt.Errorf("E651: --manifest-url must name %s-%s.manifest.json", install.BinaryName, target)
+	}
+	u.Path = path.Dir(u.Path)
+	return u.String(), nil
+}
+
+// agentBinary is the path of the running agent binary with its symlinks resolved.
+func agentBinary() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(exe)
 }

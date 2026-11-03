@@ -6,7 +6,8 @@ package main
 // Inputs:  the enrollment `join` saved under <state>/pki (pinned root, certificate, agent URL); flags --slots,
 //          --coordinator, --project, --secrets-eligible, --dedicated.
 // Outputs: jobs run on this node; logs, heartbeats and results sent through the carrier; <state>/clock_skew
-//          when the coordinator clock is off; exit 0 after a drain, 1 when the coordinator rejects this agent
+//          when the coordinator clock is off; exit 0 after a drain or after the coordinator's `upgrade` frame was applied
+//          and answered done (upgrade_frame.go; the service manager starts the new binary), 1 when the coordinator rejects this agent
 //          or the node is not enrolled, 2 on usage.
 // Constraints: the client accepts only a coordinator-kind server leaf chained to the root pinned at join and
 //          reads its own certificate from disk on every handshake, so a renewed one is used without a
@@ -144,7 +145,7 @@ func runPull(ctx context.Context, args []string, sio IO) int {
 	return pullLoop(ctx, f, state, cred, base.String(), tlsc, sio)
 }
 
-// pullLoop runs sessions until a drain completes, the coordinator rejects the agent, or ctx ends.
+// pullLoop runs sessions until a drain completes, an upgrade is applied, the coordinator rejects the agent, or ctx ends.
 func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Credential, baseURL string, tlsc *tls.Config, sio IO) int {
 	key, err := nodekey.LoadOrCreate(state)
 	if err != nil {
@@ -174,25 +175,32 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 		})
 		fence := newFenceCarrier(car, state)
 		watch := &drainWatch{Frames: agent.WithNodeSecrets(fence, resolver, logf)}
+		runCtx, stop := context.WithCancel(ctx)
+		up := newUpgradeExit(watch, state, stop, logf)
 		s, err := session.New(session.Config{
-			Carrier: watch, Key: key, Slots: table, StateDir: state,
+			Carrier: up, Key: key, Slots: table, StateDir: state,
 			Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
 			Runner:      leaseRunner{coordinator: f.coordinator},
 			Coordinator: session.Coordinator{ID: f.coordinator, RootFingerprint: cred.Enrollment.RootFingerprint},
 			Status:      hostStatus,
 			Fenced:      fence.fenced,
+			Upgrade:     up.Hook,
 		})
 		if err != nil {
+			stop()
 			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1
 		}
 		began := time.Now()
-		err = s.Run(ctx)
+		err = s.Run(runCtx)
+		stop()
 		if time.Since(began) >= restartHealthy {
 			f.restartBackoff.Reset()
 		}
 		var rej *session.RejectError
 		switch {
+		case up.upgraded():
+			return 0
 		case errors.As(err, &rej):
 			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1

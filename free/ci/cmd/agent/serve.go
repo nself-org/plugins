@@ -9,7 +9,9 @@ package main
 // written to stdout; the node key and age identity are created on first start
 // in the 0700 state dir; value-bearing secrets frames are refused unless the
 // coordinator started the agent with --accept-secret-values (PERSONAL
-// coordinator, operator-owned secrets); carrier A should start it through a
+// coordinator, operator-owned secrets); a coordinator `upgrade` frame runs the
+// verified swap (upgrade_frame.go) and ends the session after its done result (exit 0;
+// the next ssh session starts the new binary); carrier A should start it through a
 // forced command (`serve --stdio ...`) so the coordinator cannot run `slots --set`; logs and errors go to stderr, which
 // the SSH carrier keeps apart from the frame stream.
 
@@ -119,18 +121,24 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	car = withCheckout(car, state)
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	up := newUpgradeExit(car, state, stop, func(format string, a ...any) {
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent serve: "+format+"\n", a...)
+	})
 	s, err := session.New(session.Config{
-		Carrier: car, Key: key, Slots: table, StateDir: state,
+		Carrier: up, Key: key, Slots: table, StateDir: state,
 		Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
 		Runner:      leaseRunner{coordinator: *coordinator},
 		Coordinator: session.Coordinator{ID: *coordinator, RootFingerprint: *fingerprint},
 		Status:      hostStatus,
+		Upgrade:     up.Hook,
 	})
 	if err != nil {
 		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
-	if err := s.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := s.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) && !up.upgraded() {
 		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}

@@ -3,7 +3,7 @@ package update
 // Purpose: the agent (pull) carrier's half of an upgrade (hq NODE D11): the coordinator sends the protocol `upgrade` message
 //          and the agent swaps its own binary (ApplyLocal, via `nself-ci-agent upgrade`), restarts under its service manager
 //          and says hello again.
-// Inputs:  an AgentControl (the coordinator process's agent listener) and the lifecycle commands for the node, all injected.
+// Inputs:  an AgentControl (the coordinator process's agent listener, agentapi.Server, registered by cmd/serve) and the lifecycle commands for the node, all injected.
 // Outputs: a Node.
 // Constraints: the coordinator cannot read the agent's coordinators.json, so the ceiling and the running-job check are enforced
 //          by the agent (ApplyLocal) and Coordinators reports none; the coordinator side still waits for idle slots through
@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
@@ -45,13 +46,23 @@ type AgentControl interface {
 // ErrNoAgentControl is returned when this process holds no agent listener (a plain CLI process).
 var ErrNoAgentControl = errors.New("E656: this process holds no agent listener; a pull node is upgraded by the coordinator process")
 
-var registered AgentControl
+var (
+	registeredMu sync.RWMutex
+	registered   AgentControl
+)
 
-// RegisterAgentControl installs the coordinator process's AgentControl (cmd/serve registers it at start).
-func RegisterAgentControl(c AgentControl) { registered = c }
+// RegisterAgentControl installs the coordinator process's AgentControl: cmd/serve's agent listener registers its server when it
+// starts and nil when it stops. Safe to call while upgrades read it.
+func RegisterAgentControl(c AgentControl) {
+	registeredMu.Lock()
+	defer registeredMu.Unlock()
+	registered = c
+}
 
 // CurrentAgentControl returns the registered AgentControl, or ErrNoAgentControl.
 func CurrentAgentControl() (AgentControl, error) {
+	registeredMu.RLock()
+	defer registeredMu.RUnlock()
 	if registered == nil {
 		return nil, ErrNoAgentControl
 	}
