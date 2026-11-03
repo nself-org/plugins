@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nself.org/schemas/channels-v1.schema.json",
+  "title": "channels.v1",
+  "description": "Frozen channels.v1 contract: message envelope, origin-trust tags, delivery receipt and adapter capabilities. Twin of free/channels/internal/envelope.",
+  "version": "1.0.0",
+  "$ref": "#/$defs/Envelope",
+  "$defs": {
+    "Envelope": {
+      "type": "object",
+      "description": "One message crossing a channel boundary, in either direction.",
+      "required": ["envelope_id", "tenant_id", "adapter_instance", "channel", "direction", "conversation_ref", "parts", "mentions_bot", "origin_trust", "received_at"],
+      "additionalProperties": false,
+      "properties": {
+        "envelope_id": { "type": "string", "minLength": 1 },
+        "tenant_id": { "type": "string", "minLength": 1 },
+        "adapter_instance": { "type": "string", "minLength": 1 },
+        "channel": { "$ref": "#/$defs/ChannelKind" },
+        "direction": { "type": "string", "enum": ["inbound", "outbound"] },
+        "sender_external_id": { "type": "string" },
+        "conversation_ref": { "type": "string" },
+        "external_thread_ref": { "type": "string" },
+        "parent_id": { "type": "string" },
+        "edit_of": { "type": "string" },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/Part" } },
+        "attachments": { "type": "array", "items": { "$ref": "#/$defs/Attachment" } },
+        "mentions_bot": { "type": "boolean" },
+        "origin_trust": {
+          "type": "array",
+          "description": "Ordered origin-trust tags. Open set: unknown tags must be carried through unchanged. Tags are carried, never judged.",
+          "items": { "$ref": "#/$defs/TrustTag" }
+        },
+        "received_at": { "type": "string", "format": "date-time" },
+        "provider_meta": {
+          "type": "object",
+          "description": "Provider-specific data, opaque to every other stage.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "ChannelKind": {
+      "type": "string",
+      "enum": ["telegram", "discord", "slack", "teams", "matrix", "whatsapp", "email", "sms", "webchat"]
+    },
+    "TrustTag": {
+      "type": "string",
+      "description": "Origin-trust fact. Open enumerated set; the examples are the documented tags, not a closed list.",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "examples": ["paired_sender", "allowlisted", "unknown_sender", "group_message", "forwarded", "external_content", "bot_sender"]
+    },
+    "Part": {
+      "type": "object",
+      "description": "One ordered piece of message content.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["text", "approval_card", "action", "attachment"] },
+        "text": { "type": "string" },
+        "title": { "type": "string" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/Action" } },
+        "action": { "$ref": "#/$defs/Action" },
+        "attachment_digest": { "type": "string" }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "required": ["action_id"],
+      "additionalProperties": false,
+      "properties": {
+        "action_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "Attachment": {
+      "type": "object",
+      "description": "Blob reference by content digest; bytes never ride in the envelope.",
+      "required": ["digest"],
+      "additionalProperties": false,
+      "properties": {
+        "digest": { "type": "string", "pattern": "^[a-z0-9]+:[a-f0-9]+$" },
+        "media_type": { "type": "string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "filename": { "type": "string" }
+      }
+    },
+    "Receipt": {
+      "type": "object",
+      "description": "Delivery progress of one outbound envelope.",
+      "required": ["envelope_id", "state", "attempts", "updated_at"],
+      "additionalProperties": false,
+      "properties": {
+        "envelope_id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "enum": ["queued", "sent", "delivered", "read", "failed", "dead"] },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "provider_message_id": { "type": "string" },
+        "last_error": { "type": "string" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "description": "What an adapter's provider supports.",
+      "required": ["max_text", "edits", "threads", "buttons", "attachments", "typing"],
+      "additionalProperties": false,
+      "properties": {
+        "max_text": { "type": "integer", "minimum": 0 },
+        "edits": { "type": "boolean" },
+        "threads": { "type": "boolean" },
+        "buttons": { "type": "boolean" },
+        "attachments": { "type": "boolean" },
+        "typing": { "type": "boolean" }
+      }
+    }
+  }
+}
