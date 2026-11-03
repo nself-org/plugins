@@ -10,4 +10,5 @@ func (*processTree) signalTerminate()           {}
 func (*processTree) signalKill()                {}
 func (*processTree) anyAlive() bool             { return false }
 func (*processTree) stop()                      {}
+func (*processTree) reap()                      {}
 func nativeStartID(int) (string, bool)          { return "", false }
