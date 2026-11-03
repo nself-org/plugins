@@ -88,8 +88,8 @@ entry. Every other edge (optional, licensed-tier, unreleased such as `minio`, or
 plugin's `plugin.json` and is left off the wire; `plugin-counts.sh` names each one on stderr.
 
 A plugin with no row in `releases.json` has no published bytes and is left out of `registry.json`
-until the release pipeline adds a row. Checksums, tarball URLs and per-platform checksums live
-in `releases.json` only.
+until the release pipeline adds a row. Checksums, tarball URLs, per-platform checksums and release
+signatures live in `releases.json` only.
 
 ## Top-level shape
 
@@ -138,6 +138,8 @@ by this repo's plugins include:
 | `implementation` | object | Runtime details: language, entry point, plugin type, binary name |
 | `envVars` | object | Required/optional environment variables |
 | `bundles` | string[] | Named bundles this plugin ships in, if any |
+| `release_signature` | object | Ed25519 signature of the release (`alg`, `key_id`, `sig`) |
+| `platform_signatures` | object | Per-platform Ed25519 signatures, keyed by platform string (e.g. `darwin-amd64`), each containing `alg`, `key_id`, `sig` |
 
 ## Categories
 
