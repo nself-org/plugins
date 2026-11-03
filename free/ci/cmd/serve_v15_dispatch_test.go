@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -115,6 +116,11 @@ func TestDispatchPipelineSecurityWiring(t *testing.T) {
 			_, err = dispatchPipeline(home, &v15ServeFlags{})(ctx, row)
 			if (err == nil) != tc.want || called != tc.want {
 				t.Fatalf("ran=%v, err=%v, want ran=%v", called, err, tc.want)
+			}
+			// D-1534: a member's job that reads secrets is refused with E677 before any lease or value;
+			// a member's release job keeps the role refusal.
+			if wantE677 := tc.role == roles.Member && tc.secret && tc.kind != "release"; (secrets.CodeOf(err) == "E677") != wantE677 {
+				t.Fatalf("err=%v; want E677=%v", err, wantE677)
 			}
 		})
 	}

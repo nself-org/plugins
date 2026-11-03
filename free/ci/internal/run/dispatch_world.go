@@ -62,7 +62,8 @@ func wantPlatform(explicit string) string {
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
 // demand. The job's own labels, tools, isolation floor and accelerators are dropped: the local
 // declaration carries no measured facts for them until P7-TRUST-08, and the exec-time isolation
-// hook is the gate for them.
+// hook is the gate for them. A TEAM job with secrets is placed remote-only with its own requirements
+// (nodeJob, D-1534): it never runs on this machine.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
 	want := wantPlatform(s.Platform)
 	c := planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()}, DefaultPlatform: platform(), Foreground: s.Foreground}
@@ -72,20 +73,22 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 	if !slices.Contains(c.Support, want) { // an explicit platform outside the host-only default support is still the job's own ask
 		c.Support = append(slices.Clone(c.Support), want)
 	}
-	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Platform: s.Platform, Job: *s.Job})
+	job, node := nodeJob(rd.sess, *s.Job) // a TEAM job with secrets goes to a leased node in its node form (secrets_node.go)
+	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Platform: s.Platform, Job: job})
 	j.Key, j.Attempt, j.Trust = id, s.N, rd.jobTrust()
 	j.User, j.Team = rd.sess.User, rd.sess.Team
 	j.Pipeline.Band = attemptBand(s.Band, rd.row.Trigger)
 	j.Accelerators = nil
 	j.Pipeline.Record = rd.sess.Record
 	req := model.PlacementRequirements{Platform: want, CPU: int64(cpu), MemMB: int64(mem)}
-	if s.Job.RemoteOnly { // the only jobs that go to a node with requirements: the world can check them against the node's facts
+	if job.RemoteOnly || node { // the only jobs that go to a node with requirements: the world can check them against the node's facts
 		req.Labels, req.Tools, req.IsolationMin, req.Network = j.Requirements.Labels, j.Requirements.Tools, j.Requirements.IsolationMin, j.Requirements.Network
-		if s.Job.Requirements != nil {
-			j.Accelerators = s.Job.Requirements.Accelerators
+		if job.Requirements != nil {
+			j.Accelerators = job.Requirements.Accelerators
 		}
 	}
 	j.Requirements = req
+	j.RemoteOnly = j.RemoteOnly || node
 	if rd.sess.LocalOnly != nil && rd.sess.LocalOnly(*s.Job) { // only the runner that is this machine carries the label
 		j.Requirements.Labels = append(j.Requirements.Labels, world.LocalLabel)
 	}

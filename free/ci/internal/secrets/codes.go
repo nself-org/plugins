@@ -1,7 +1,8 @@
 package secrets
 
 // Purpose: the package's error codes (TRUST Epic D25, E674-E677) and the one error type.
-// Inputs:  none. Outputs: Error, the four constructors, model.Register of the codes.
+// Inputs:  none. Outputs: Error, the four constructors, RefuseSubmitter (the dispatch-time E677 of a
+// TEAM submitter without release.start), model.Register of the codes.
 // Constraints: an error string never contains a secret value, any part of one, or the text of
 // a store file; messages name refs, reasons and nodes only.
 
@@ -17,6 +18,8 @@ const (
 	ReasonNodeNoRecipient = "secrets.node_no_recipient"
 	ReasonRefsOnly        = "secrets.coordinator_refs_only"
 	ReasonLegacyScope     = "secrets.legacy_scope"
+	// ReasonSubmitterNotAuthorized: a TEAM submitter without release.start asked for a job that reads secrets.
+	ReasonSubmitterNotAuthorized = "secrets.submitter_not_authorized"
 )
 
 // Error carries a registered machine-readable code and, for E677, the refusal reasons.
@@ -58,6 +61,13 @@ func errNotEligible(reasons []string, format string, args ...any) error {
 	e := newErr("E677", format, args...)
 	e.Reasons = append([]string(nil), reasons...)
 	return e
+}
+
+// RefuseSubmitter is the E677 a coordinator returns before any lease when the run's submitter may not
+// start a job that reads secrets (D-1534). detail names the authorization failure, never a value.
+func RefuseSubmitter(detail string) error {
+	return errNotEligible([]string{ReasonSubmitterNotAuthorized}, "the submitter may not start a job that reads secrets (%s): %s",
+		ReasonSubmitterNotAuthorized, echo(detail))
 }
 
 // CodeOf returns the E-code of an error from this package, or "".
