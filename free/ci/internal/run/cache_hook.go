@@ -42,6 +42,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 var _ authz.ValueScanner = (*redact.Redactor)(nil)
@@ -179,7 +180,9 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}
 	sweepStale(filepath.Join(home, "cache-work"), time.Now(), func(id string) bool { _, mine := h.sessions.Load(id); return mine || live(ctx, a.Store, id) })
+	endBegin := trace.Start("cache.begin")
 	s, err := specs.Begin(ctx, in)
+	endBegin()
 	if err != nil {
 		h.warn("cache plan refused: " + firstLineOf(err.Error()))
 		s.Cleanup()

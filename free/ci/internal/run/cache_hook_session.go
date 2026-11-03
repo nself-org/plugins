@@ -8,6 +8,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 // BeforeJob creates the workspace cache dirs of a container job that missed
@@ -23,6 +24,7 @@ func (h *cacheHook) BeforeJob(ctx context.Context, a AttemptInfo, workspace *os.
 // the commit waits for AttemptFinalize. A cache failure never fails the job.
 func (h *cacheHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
 	if e, ok := h.sessions.Load(a.AttemptID); ok {
+		defer trace.Start("cache.after_job")()
 		return e.(cacheEntry).s.AfterJob(ctx, workspace)
 	}
 	return nil
@@ -31,6 +33,7 @@ func (h *cacheHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.R
 // AttemptFinalize saves while the attempt is finalizing at epoch.
 func (h *cacheHook) AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error {
 	if e, ok := h.sessions.Load(a.AttemptID); ok {
+		defer trace.Start("cache.finalize")()
 		e.(cacheEntry).s.Finalize(ctx, epoch)
 	}
 	return nil
@@ -50,7 +53,9 @@ func (h *cacheHook) Wants(a AttemptInfo) bool {
 func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 	if e, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
 		ce := e.(cacheEntry)
+		endRetract := trace.Start("cache.retract")
 		retractUnpassed(ctx, a.Store, ce)
+		endRetract()
 		wg := cleanupGroup(a.RunID)
 		wg.Add(1)
 		go func() {
