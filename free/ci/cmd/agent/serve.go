@@ -13,7 +13,9 @@ package main
 // verified swap (upgrade_frame.go) and ends the session after its done result (exit 0;
 // the next ssh session starts the new binary); carrier A should start it through a
 // forced command (`serve --stdio ...`) so the coordinator cannot run `slots --set`; logs and errors go to stderr, which
-// the SSH carrier keeps apart from the frame stream.
+// the SSH carrier keeps apart from the frame stream; every lease is admitted by
+// the node's contention gate (battery, interactive use, reservation) and runs
+// inside its Isolator (contention_wire.go).
 
 import (
 	"bytes"
@@ -123,16 +125,19 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	car = withCheckout(car, state)
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	up := newUpgradeExit(car, state, stop, func(format string, a ...any) {
+	logf := func(format string, a ...any) {
 		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent serve: "+format+"\n", a...)
-	})
+	}
+	up := newUpgradeExit(car, state, stop, logf)
+	nc := newNodeContention(state, machineID(), *secretValues, table, logf)
 	s, err := session.New(session.Config{
 		Carrier: up, Key: key, Slots: table, StateDir: state,
 		Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
-		Runner:      leaseRunner{coordinator: *coordinator},
+		Runner:      leaseRunner{coordinator: *coordinator, contention: nc},
 		Coordinator: session.Coordinator{ID: *coordinator, RootFingerprint: *fingerprint},
 		Status:      hostStatus,
 		Upgrade:     up.Hook,
+		Contention:  nc.session(),
 	})
 	if err != nil {
 		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
@@ -146,7 +151,11 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 }
 
 // leaseRunner runs a lease's job through the exec path.
-type leaseRunner struct{ coordinator string }
+type leaseRunner struct {
+	coordinator string
+	// contention isolates the job inside the node's reservation; nil runs the plain isolator chain.
+	contention *nodeContention
+}
 
 func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResult, error) {
 	l := j.Lease
@@ -160,6 +169,9 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		spec.JobID = l.Evidence.Job
 	}
 	in := jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip}
+	if r.contention != nil {
+		in.Isolate = r.contention.isolate
+	}
 	if len(j.Credential) > 0 {
 		if err := wrapCredential(&spec, &in, j); err != nil {
 			return session.JobResult{}, err

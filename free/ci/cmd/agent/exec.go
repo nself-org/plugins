@@ -3,7 +3,8 @@ package main
 // Purpose: `nself-ci-agent exec --spec <file> --evidence <path>` runs one job
 // through the P7-CI-32 executor and assembles its ci.evidence/v1 document with
 // the P7-CI-38 builder. It is the entrypoint hosted workflows (P7-HOST) call,
-// and runSpec is what `serve` runs for each lease.
+// and runSpec is what `serve` runs for each lease (inside the node's
+// contention Isolator: contention_wire.go).
 // Inputs:  a JSON job spec file (execSpec); the agent state dir for the
 // executor's private work area.
 // Outputs: the job's output on stdout, the evidence file (0600, atomic).
@@ -74,6 +75,9 @@ type jobInputs struct {
 	Tail func() string
 	// Skip names why the job must not run ("cancelled", "secrets_missing").
 	Skip string
+	// Isolate wraps the isolator chain of a leased job (contention_wire.go: background priority and the
+	// node's reservation); nil runs the chain as it is (the `exec` subcommand).
+	Isolate func(ciexec.Isolator) ciexec.Isolator
 }
 
 var revisionRE = regexp.MustCompile(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`)
@@ -229,6 +233,9 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	iso := cirun.Hooks{}.Resolved().Isolation
 	if iso == nil {
 		return ciexec.AttemptResult{}, "", errors.New("no isolator is registered; the agent will not run a job without one")
+	}
+	if in.Isolate != nil {
+		iso = in.Isolate(iso)
 	}
 	// The transport expects a cancelled result within five seconds. Leave time
 	// for evidence and cleanup after escalating SIGTERM to SIGKILL.

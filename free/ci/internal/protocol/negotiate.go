@@ -79,7 +79,11 @@ func AcceptHello(hello Hello, pinned *string, coordinatorVersions []int, minAgen
 	if reject != nil {
 		return *reject, nil
 	}
-	return Welcome{Version: version, MinAgentVersion: minAgentVersion, SessionID: sessionID, HeartbeatMS: heartbeatMS, AgentTTLMS: ttlMS}, nil
+	w := Welcome{Version: version, MinAgentVersion: minAgentVersion, SessionID: sessionID, HeartbeatMS: heartbeatMS, AgentTTLMS: ttlMS}
+	if WantsContention(hello) { // the caller may fill the policy; an empty block still says reasons are read
+		w.Contention = &Contention{}
+	}
+	return w, nil
 }
 
 // WriteHelloResponse writes exactly one reply after checking the age pin.

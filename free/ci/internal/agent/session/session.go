@@ -9,7 +9,9 @@
 // goroutines only send frames (serialised by a mutex) and report back on a
 // channel. The slot table caps leases across every coordinator and carrier; a
 // lease beyond it is refused with E654 (a log line plus a heartbeat naming the
-// lease state "refused", because v1 has no agent-side reject frame). A stale
+// lease state "refused", because v1 has no agent-side reject frame); with
+// Config.Contention the node's battery, interactive and reservation policy
+// gates the lease too (contention.go). A stale
 // epoch is ignored. Nothing here decides trust: a lease is run as the carrier
 // delivered it, and a result is signed only by the registered Signer.
 package session
@@ -86,6 +88,8 @@ type Config struct {
 	// fail those leases at once instead of waiting for them to expire (Epic D6). nil reports none.
 	Fenced func() []protocol.LeaseState
 	Resume *Resume
+	// Contention composes the node's contention layer (contention.go); nil takes plain slots.
+	Contention *Contention
 }
 
 // RejectError is the coordinator's reject of hello.
@@ -176,6 +180,7 @@ func (s *Session) Run(ctx context.Context) error {
 			return &protocol.Error{Code: protocol.CodeVersion, Reason: "welcome_version"}
 		}
 		s.sendSeq, s.welcome = s.cfg.Resume.SendSeq, s.cfg.Resume.Welcome
+		s.applyWelcome()
 	} else {
 		if err := s.sendHello(); err != nil {
 			return err
@@ -208,6 +213,7 @@ func (s *Session) Run(ctx context.Context) error {
 		case err := <-s.sendFailed:
 			return fmt.Errorf("carrier send: %w", err)
 		case <-s.ticker.C():
+			s.wake()
 			s.beat(nil)
 		case al := <-s.finished:
 			if s.active[al.lease.LeaseID] == al {
@@ -275,7 +281,7 @@ func (s *Session) sendHello() error {
 		NodeKey:             protocol.NodeKey{Alg: "ed25519", KeyID: s.cfg.Key.KeyID(), Public: s.cfg.Key.PublicString()},
 		CapabilityDigest:    f.CapabilityDigest,
 		Identity:            protocol.Identity{MachineID: f.MachineID, HostKeyFingerprints: fps},
-		CompatModeSupported: f.CompatModes,
+		CompatModeSupported: s.compatModes(),
 		Slots:               protocol.Slots{Total: s.cfg.Slots.Total(), Used: used},
 	}, nil)
 }
@@ -287,6 +293,7 @@ func (s *Session) onHandshake(m protocol.Message) error {
 			return &protocol.Error{Code: protocol.CodeVersion, Reason: "welcome_version"}
 		}
 		s.welcome = *b
+		s.applyWelcome()
 		return RecordWelcome(s.cfg.StateDir, s.cfg.Coordinator, *b, s.cfg.Clock.Now())
 	case *protocol.Reject:
 		return &RejectError{*b}

@@ -8,7 +8,8 @@ package agentapi
 // Constraints: the body is capped at one frame (1 MiB) and decoded strictly; the node key is pinned on
 //          the first hello of a node and compared in constant time later (pki.CA.CheckNodeKey); a
 //          rejected hello creates no session and pins nothing; welcome carries heartbeat_ms and
-//          agent_ttl_ms = coordinator TTL - 2 x heartbeat (Epic D6).
+//          agent_ttl_ms = coordinator TTL - 2 x heartbeat (Epic D6); an agent that lists
+//          protocol.CompatContention also gets the node's stored contention policy (D-1226).
 
 import (
 	"crypto/ed25519"
@@ -85,6 +86,13 @@ func (s *Server) serveHello(w http.ResponseWriter, r *http.Request) {
 	s.noteHello(q.node, hello.AgentVersion, hello.Slots.Used)
 	welcome := reply.(protocol.Welcome)
 	welcome.SessionID = sess.id
+	if welcome.Contention != nil && s.cfg.Policy != nil { // the agent asked for it (protocol/contention.go)
+		p, perr := s.cfg.Policy(q.ctx, q.node)
+		if perr != nil {
+			s.cfg.Logf("agentapi: contention policy of %s not read: %v", q.node, perr)
+		}
+		welcome.Contention.Policy = p
+	}
 	w.Header().Set(HeaderSession, sess.id)
 	f, ferr := newFlow(w, q.rc, 0)
 	if ferr != nil {

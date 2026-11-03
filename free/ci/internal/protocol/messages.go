@@ -47,6 +47,8 @@ type Welcome struct {
 	SessionID       string `json:"session_id"`
 	HeartbeatMS     int    `json:"heartbeat_ms"`
 	AgentTTLMS      int    `json:"agent_ttl_ms"`
+	// Contention is sent only to an agent whose hello lists CompatContention (contention.go).
+	Contention *Contention `json:"contention,omitempty"`
 }
 type Reject struct {
 	Code            string `json:"code"`
@@ -57,6 +59,8 @@ type LeaseState struct {
 	LeaseID string `json:"lease_id"`
 	Epoch   uint64 `json:"epoch"`
 	State   string `json:"state"`
+	// Reason names the node.* scheduler reason of a "refused" state (contention.go).
+	Reason string `json:"reason,omitempty"`
 }
 type Heartbeat struct {
 	Leases      []LeaseState `json:"leases"`
@@ -109,20 +113,20 @@ type LeaseCache struct {
 	Save      []CacheSave    `json:"save"`
 }
 type Lease struct {
-	NetworkScope     model.NetworkScope  `json:"network_scope,omitempty"`
-	LeaseID          string              `json:"lease_id"`
-	AttemptID        string              `json:"attempt_id"`
-	Epoch            uint64              `json:"epoch"`
-	Token            string              `json:"token"`
-	CompatMode       CompatMode          `json:"compat_mode"`
-	Job              model.Job           `json:"job"`
-	Checkout         Checkout            `json:"checkout"`
-	Secrets          []SecretRef         `json:"secrets"`
-	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; a node judges its own secret eligibility and the job's network scope by it
-	ExpiresAt        string              `json:"expires_at"`
-	Cache            *LeaseCache         `json:"cache,omitempty"`
-	RunnerCredential *RunnerCredential   `json:"runner_credential,omitempty"`
-	Evidence         *LeaseEvidence      `json:"evidence,omitempty"`
+	NetworkScope     model.NetworkScope `json:"network_scope,omitempty"`
+	LeaseID          string             `json:"lease_id"`
+	AttemptID        string             `json:"attempt_id"`
+	Epoch            uint64             `json:"epoch"`
+	Token            string             `json:"token"`
+	CompatMode       CompatMode         `json:"compat_mode"`
+	Job              model.Job          `json:"job"`
+	Checkout         Checkout           `json:"checkout"`
+	Secrets          []SecretRef        `json:"secrets"`
+	Trust            model.TrustClass   `json:"trust,omitempty"` // the class the job was admitted at; a node judges its own secret eligibility and the job's network scope by it
+	ExpiresAt        string             `json:"expires_at"`
+	Cache            *LeaseCache        `json:"cache,omitempty"`
+	RunnerCredential *RunnerCredential  `json:"runner_credential,omitempty"`
+	Evidence         *LeaseEvidence     `json:"evidence,omitempty"`
 }
 
 // LeaseEvidence is what the coordinator recorded for the attempt (its run, repository, source trust, policy

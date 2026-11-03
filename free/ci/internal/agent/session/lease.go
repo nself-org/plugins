@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -11,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal/agent/slots"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
@@ -83,14 +81,8 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 		s.refuse(l, "lease_expired", "")
 		return
 	}
-	slot, err := s.cfg.Slots.Acquire(slots.Self(s.cfg.Coordinator.ID, l.LeaseID))
-	if err != nil {
-		var se *slots.Error
-		if errors.As(err, &se) {
-			s.refuse(l, se.Reason, slots.CodeFull)
-		} else {
-			s.refuse(l, "slot_table_error", "")
-		}
+	h, ok := s.acquire(l)
+	if !ok {
 		return
 	}
 	s.noteEpoch(l)
@@ -108,7 +100,7 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	al.addMask(l.Token)
 	s.active[l.LeaseID] = al
 	s.wg.Add(1)
-	go s.runLease(ctx, al, slot)
+	go s.runLease(ctx, al, h)
 	if al.feed != nil {
 		s.beat(nil) // tells a pull coordinator the lease is running: it starts the restore push
 	}
@@ -142,9 +134,19 @@ func (s *Session) refuse(l protocol.Lease, reason, code string) {
 	if code != "" {
 		text = code + ": " + strings.ReplaceAll(reason, "_", " ")
 	}
+	s.refuseWith(l, text, "")
+}
+
+// refuseWith sends the refusal's log line and heartbeat; a node.* reason rides on the heartbeat entry
+// when the coordinator reads it.
+func (s *Session) refuseWith(l protocol.Lease, text, reason string) {
 	probe := &activeLease{lease: l}
 	_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: 1, Stream: "stderr", Text: text}, probe)
-	s.beat([]protocol.LeaseState{{LeaseID: l.LeaseID, Epoch: l.Epoch, State: "refused"}})
+	st := protocol.LeaseState{LeaseID: l.LeaseID, Epoch: l.Epoch, State: "refused"}
+	if s.reasonRead() {
+		st.Reason = reason
+	}
+	s.beat([]protocol.LeaseState{st})
 }
 
 const (
@@ -158,7 +160,7 @@ const (
 // noteTail keeps the last tailKeep bytes of masked output.
 // maskedTail is JobRun.Tail: flush the unterminated line, return the masked tail.
 // redact hides every literal secret the lease carries from a string.
-func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slot) {
+func (s *Session) runLease(ctx context.Context, al *activeLease, h held) {
 	defer s.wg.Done()
 	defer func() {
 		al.done.Store(true)
@@ -167,7 +169,7 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 		case <-s.closing:
 		}
 	}()
-	defer func() { _ = s.cfg.Slots.Release(slot) }()
+	defer func() { _ = h.release() }()
 	defer al.cancelCtx()
 	l := al.lease
 	al.lw = newLineWriter(func(text string) {
@@ -241,7 +243,7 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 	case missingSecrets(l.Job.Secrets, setup.Secrets):
 		skip = "secrets_missing"
 	}
-	res, err := s.cfg.Runner.Run(ctx, JobRun{Lease: l, Slot: slot.Index, Root: root, Setup: setup, Credential: cred, Output: al.lw.Write, Tail: al.maskedTail, Skip: skip})
+	res, err := s.cfg.Runner.Run(ctx, JobRun{Lease: l, Slot: h.slot.Index, Root: root, Setup: setup, Credential: cred, Output: al.lw.Write, Tail: al.maskedTail, Skip: skip})
 	al.lw.Flush()
 	s.finish(ctx, al, root, res, err)
 }
