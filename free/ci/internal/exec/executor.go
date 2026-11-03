@@ -144,13 +144,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 		s.Home = filepath.Join(home, ".nself", "ci")
 	}
-	base := filepath.Join(s.Home, "work")
-	if err := os.MkdirAll(base, 0700); err != nil {
-		result.Err = err
-		return
-	}
-	workspace := filepath.Join(base, s.AttemptID)
-	if err := os.Mkdir(workspace, 0700); err != nil {
+	workspace, release, err := acquireWorkspace(s.Home, s.AttemptID, s.WorkspaceKey)
+	if err != nil {
 		result.Err = err
 		return
 	}
@@ -161,6 +156,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			result.Attempt.State = "failed"
 			result.Attempt.FailureClass = "infra"
 		}
+		release()
 	}()
 	pinned, err := os.OpenRoot(workspace) // pinned before the job runs: AfterJob works on this inode
 	if err != nil {

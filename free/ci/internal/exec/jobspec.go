@@ -19,12 +19,14 @@ type JobSpec struct {
 	Job                      model.Job
 	Command                  []string
 	SourceDir                string
-	Mounts                   []Mount
-	Home                     string
-	Timeout                  time.Duration
-	Network                  model.NetworkScope
-	CPU                      float64
-	MemoryMB                 int
+	// WorkspaceKey selects a stable workspace across attempts; empty keeps the attempt path.
+	WorkspaceKey string
+	Mounts       []Mount
+	Home         string
+	Timeout      time.Duration
+	Network      model.NetworkScope
+	CPU          float64
+	MemoryMB     int
 	// MemoryLimitMB caps a process job's writable memory (RLIMIT_DATA on Linux). Zero means no cap:
 	// MemoryMB alone is a reservation, enforced by container isolation, never by RLIMIT_AS.
 	MemoryLimitMB int
