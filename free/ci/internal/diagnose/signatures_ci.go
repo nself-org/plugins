@@ -188,7 +188,7 @@ func pinDiagnosis() Diagnosis {
 
 // ClassifyInstall classifies a failed dependency install from its log: infra
 // (retryable, with the signature) for a full disk, an unreachable registry
-// (DNS or network) or a kill by memory; code for everything else, because an
+// (DNS or network); memory needs host evidence. Code for everything else, because an
 // unknown install failure is the project's. Guards read the whole log first
 // (a lockfile out of sync, a failing lifecycle script or test assertion, a
 // connection to this machine, a client error from the registry) and return
@@ -218,7 +218,7 @@ func classifyInstall(log string, localInfra bool) Diagnosis {
 	case installDisk.MatchString(log):
 		return infra(signatureByID(SigDisk))
 	case installKilled.MatchString(log):
-		return infra(signatureByID(SigOOM))
+		return named(SigCode, "code")
 	}
 	code := lastCode(installNPMCode, log)
 	if code == "" {

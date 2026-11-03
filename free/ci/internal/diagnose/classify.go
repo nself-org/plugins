@@ -26,8 +26,8 @@ const ExcerptMax = 4096
 type Input struct {
 	ExecClass model.FailureClass // the executor's coarse class: code, infra, timeout, cancelled; "" when unknown
 	ExitCode  int
-	Err       string // the executor, admission or prepare error text, if any
-	Reason    string // "resource_limit" when a container hit its memory or process limit
+	Err       string // host-collected executor, admission or prepare error; never job output
+	Reason    string // host-collected "resource_limit" when a container hit its memory or process limit
 	Signal    string // the signal that ended the job (SIGKILL, SIGSEGV, ...); "" when unknown or none
 	Tail      string // the end of the redacted output
 	Lost      bool   // the lease expired or the runner was revoked
@@ -53,14 +53,14 @@ func Classify(in Input) Diagnosis {
 	case in.TimedOut || in.ExecClass == "timeout":
 		return named(SigTimeout, "timeout") // a timeout kill is SIGKILL too: judged before any signature
 	}
+	if in.Reason == "resource_limit" {
+		return infra(signatures[0])
+	}
 	if i := strings.LastIndex(in.Tail, PrepareFailed); i >= 0 && in.ExitCode == PrepareExit {
 		return classifyPrepare(in.Tail[:i]) // a Node gate's frozen install failed (P7-AUTO-16)
 	}
 	if in.ExitCode == PinExit && strings.Contains(in.Tail, PinMismatch) {
 		return pinDiagnosis()
-	}
-	if in.Reason == "resource_limit" {
-		return infra(signatures[0])
 	}
 	tail := in.Tail
 	if len(tail) > TailWindow {
@@ -102,7 +102,7 @@ func (s signature) matches(in Input, tail string) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
+	return !s.resource && in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
 }
 
 // externalKill reports whether a signal can come from outside the job (the

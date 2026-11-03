@@ -97,7 +97,7 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	if err := markRuntimeUsed(s.Home, runtime); err != nil { // the orphan sweep lists only marked runtimes
 		return -1, err
 	}
-	stop := containerStopper(runtime, name, e.Grace)
+	stop := containerStopper(runtime, name, e.Grace, nil)
 	code, err := e.runCommandIn(ctx, s.Stdin, append([]string{runtime}, args...), workspace, cliEnv, s.Output, stop, nil, "")
 	if err != nil {
 		stop()
@@ -147,8 +147,9 @@ func writeEnvFile(home string, env []string) (string, func(), error) {
 }
 
 // containerStopper returns a once-only stop-then-remove of the named container
-// through the given runtime CLI, bounded by the grace period.
-func containerStopper(binary, name string, grace time.Duration) func() {
+// through the given runtime CLI, bounded by the grace period. beforeRemove, when
+// set, runs after the stop and before the removal (the final host sample).
+func containerStopper(binary, name string, grace time.Duration, beforeRemove func()) func() {
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -160,6 +161,9 @@ func containerStopper(binary, name string, grace time.Duration) func() {
 			stop.Env = dockerHostEnv()
 			_ = stop.Run()
 			cancelStop()
+			if beforeRemove != nil {
+				beforeRemove()
+			}
 			if remain := time.Until(deadline); remain > 0 {
 				rmCtx, cancelRM := context.WithTimeout(context.Background(), remain)
 				rm := osexec.CommandContext(rmCtx, binary, "rm", "-f", name)

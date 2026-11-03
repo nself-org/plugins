@@ -13,9 +13,7 @@ func TestClassifyOOM(t *testing.T) {
 		"killed by a signal, no error": {ExecClass: "code", ExitCode: -1},
 		"killed by SIGKILL":            {ExecClass: "code", ExitCode: -1, Signal: "SIGKILL"},
 		"killed by SIGTERM":            {ExecClass: "code", ExitCode: -1, Signal: "SIGTERM"},
-		"shell Killed line after 137":  {ExecClass: "code", ExitCode: 137, Tail: "make\nsh: line 1:  4242 Killed   cc1\n"},
 		"container memory limit":       {ExecClass: "code", ExitCode: 1, Reason: "resource_limit"},
-		"kernel oom line in output":    {ExecClass: "code", ExitCode: 1, Tail: "build\nOut of memory: Killed process 4242 (cc1)\n"},
 		"exec reports a killed signal": {ExecClass: "infra", ExitCode: -1, Err: "signal: killed"},
 	} {
 		d := Classify(in)

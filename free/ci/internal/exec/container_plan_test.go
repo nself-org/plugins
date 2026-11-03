@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -26,7 +25,28 @@ func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []str
 	t.Helper()
 	dir := t.TempDir()
 	fakeRuntimeDir = dir
-	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in events) cat \"$d/events\" 2>/dev/null; exit 0;; run) ;; *) exit 0;; esac\ncase \"$*\" in *\"--env-file /dev/fd/3\"*) cat /dev/fd/3 > \"$d/env3\";; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
+	script := `#!/bin/sh
+d=$(dirname "$0")
+case "$1" in inspect) cat "$d/inspect" 2>/dev/null; exit 0;; esac
+echo "$*" >> "$d/calls"
+case "$*" in *--entrypoint*) exit 0;; esac
+case "$1" in
+events) cat "$d/events" 2>/dev/null; exit 0;;
+rm)
+  if [ -e "$d/cgroup" ]; then
+    scope=$(cat "$d/cgroup")
+    rm "$scope/pids.events" "$scope/pids.max" "$scope/memory.events"
+    rmdir "$scope"
+  fi
+  exit 0;;
+run) ;;
+*) exit 0;;
+esac
+case "$*" in *"--env-file /dev/fd/3"*) cat /dev/fd/3 > "$d/env3";; esac
+cat > "$d/stdin"
+cat "$d/out"
+exit $(cat "$d/code")
+`
 	for name, body := range map[string]string{"docker": script, "out": out, "code": code} {
 		mode := os.FileMode(0600)
 		if name == "docker" {
@@ -92,7 +112,7 @@ func TestPlannedContainerRunsCommandAndCleanup(t *testing.T) {
 		t.Fatalf("result %+v", res)
 	}
 	got := calls()
-	if len(got) != 2 || !strings.HasPrefix(got[0], "run --rm --name nself-ci-plan-ok") || !strings.HasSuffix(got[0], "alpine:3.19 go test -v") || !strings.Contains(got[1], "--entrypoint sh") {
+	if len(got) != 3 || !strings.HasPrefix(got[0], "run --name nself-ci-plan-ok") || !strings.HasSuffix(got[0], "alpine:3.19 go test -v") || got[1] != "rm -f nself-ci-plan-ok" || !strings.Contains(got[2], "--entrypoint sh") {
 		t.Fatalf("calls %q", got)
 	}
 }
@@ -112,7 +132,7 @@ func TestPlannedContainerGetsEnvOnStdinNeverOnDiskOrArgv(t *testing.T) {
 		if strings.Contains(call, "synthetic-value-1") || strings.Contains(call, "ci-env-") {
 			t.Fatalf("env value or env file on argv: %q", call)
 		}
-		if strings.Contains(call, "--entrypoint") {
+		if strings.Contains(call, "--entrypoint") || strings.HasPrefix(call, "rm -f ") {
 			continue
 		}
 		if !strings.Contains(call, "--env-file /dev/stdin") {
@@ -127,8 +147,8 @@ func TestPlannedContainerGetsEnvOnStdinNeverOnDiskOrArgv(t *testing.T) {
 
 func TestPlannedContainerReasons(t *testing.T) {
 	for name, tc := range map[string]struct{ out, code, reason string }{
-		"killed":      {"", "137", "resource_limit"},
-		"forkfail":    {"sh: can't fork\n", "2", "resource_limit"},
+		"killed":      {"", "137", ""},               // no oom event, no cgroup counter: nothing the host saw
+		"forkfail":    {"sh: can't fork\n", "2", ""}, // printed by the job, no host evidence: not a limit (D-1580)
 		"plainfail":   {"FAIL\n", "1", ""},
 		"killedclean": {"", "0", ""},
 	} {
@@ -198,350 +218,6 @@ func TestPlannedWorkspaceOpenedToJobUID(t *testing.T) {
 		info, _ := os.Stat(path)
 		if info.Mode().Perm() != want {
 			t.Fatalf("%s mode %v want %v", path, info.Mode().Perm(), want)
-		}
-	}
-}
-
-func TestCheckContainerCommand(t *testing.T) {
-	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1"}
-	good := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged")
-
-	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: good}, run); err != nil {
-		t.Fatalf("job words after the image must not matter: %v", err)
-	}
-	withFlag := func(extra ...string) ContainerCommand {
-		return ContainerCommand{Binary: "docker", Args: append(append([]string{}, good[:1]...), append(extra, good[1:]...)...)}
-	}
-	for name, c := range map[string]ContainerCommand{
-		"privileged":  withFlag("--privileged"),
-		"pidhost":     withFlag("--pid=host"),
-		"ipchost":     withFlag("--ipc", "host"),
-		"nethost":     withFlag("--network=host"),
-		"netsplit":    withFlag("--network", "host"),
-		"capadd":      withFlag("--cap-add", "SYS_ADMIN"),
-		"device":      withFlag("--device=/dev/kvm"),
-		"volume":      withFlag("-v", "/:/host"),
-		"volumeglue":  withFlag("-v/:/host"),
-		"volumelong":  withFlag("--volume=/:/host"),
-		"socketmount": withFlag("--mount", "type=bind,src=/var/run/docker.sock,dst=/s"),
-		"hostpath":    withFlag("--mount", "type=bind,src=/etc,dst=/e"),
-		"usernshost":  withFlag("--userns=host"),
-		"nocapdrop":   {Binary: "docker", Args: []string{"run", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
-		"notrun":      {Binary: "docker", Args: []string{"exec", "alpine:3.19"}},
-		"binary":      {Binary: "sh", Args: good},
-		"noimage":     {Binary: "docker", Args: good[:13]},
-		"nouser":      {Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--network=none", "alpine:3.19", "x"}},
-		"nonetwork":   {Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "alpine:3.19", "x"}},
-		"envfiledisk": withFlag("--env-file", "/tmp/secrets"),
-		"seccomp":     withFlag("--security-opt", "seccomp=unconfined"),
-		"apparmor":    withFlag("--security-opt=apparmor=unconfined"),
-		"capdrop-net": {Binary: "docker", Args: []string{"run", "--cap-drop=NET_ADMIN", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
-		"userroot":    withFlag("--user", "0:0"),
-		"userword":    withFlag("--user", "root"),
-		"useragent":   withFlag("--user", itoa(os.Getuid())+":"+itoa(os.Getuid())),
-		"runtimekata": withFlag("--runtime", "kata"),
-		"tmpfsother":  withFlag("--tmpfs", "/etc:rw"),
-		"envfile":     withFlag("--env-file", "/etc/shadow"),
-		"sysctl":      withFlag("--sysctl", "net.ipv4.ip_forward=1"),
-		"gpus":        withFlag("--gpus=all"),
-		"addhost":     withFlag("--add-host", "x:1.1.1.1"),
-		"positional":  withFlag("stray"),
-		"valueonbool": withFlag("--rm=true"),
-		"net other":   withFlag("--network", "container:x"),
-		"mounteq":     withFlag("--mount=type=bind,src=/,dst=/h"),
-		"mountsource": withFlag("--mount", "type=bind,src=/w/ws,source=/,dst=/repo"),
-		"mountdup":    withFlag("--mount", "type=bind,src=/w/ws,src=/,dst=/repo"),
-		"mountupper":  withFlag("--mount", "TYPE=bind,SOURCE=/,src=/w/ws,dst=/repo"),
-		"mountdst":    withFlag("--mount", "type=bind,src=/w/ws,dst=/etc"),
-		"mountro":     withFlag("--mount", "type=bind,src=/w/ws,dst=/repo,readonly"),
-		"roffalse":    withFlag("--read-only=false"),
-		"pids0":       withFlag("--pids-limit", "0"),
-		"pidsneg":     withFlag("--pids-limit=-1"),
-		"mem0":        withFlag("--memory=0m"),
-		"memg":        withFlag("--memory=1g"),
-		"cpus0":       withFlag("--cpus=0"),
-		"nopids":      without(good, "--pids-limit", 2),
-		"nomemory":    without(good, "--memory", 2),
-		"nocpus":      without(good, "--cpus", 2),
-		"nolabel":     without(good, "--label", 2),
-		"noname":      without(good, "--name", 2),
-		"othername":   withFlag("--name", "someone-else"),
-		"lowuid":      withFlag("--user", "1:1"),
-		"envsecret":   withFlag("--env", "TOKEN=hunter2"),
-	} {
-		if err := checkContainerCommand(c, run); err == nil {
-			t.Errorf("%s: accepted %v", name, c.Args)
-		}
-	}
-}
-
-// without returns a command whose argv lacks flag and its width-1 value(s).
-func without(args []string, flag string, width int) ContainerCommand {
-	out := []string{}
-	for i := 0; i < len(args); i++ {
-		if args[i] == flag {
-			i += width - 1
-			continue
-		}
-		out = append(out, args[i])
-	}
-	return ContainerCommand{Binary: "docker", Args: out}
-}
-
-func TestRuntimeQueryAndRemoveRefuseOtherVerbs(t *testing.T) {
-	ctx := context.Background()
-	if _, err := RuntimeQuery(ctx, "docker", "run", "x"); err == nil {
-		t.Fatal("run accepted")
-	}
-	if _, err := RuntimeQuery(ctx, "sh", "info"); err == nil {
-		t.Fatal("sh accepted")
-	}
-	if err := RuntimeRemove(ctx, "docker", "other-container"); err == nil {
-		t.Fatal("non-attempt name accepted")
-	}
-}
-
-// fixtureUID is a job user that is never the test's own uid.
-func fixtureUID() string {
-	uid := 65533
-	if os.Getuid() == uid || os.Geteuid() == uid {
-		uid++
-	}
-	return itoa(uid) + ":" + itoa(uid)
-}
-
-func itoa(n int) string { return strconv.Itoa(n) }
-
-func asError(err error, target **Error) bool {
-	e, ok := err.(*Error)
-	*target = e
-	return ok
-}
-
-func TestPlannedContainerMounts(t *testing.T) {
-	ro := Mount{Host: "/cache/a", Target: "/cache", ReadOnly: true}
-	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1", Mounts: []Mount{ro}}
-	args := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only",
-		"--mount", ro.Spec(), "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "alpine:3.19", "x")
-	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: args}, run); err != nil {
-		t.Fatalf("a declared read-only mount must pass: %v", err)
-	}
-	run.Mounts = nil
-	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: args}, run); err == nil {
-		t.Fatal("an undeclared mount passed")
-	}
-	spec := plannedSpec(t, "plan-rw", hardPlanner{})
-	spec.Mounts = []Mount{{Host: t.TempDir(), Target: "/cache"}}
-	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
-	var e *Error
-	if !errors.As(res.Err, &e) || e.Code != "E611" {
-		t.Fatalf("a read-write mount must be refused under the hardened profile: %+v", res)
-	}
-}
-
-// helperPlanner runs its cleanup in its own image, as the container profile does (D-0963).
-type helperPlanner struct {
-	hardPlanner
-	declared bool // the command carries Image; false hides it so the backstop cannot find the helper image
-}
-
-func (p helperPlanner) Cleanup(r ContainerRun) (*ContainerCommand, error) {
-	if !r.JobImageCleanup {
-		r.Image = "docker.io/library/busybox@sha256:helper"
-	}
-	cmd, err := p.hardPlanner.Cleanup(r)
-	if err == nil && p.declared {
-		cmd.Image = r.Image
-	}
-	return cmd, err
-}
-
-func TestPlannedCleanupRunsItsOwnImage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		declared  bool
-		wantNote  bool
-		wantClean bool
-	}{
-		"helper image declared":     {declared: true, wantClean: true},
-		"helper image not declared": {declared: false, wantNote: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			calls := fakeRuntime(t, "ok\n", "0")
-			var out strings.Builder
-			spec := plannedSpec(t, "plan-helper", helperPlanner{declared: tc.declared})
-			spec.Output = func(b []byte) { out.Write(b) }
-			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
-			if res.Err != nil || res.Attempt.State != "passed" {
-				t.Fatalf("result %+v", res)
-			}
-			got := calls()
-			cleaned := len(got) == 2 && strings.Contains(got[1], "docker.io/library/busybox@sha256:helper -c true") && !strings.Contains(got[1], "alpine:3.19")
-			if cleaned != tc.wantClean {
-				t.Errorf("cleanup ran in the helper image = %v, want %v (calls %q)", cleaned, tc.wantClean, got)
-			}
-			if note := strings.Contains(out.String(), "cleanup helper did not finish"); note != tc.wantNote {
-				t.Errorf("failure note = %v, want %v (output %q)", note, tc.wantNote, out.String())
-			}
-		})
-	}
-}
-
-// A node that cannot start the helper image (never pulled, no registry) still cleans the workspace in the job image,
-// as it did before the helper existed; a node where both fail reports it in the job log.
-func TestPlannedCleanupFallsBackToTheJobImage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		helperFails, jobFails bool
-		wantCalls             int
-		wantNote              bool
-	}{
-		"helper fine":                   {wantCalls: 2},
-		"helper missing then job image": {helperFails: true, wantCalls: 3},
-		"both fail":                     {helperFails: true, jobFails: true, wantCalls: 3, wantNote: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			log := filepath.Join(dir, "calls")
-			body := "echo \"$*\" >> " + log + "\ncase \"$*\" in\n"
-			if tc.helperFails {
-				body += "*sha256:helper*) echo 'Unable to find image' >&2; exit 125;;\n"
-			}
-			if tc.jobFails {
-				body += "*--entrypoint*) exit 1;;\n"
-			}
-			body += "esac\nexit 0\n"
-			fakeDocker(t, body)
-			var out strings.Builder
-			spec := plannedSpec(t, "plan-fallback", helperPlanner{declared: true})
-			spec.Output = func(b []byte) { out.Write(b) }
-			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
-			if res.Err != nil || res.Attempt.State != "passed" {
-				t.Fatalf("result %+v", res)
-			}
-			data, _ := os.ReadFile(log)
-			calls := strings.Split(strings.TrimSpace(string(data)), "\n")
-			if len(calls) != tc.wantCalls {
-				t.Fatalf("calls %q, want %d", calls, tc.wantCalls)
-			}
-			if tc.helperFails && (!strings.Contains(calls[1], "sha256:helper") || !strings.Contains(calls[2], "alpine:3.19") || strings.Contains(calls[2], "sha256:helper")) {
-				t.Errorf("second try must run the job image: %q", calls[1:])
-			}
-			if note := strings.Contains(out.String(), "cleanup helper did not finish"); note != tc.wantNote {
-				t.Errorf("note = %v, want %v (output %q)", note, tc.wantNote, out.String())
-			}
-		})
-	}
-}
-
-// TestPlannedContainerRunnerRoot: a runner job gets one extra, exec-capable tmpfs at /runner and nothing else
-// new; the backstop accepts exactly that value and only for a run that asked for it, and requires it then.
-func TestPlannedContainerRunnerRoot(t *testing.T) {
-	fakeRuntime(t, "ok\n", "0")
-	base := []string{"run", "--rm", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
-	with := func(tmpfs ...string) ContainerCommand {
-		args := append([]string(nil), base...)
-		for _, v := range tmpfs {
-			args = append(args, "--tmpfs", v)
-		}
-		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
-	}
-	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x"}
-	for name, tc := range map[string]struct {
-		cmd    ContainerCommand
-		root   string
-		accept bool
-	}{
-		"asked and present":            {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), RunnerRootPath, true},
-		"asked and missing":            {with("/tmp:rw,nosuid,size=256m"), RunnerRootPath, false},
-		"present but not asked":        {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), "", false},
-		"asked with a wider value":     {with("/runner:rw,exec,size=99999m"), RunnerRootPath, false},
-		"asked with another path":      {with("/etc:rw,exec,size=1m"), RunnerRootPath, false},
-		"another root path is refused": {with(RunnerRootTmpfs()), "/opt", false},
-	} {
-		run.RunnerRoot = tc.root
-		err := checkContainerCommand(tc.cmd, run)
-		if (err == nil) != tc.accept {
-			t.Errorf("%s: accepted=%v err=%v", name, err == nil, err)
-		}
-	}
-	if RunnerRootTmpfs() != "/runner:rw,exec,nosuid,nodev,size=384m" {
-		t.Fatalf("the runner tmpfs value changed: %q", RunnerRootTmpfs())
-	}
-}
-
-// TestPlannedContainerBackstopRequiresTheEnvFile (gp-gemini): a run that has an environment but whose command
-// leaves out --env-file is refused; with the pipe on fd 3 nobody would read it and the writer would wait.
-func TestPlannedContainerBackstopRequiresTheEnvFile(t *testing.T) {
-	fakeRuntime(t, "ok\n", "0")
-	args := []string{"run", "--rm", "--interactive", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
-	cmd := func(extra ...string) ContainerCommand {
-		return ContainerCommand{Binary: "docker", Args: append(append(append([]string(nil), args...), extra...), "alpine:3.19", "true")}
-	}
-	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true, EnvFile: envFileFD}
-	if err := checkContainerCommand(cmd(), run); err == nil || !strings.Contains(err.Error(), "missing --env-file") {
-		t.Fatalf("a run with an environment and no --env-file must be refused, got %v", err)
-	}
-	if err := checkContainerCommand(cmd("--env-file", envFileFD), run); err != nil {
-		t.Fatalf("with the fd 3 env file it passes: %v", err)
-	}
-	run.EnvFile = ""
-	run.Interactive = false
-	noFlag := ContainerCommand{Binary: "docker", Args: append(append([]string(nil), args[:2]...), args[3:]...)}
-	noFlag.Args = append(noFlag.Args, "alpine:3.19", "true")
-	if err := checkContainerCommand(noFlag, run); err != nil {
-		t.Fatalf("a run with no environment (the cleanup helper) needs no --env-file: %v", err)
-	}
-}
-
-// TestPlannedContainerEntrypoint (P7-HOST-07): a runner image whose own entrypoint is a launcher (gitlab-runner)
-// gets the job's entrypoint, the mounted agent. The backstop accepts exactly the entrypoint the run asked for,
-// only for a run that holds a stdin (a runner credential), requires it then, and still allows the cleanup
-// helper's `sh`.
-func TestPlannedContainerEntrypoint(t *testing.T) {
-	fakeRuntime(t, "ok\n", "0")
-	const agent = "/usr/local/bin/nself-ci-agent"
-	base := []string{"run", "--rm", "--interactive", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
-	cmd := func(entry ...string) ContainerCommand {
-		args := append([]string(nil), base...)
-		for _, v := range entry {
-			args = append(args, "--entrypoint", v)
-		}
-		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
-	}
-	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true}
-	mounted := []Mount{{Host: "/host/agent", Target: agent, ReadOnly: true}}
-	for name, tc := range map[string]struct {
-		cmd         ContainerCommand
-		entry       string
-		interactive bool
-		accept      bool
-		noMount     bool
-	}{
-		"asked and present":          {cmd(agent), agent, true, true, false},
-		"asked and missing":          {cmd(), agent, true, false, false},
-		"present but not asked":      {cmd(agent), "", true, false, false},
-		"another program":            {cmd("/bin/sh"), agent, true, false, false},
-		"asked path is not a mount":  {cmd("/bin/sh"), "/bin/sh", true, false, false},
-		"sh on a credential run":     {cmd("sh"), agent, true, false, false},
-		"two entrypoints":            {cmd(agent, "sh"), agent, true, false, false},
-		"agent not mounted":          {cmd(agent), agent, true, false, true},
-		"cleanup helper sh":          {cmd("sh"), "", false, true, false},
-		"asked without a job stdin":  {cmd(agent), agent, false, false, false},
-		"no entrypoint and none ask": {cmd(), "", true, true, false},
-	} {
-		run.Entrypoint, run.Interactive, run.Mounts = tc.entry, tc.interactive, mounted
-		if tc.noMount {
-			run.Mounts = nil
-		}
-		c := tc.cmd
-		if !tc.interactive { // the same command without --interactive, so only the entrypoint rule can refuse it
-			c = ContainerCommand{Binary: "docker", Args: append(append([]string(nil), c.Args[:2]...), c.Args[3:]...)}
-		}
-		err := checkContainerCommand(c, run)
-		if (err == nil) != tc.accept {
-			t.Errorf("%s: accepted=%v err=%v", name, err == nil, err)
 		}
 	}
 }

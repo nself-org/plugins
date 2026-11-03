@@ -9,6 +9,7 @@ package diagnose
 // output rows match only the last OutputLines lines and never a bare word; an
 // exit status counts only when the executor reported no error, and a plain
 // exit status chosen by the program (137, 127) is never enough on its own);
+// Resource signatures require host evidence and never match job output.
 // unknown stays code (misclassifying a code failure as infra hides bugs).
 
 import "regexp"
@@ -38,6 +39,7 @@ const (
 // signature is one infrastructure cause.
 type signature struct {
 	id          string
+	resource    bool
 	exits       []int          // exit statuses that alone identify the cause
 	errText     *regexp.Regexp // the executor, admission or prepare error text
 	output      *regexp.Regexp // the end of the redacted output
@@ -55,9 +57,9 @@ func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 var signatures = []signature{
 	{
 		id:          SigOOM,
+		resource:    true,
 		exits:       []int{-1}, // killed by a signal (the executor reports exit -1, no error); a plain `exit 137` is the job's own code and is not enough
 		errText:     re(`(?i)signal: killed|oomkilled|out of memory`),
-		output:      re(`(?im)oomkilled|out of memory: kill|oom-kill|cannot allocate memory|^\w*sh: (line \d+: )? *\d+ +killed\b`),
 		remediation: "The process was killed by a signal, most likely for memory. Free memory on the runner, lower the job's parallelism, or raise `requires.mem_mb`; then run it again.",
 	},
 	{

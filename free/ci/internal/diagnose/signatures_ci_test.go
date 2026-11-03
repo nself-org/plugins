@@ -82,7 +82,7 @@ func TestClassifyInstall(t *testing.T) {
 		"ansi colours":                               {"\x1b[31mnpm error code ENOSPC\x1b[0m\n", "infra", SigDisk},
 		"pnpm progress counts are no status codes":   {"Progress: resolved 403, reused 0, downloaded 0, added 0\nProgress: resolved 404, reused 0, downloaded 0, added 0\n ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: request timed out\n", "infra", SigNetwork},
 		"http 404 in words":                          {"error An unexpected error occurred: \"https://registry.yarnpkg.com/x: Request failed \\\"404 Not Found\\\"\".\n", "code", SigCode},
-		"shell kill":                                 {"sh: line 1:  4242 Killed                  npm ci\n", "infra", SigOOM},
+		"shell kill":                                 {"sh: line 1:  4242 Killed                  npm ci\n", "code", SigCode},
 		// code: everything else
 		"nothing recognised":                        {"something broke\n", "code", SigCode},
 		"sync (npm)":                                {"npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.\nnpm error Missing: x@1.0.0 from lock file\n", "code", SigCode},
