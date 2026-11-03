@@ -117,7 +117,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	// Keep the container inspectable until the final host sample has been collected.
 	cmd.Args = retainContainer(cmd.Args, run.Image)
 	var watch *pidsWatch
-	stop := containerStopperBeforeRemove(cmd.Binary, run.Name, e.Grace, func() { watch.stop() })
+	stop := containerStopper(cmd.Binary, run.Name, e.Grace, func() { watch.stop() })
 	tail := &outputTail{max: 4096}
 	sink := func(b []byte) {
 		tail.write(b)
@@ -140,7 +140,8 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	watch = startPidsWatch(cmd.Binary, run.Name)
 	code, _, err := e.runCommandFiles(ctx, cliStdin, extra, append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
 	pids := watch.stop() // final read, including discovery for jobs that exited before the first tick
-	if (pids.PidsError != "" || pids.MemError != "") && s.Output != nil {
+	// a failed job only: a passing job's output stays its own (gVisor has no pids.events, so this would print on every run)
+	if code != 0 && (pids.PidsError != "" || pids.MemError != "") && s.Output != nil {
 		s.Output([]byte("nself-ci: host counter diagnostics: " + pids.String() + "\n"))
 	}
 	if err != nil {
@@ -206,7 +207,7 @@ func (e *Executor) cleanupOnce(s JobSpec, run ContainerRun) (helper bool, err er
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
-	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
+	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace, nil)
 	local := Executor{Isolation: BaselineIsolator{}, Redactor: passThroughRedactor{}, Grace: e.Grace}
 	tail := &outputTail{max: 512}
 	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), tail.write, stop, nil, "")
