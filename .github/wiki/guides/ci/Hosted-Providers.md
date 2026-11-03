@@ -143,6 +143,17 @@ A project listed under the signing key is a signing project. For that project th
 
 GitLab runners use the runner token named above. The token needs `create_runner`.
 
+### Runner demand
+
+A pending job asks for an nSelf runner when its tags include `nself`. Two paths offer such a job to the coordinator:
+
+- **Job Hook.** GitLab sends one Job Hook per job status. The coordinator answers a declined demand with a 200, so GitLab never sends that hook again.
+- **Pending-job poll.** Every 30 seconds the coordinator lists the pending jobs of each project named under the webhook signing or token keys. It offers every `nself` job it has not handed over yet. The list is read with `If-None-Match`, so an unchanged list costs one conditional request and nothing more. A rate-limited list stops the tick.
+
+A demand declined for a reason that can pass is not marked. That covers a capped demand (`providers.gitlab.runner.max_pending` jobs already live) and a coordinator whose runner ledger is not bound yet. The poll offers it again on its next tick, so it runs once a slot frees. A refused demand, such as a tag outside `providers.gitlab.runner.tags`, is handed over once per job status and not again. A job that both paths offer becomes one intake row.
+
+The poll reads a project by its configured id, else by the id a signed delivery pinned, else by its path. It reads nothing when no GitLab project is configured.
+
 ## Hosted capacity
 
 ### Included capacity and cost class

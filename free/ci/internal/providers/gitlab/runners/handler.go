@@ -8,10 +8,10 @@ package runners
 // Outputs: a *model.Pipeline, or a *providers.Error: E708 label.not_allowed (a refusal), E703
 //          runner.demand_capped, E704 for a transient miss (no ledger yet, policy unreadable), E700 for a bad
 //          pin or an instance URL the restricted network scope cannot serve (an IP literal, a port other than 443,
-//          a private base). Unlike GitHub, which polls its queue and offers a capped job again (github/reconcile),
-//          no GitLab poll exists yet: the Job Hook is sent once and the ingress answers a declined one with a 200,
-//          so a capped or not-ready GitLab demand stays pending until GitLab's own stuck-job timeout (debt row;
-//          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: runnerjob.Spec accepts
+//          a private base). The Job Hook is sent once per status and the ingress answers a declined one with a
+//          200, so the pending-job poll (gitlab/webhook.Poll, D-1389) offers a job this handler answered with a
+//          retryable class (E703, E704) again on its next tick; a refusal (E700, E702, E708) is not offered
+//          again. A subgroup project (a/b/c) is E702: runnerjob.Spec accepts
 //          group/project only (the coordinator accepts subgroups since D-1365).
 //          The runner may reach the instance host and the operator's providers.gitlab.runner.hosts (artifact and object
 //          storage hosts, at most runnerjob.MaxHosts in all); any other host stays closed.

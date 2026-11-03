@@ -17,7 +17,8 @@ package webhook
 //          (project.path_with_namespace bound to project.id); the merge request source project is only
 //          a fact. Authentication always comes before any event decision, so an unauthenticated sender
 //          learns nothing about which events are served. Dormant unless the adapter routes to it
-//          (compat.V15()).
+//          (compat.V15()). init also registers DefaultPoll (poll.go), the Reconciler that offers a pending
+//          nself job again when the handler declined its Job Hook for a retryable reason.
 
 import (
 	"context"
@@ -26,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
@@ -80,6 +82,10 @@ func init() {
 	// The registry holds one provider per id and "gitlab" is the dispatch provider (HOST-06): the
 	// refetch of trigger facts plugs into it instead of registering a second one.
 	pipeline.Default().UseTrustFacts(Default)
+	// A Job Hook is sent once per status: the pending-job poll offers a declined demand again (D-1389).
+	if err := coordinator.RegisterReconciler(DefaultPoll); err != nil {
+		Default.regErrs = append(Default.regErrs, err)
+	}
 }
 
 // Name is "gitlab".
