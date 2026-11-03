@@ -178,7 +178,14 @@ func TestServeGitHubReconciliation(t *testing.T) {
 				reconcile.KeyPollInterval:   `"47s"`,
 				reconcile.KeyHookURL:        `"https://ci.example"`,
 			}, "", forge)
-			if got := reconcile.Default().Demand().Every(); got != 47*time.Second {
+			// serve applies the operator's settings after it starts listening: wait for them, bounded
+			settled := time.Now().Add(5 * time.Second)
+			got := reconcile.Default().Demand().Every()
+			for got != 47*time.Second && time.Now().Before(settled) {
+				time.Sleep(10 * time.Millisecond)
+				got = reconcile.Default().Demand().Every()
+			}
+			if got != 47*time.Second {
 				t.Fatalf("demand interval = %s, want operator's 47s", got)
 			}
 			key := "enq|owner/repo|" + githubServeRev
