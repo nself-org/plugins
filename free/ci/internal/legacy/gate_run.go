@@ -64,7 +64,7 @@ func Run(cfg Config) (*Result, error) {
 		var gates []GateResult
 		switch stack {
 		case "go":
-			gates = runGoGates(root, timeout, cfg.Verbose)
+			gates = runGoModuleGates(root, timeout, cfg.Verbose)
 		case "node":
 			gates = runNodeGates(root, timeout, cfg.Verbose)
 		case "flutter":
@@ -160,11 +160,12 @@ func Run(cfg Config) (*Result, error) {
 	return res, nil
 }
 
-// detectStacks returns which stacks are present in the repo root.
+// detectStacks returns which stacks are present in the repo.
+// Go is detected at the root or in nested modules (depth 1-2, see goModuleDirs).
 // Rust is detected by Cargo.toml presence.
 func detectStacks(root string) []string {
 	var stacks []string
-	if fileExists(filepath.Join(root, "go.mod")) {
+	if len(goModuleDirs(root)) > 0 {
 		stacks = append(stacks, "go")
 	}
 	if fileExists(filepath.Join(root, "package.json")) {
