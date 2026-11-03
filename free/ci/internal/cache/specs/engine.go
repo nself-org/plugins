@@ -46,12 +46,13 @@ type Backend interface {
 	AppendAudit(ctx context.Context, actor, action, target, detail string) error
 }
 
-// Engine saves and restores entries. All fields are required.
+// Engine saves and restores entries. Trees is optional; all other fields are required.
 type Engine struct {
 	Entries *entries.Store
 	Blobs   *cas.Store
 	Scanner authz.ValueScanner
 	Backend Backend
+	Trees   string // verified unpacked blobs; empty disables tree cloning
 }
 
 // Dirs maps a spec dir name (the blob path) to its directory relative to the
@@ -173,7 +174,7 @@ func (e *Engine) unpackBlobs(ctx context.Context, base *os.Root, realm cas.Realm
 		slots <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-slots }()
-			errs[i] = e.unpackBlob(ctx, base, realm, b.SHA256, dirs[b.Path], opt)
+			errs[i] = e.restoreBlob(ctx, base, realm, b.SHA256, dirs[b.Path], opt)
 		})
 	}
 	wg.Wait()

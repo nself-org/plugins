@@ -171,7 +171,7 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	facts := cacheFacts(a, p, att, priv)
 	// the reader's own private-dependency signals switch snapshots off for it; they can only tighten (X1)
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
-	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
+	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store, Trees: filepath.Join(home, "cache-trees")}, Attempt: a.AttemptID, Epoch: a.Epoch,
 		Facts: facts, Root: filepath.Join(home, "cache-work", a.AttemptID), Detected: detected, Scope: scope, ExtraKeys: keys, Container: container,
 		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: func(ctx context.Context, argv []string) (string, error) {
 			return h.probeOnce(ctx, a.RunID, a.Job, p.Project, argv)
@@ -180,6 +180,7 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}
 	sweepStale(filepath.Join(home, "cache-work"), time.Now(), func(id string) bool { _, mine := h.sessions.Load(id); return mine || live(ctx, a.Store, id) })
+	sweepStale(filepath.Join(home, "cache-trees"), time.Now(), func(string) bool { return false })
 	endBegin := trace.Start("cache.begin")
 	s, err := specs.Begin(ctx, in)
 	endBegin()
