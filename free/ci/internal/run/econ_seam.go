@@ -12,6 +12,7 @@ package run
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
@@ -31,7 +32,8 @@ type EconEnv struct {
 
 // EconHooks is what internal/economics provides to the dispatcher.
 type EconHooks struct {
-	Bind    func(EconEnv) (restore func())
+	// Bind holds the shared economics binding for one run; the returned release is safe to call once per run.
+	Bind    func(EconEnv) (release func(), err error)
 	Apply   func(p *sched.Policy, sp schedpolicy.SpendPolicy, coordinator string)
 	Pending func(ctx context.Context, run string, estimateMicro int64) error
 	// Worst is the worst-case cost of a pipeline whose jobs run timeoutsMs each, priced at the dearest paid runner of costs.
@@ -55,12 +57,18 @@ func (rd *runDispatch) spendNow(context.Context) (schedpolicy.SpendPolicy, error
 
 // bindEconomics resolves the policy (best effort: a failure is retried by the first job) and binds the
 // economics env before the dispatcher exists, so an unbound process never refuses metered runners by accident.
-func (rd *runDispatch) bindEconomics(ctx context.Context) {
+// The binding is shared by overlapping runs, so a run whose env differs from the bound one is refused.
+func (rd *runDispatch) bindEconomics(ctx context.Context) error {
 	if econHooks == nil || econHooks.Bind == nil {
-		return
+		return nil
 	}
 	_, _ = rd.policy(ctx, "")
-	rd.econRestore = econHooks.Bind(EconEnv{Store: rd.sess.Store, Spend: rd.spendNow, Now: rd.sess.now, Coordinator: rd.sess.Coordinator.ID})
+	release, err := econHooks.Bind(EconEnv{Store: rd.sess.Store, Spend: rd.spendNow, Now: rd.sess.now, Coordinator: rd.sess.Coordinator.ID})
+	if err != nil {
+		return err
+	}
+	rd.econRestore = release
+	return nil
 }
 
 // applySpend puts the spend keys on the scheduler policy (economics.ApplyPolicy).
@@ -87,7 +95,10 @@ func (s econSink) Record(ctx context.Context, d dispatch.Decision) {
 			}
 		}
 		if est := econHooks.Worst(d.World.Costs, timeouts); est > 0 {
-			_ = econHooks.Pending(ctx, d.Job.Pipeline.ID, est)
+			if err := econHooks.Pending(ctx, d.Job.Pipeline.ID, est); err != nil {
+				// Fail closed: with no figure noted, ApproveSpend refuses ("no spend awaiting approval").
+				slog.Warn("economics: pending spend estimate not recorded", "run", d.Job.Pipeline.ID, "err", err)
+			}
 		}
 	}
 	s.DecisionSink.Record(ctx, d)

@@ -19,7 +19,7 @@ import (
 
 func init() {
 	cirun.SetEconomics(cirun.EconHooks{
-		Bind: func(e cirun.EconEnv) func() {
+		Bind: func(e cirun.EconEnv) (func(), error) {
 			return Bind(Env{Store: e.Store, Spend: e.Spend, Now: e.Now, Coordinator: e.Coordinator})
 		},
 		Apply:   ApplyPolicy,

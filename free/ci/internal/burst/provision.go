@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/nself-org/plugins/free/ci/internal/economics"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -30,6 +29,9 @@ type Request struct {
 	// ExpectedWaitMs is the job's expected wait; QueuedDemand the queued jobs the machine would serve.
 	ExpectedWaitMs int64
 	QueuedDemand   int
+	// PipelineTimeoutsMs are the timeouts of every job of the pipeline (optional): an approval.pending
+	// refusal then notes the pipeline's worst case, not just this machine's reservation.
+	PipelineTimeoutsMs []int64
 }
 
 // Result is the outcome of Provision. Token and Resource are empty when the decision was no.
@@ -105,7 +107,7 @@ func (e *Engine) admit(ctx context.Context, p Provider, req Request) (Decision, 
 		BreakerOpen: br.OpenUntil > now.UnixMilli(), TeardownFailed: counts.TeardownFailed, ReservationFits: true}
 	if cloud {
 		if ferr := e.fits(ctx, token, p.ID(), req.Pipeline); ferr != nil {
-			e.notePending(ctx, req.Pipeline, ferr)
+			e.notePending(ctx, req, ferr)
 			in.ReservationFits, in.FitReason = false, fitReason(ferr)
 		}
 	}
@@ -125,15 +127,6 @@ func (e *Engine) admit(ctx context.Context, p Provider, req Request) (Decision, 
 		return d, "", err
 	}
 	return d, token, nil
-}
-
-// notePending records the estimate of an approval.pending refusal: ReserveResource rolled its
-// transaction back, so nothing was noted for the run and ApproveSpend would find no figure (D-1280).
-func (e *Engine) notePending(ctx context.Context, pipeline string, err error) {
-	var se *economics.SpendError
-	if errors.As(err, &se) && se.Reason == model.ApprovalPending && se.Estimate > 0 && pipeline != "" {
-		_ = economics.NotePending(e.econCtx(ctx), pipeline, se.Estimate)
-	}
 }
 
 // fitReason is the placement reason of a refused reservation.
@@ -192,7 +185,7 @@ func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req
 	})
 	var se *economics.SpendError
 	if errors.As(err, &se) {
-		e.notePending(ctx, req.Pipeline, err)
+		e.notePending(ctx, req, err)
 		return refused(string(se.Reason), err, "%s", se.Detail)
 	}
 	if errors.Is(err, errCapsMoved) {

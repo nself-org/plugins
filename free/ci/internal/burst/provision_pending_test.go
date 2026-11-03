@@ -32,3 +32,33 @@ func TestBurstApprovalPendingNotesThePipelineEstimate(t *testing.T) {
 		t.Fatalf("decision log %+v %v", ds, derr)
 	}
 }
+
+// With the pipeline's job timeouts on the request, the burst refusal notes the pipeline worst case
+// (priced at the provider's rate through economics.PipelineWorst), never less than this machine's reservation.
+func TestBurstApprovalPendingNotesThePipelineWorstCase(t *testing.T) {
+	r := newRig(t, func(r *rig) {
+		r.pol.ApprovalThresholdMicro = schedpolicy.Budget{Micro: 1_000, Set: true}
+	})
+	req := r.request("job-1")
+	req.PipelineTimeoutsMs = []int64{3_600_000, 3_600_000, 3_600_000} // 3 jobs x 1 h at 3.6e6 micro/h
+	if _, err := r.eng.Provision(context.Background(), req); err == nil {
+		t.Fatal("a reservation over the approval threshold must be refused")
+	}
+	noted, _, err := r.st.PendingEstimate(context.Background(), "pipe-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := int64(3 * 3_600_000); noted != want {
+		t.Fatalf("noted %d, want the whole pipeline %d", noted, want)
+	}
+	// Timeouts that price below the reservation never lower the figure.
+	r2 := newRig(t, func(r *rig) { r.pol.ApprovalThresholdMicro = schedpolicy.Budget{Micro: 1_000, Set: true} })
+	small := r2.request("job-1")
+	small.PipelineTimeoutsMs = []int64{60_000}
+	if _, err = r2.eng.Provision(context.Background(), small); err == nil {
+		t.Fatal("must be refused")
+	}
+	if n, _, _ := r2.st.PendingEstimate(context.Background(), "pipe-1"); n != int64(105*60_000) {
+		t.Fatalf("the figure must stay at the lifetime reservation, got %d", n)
+	}
+}

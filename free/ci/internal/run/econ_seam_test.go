@@ -31,7 +31,9 @@ func withHooks(t *testing.T, h *EconHooks) {
 func TestEconomicsUnregisteredHooksAreInert(t *testing.T) {
 	withHooks(t, nil)
 	rd := &runDispatch{sess: &Session{}}
-	rd.bindEconomics(context.Background())
+	if err := rd.bindEconomics(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	var p sched.Policy
 	rd.applySpend(&p)
 	if rd.econRestore != nil || p.PaidEnabled {
@@ -43,12 +45,14 @@ func TestEconomicsBindAndApplyUseTheResolvedSpend(t *testing.T) {
 	var bound EconEnv
 	var applied schedpolicy.SpendPolicy
 	withHooks(t, &EconHooks{
-		Bind:  func(e EconEnv) func() { bound = e; return func() {} },
+		Bind:  func(e EconEnv) (func(), error) { bound = e; return func() {}, nil },
 		Apply: func(_ *sched.Policy, sp schedpolicy.SpendPolicy, _ string) { applied = sp },
 	})
 	sp := schedpolicy.SpendPolicy{MaxPaidTimeoutMs: 42}
 	rd := &runDispatch{sess: &Session{Coordinator: store.Coordinator{ID: "coord-1"}, Placement: &sched.Policy{}, Queue: &schedpolicy.QueuePolicy{}, Spend: &sp}}
-	rd.bindEconomics(context.Background())
+	if err := rd.bindEconomics(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	if rd.econRestore == nil || bound.Coordinator != "coord-1" {
 		t.Fatalf("bound env %+v", bound)
 	}
@@ -62,9 +66,11 @@ func TestEconomicsBindAndApplyUseTheResolvedSpend(t *testing.T) {
 
 func TestEconomicsNoSpendPolicyBindsTheDefaults(t *testing.T) {
 	var bound EconEnv
-	withHooks(t, &EconHooks{Bind: func(e EconEnv) func() { bound = e; return func() {} }})
+	withHooks(t, &EconHooks{Bind: func(e EconEnv) (func(), error) { bound = e; return func() {}, nil }})
 	rd := &runDispatch{sess: &Session{Placement: &sched.Policy{}, Queue: &schedpolicy.QueuePolicy{}}}
-	rd.bindEconomics(context.Background())
+	if err := rd.bindEconomics(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	if got, err := bound.Spend(context.Background()); err != nil || got.PaidEnabled {
 		t.Fatalf("no resolved spend policy is the default, which places nothing paid: %+v %v", got, err)
 	}

@@ -191,7 +191,9 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
-	rd.bindEconomics(ctx) // before the dispatcher starts: an unbound process refuses metered and ephemeral runners
+	if err := rd.bindEconomics(ctx); err != nil { // before the dispatcher starts: an unbound process refuses metered and ephemeral runners
+		return nil, fail(CodeRun, "run %s: %v", sess.RunID, err)
+	}
 	cfg := dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },

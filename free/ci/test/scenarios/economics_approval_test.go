@@ -40,7 +40,11 @@ func TestEconomicsApprovalPausesUntilAnAdminApproves(t *testing.T) {
 	st := econStore(t, clk)
 	p := econPolicy(t, trust.SourceProject, econKV(map[string]string{schedpolicy.KeyApproval: `100000`}), nil)
 	env := econEnv(st, p, clk)
-	t.Cleanup(economics.Bind(env))
+	release, err := economics.Bind(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
 	act := newEconActors(t, st, clk)
 	sink := econSink{ch: make(chan dispatch.Decision, 256)}
 	d := newDispatcher(t, dispatch.Config{Store: st, World: econWorld(t, st, p, clk, econPaid("paid", "metered", "cloudco")), Poll: time.Millisecond, Clock: clk.Now, Sink: sink, Transport: &transport{}})
