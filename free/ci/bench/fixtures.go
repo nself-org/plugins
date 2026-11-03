@@ -41,7 +41,8 @@ func baseEnv() []string {
 	var env []string
 	for _, k := range []string{"PATH", "HOME", "USER", "LANG", "TMPDIR", "GOCACHE", "GOMODCACHE", "GOPATH",
 		"GOROOT", "GOFLAGS", "GOTOOLCHAIN", "GOPROXY", "GONOSUMDB", "GOSUMDB", "GOPRIVATE", "NVM_DIR", "PNPM_HOME",
-		"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "COLIMA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR"} {
+		"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "COLIMA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR",
+		"NSELF_CI_TRACE"} { // the opt-in span trace reaches the measured runs (P7-CI-46)
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}
