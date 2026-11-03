@@ -7,7 +7,8 @@ package webhook
 //          the same function it gives runtime.UsePolicy, which no code does yet for this source or the
 //          GitHub one, so until it is wired every delivery is refused: fail closed); environment
 //          variables named by the keys.
-// Outputs: Keys (the specs registered at init), SecretsFrom, UsePolicy, and the id pins.
+// Outputs: Keys (the specs registered at init), SecretsFrom, UsePolicy, and the id pins (also read by the
+//          pending-job poll, which never pins).
 // Constraints: operator scope only (Spend), Fixed, nil registered default (a Fixed key with a default
 //          could never be set, see the HOST-16 ruling). A value is an environment variable NAME, never
 //          a secret. A value is either "NAME" or {"env": "NAME", "id": 123}; with an id, a delivery
@@ -167,4 +168,12 @@ func (p *pinTable) holds(name string, id int64) bool {
 	}
 	p.ids[name] = id
 	return true
+}
+
+// pinned returns the id pinned for name, without pinning one (the pending-job poll reads by it).
+func (p *pinTable) pinned(name string) (int64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	id, ok := p.ids[name]
+	return id, ok
 }
