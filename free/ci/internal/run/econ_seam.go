@@ -12,10 +12,8 @@ package run
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -79,30 +77,6 @@ func (rd *runDispatch) applySpend(p *sched.Policy) {
 }
 
 // econSink notes the worst case of the whole pipeline for a job held with approval.pending: such a job
-// never reaches the budget step, so ApproveSpend would find no figure.
-type econSink struct {
-	dispatch.DecisionSink
-	rd *runDispatch
-}
-
-func (s econSink) Record(ctx context.Context, d dispatch.Decision) {
-	if d.Outcome == dispatch.OutcomeAwaitingAppr && econHooks != nil && econHooks.Pending != nil && econHooks.Worst != nil && d.World != nil {
-		timeouts := []int64{d.Job.TimeoutMs}
-		if pl := s.rd.sess.Plan; pl != nil && len(pl.Jobs) > 0 {
-			timeouts = timeouts[:0]
-			for _, pj := range pl.Jobs {
-				timeouts = append(timeouts, jobTimeoutMs(pj.Job.Timeout))
-			}
-		}
-		if est := econHooks.Worst(d.World.Costs, timeouts); est > 0 {
-			if err := econHooks.Pending(ctx, d.Job.Pipeline.ID, est); err != nil {
-				// Fail closed: with no figure noted, ApproveSpend refuses ("no spend awaiting approval").
-				slog.Warn("economics: pending spend estimate not recorded", "run", d.Job.Pipeline.ID, "err", err)
-			}
-		}
-	}
-	s.DecisionSink.Record(ctx, d)
-}
 
 // jobTimeoutMs is the timeout planview gives a job: its declared one, else the default.
 func jobTimeoutMs(declared string) int64 {
