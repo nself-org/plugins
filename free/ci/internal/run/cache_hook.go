@@ -168,6 +168,9 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	container := level == "container"
 	priv, _ := specs.PrivateDeps(specs.PrivInput{Dirs: factDirs(p.Project, workdir, detected), Home: h.home(), Environ: flatEnv(env)})
 	facts := cacheFacts(a, p, att, priv)
+	if setup, ok := tryPersistentGoCache(string(home), container, detected, facts); ok {
+		return setup
+	}
 	// the reader's own private-dependency signals switch snapshots off for it; they can only tighten (X1)
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
 	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
