@@ -37,7 +37,7 @@ type LocalOptions struct {
 	Version        string
 	AllowDowngrade bool
 	// AllowRestore lets a request for the version recorded at .prev.version put that binary back without AllowDowngrade. The
-	// handler of the coordinator's `upgrade` message sets it (that handler is not wired yet, debt D-1383); an operator typing
+	// handler of the coordinator's `upgrade` message sets it (cmd/agent upgrade_frame.go); an operator typing
 	// `nself-ci-agent upgrade` passes AllowDowngrade instead.
 	AllowRestore bool
 	Platform     lifecycle.Platform

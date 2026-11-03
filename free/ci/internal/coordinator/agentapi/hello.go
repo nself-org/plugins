@@ -4,7 +4,7 @@ package agentapi
 //          the welcome that opens a session (Epic D5, D6, runner-protocol).
 // Inputs:  one hello frame (seq 1) from a node certificate; the pinned node key and age recipient.
 // Outputs: one welcome or reject frame (seq 1); on welcome the X-Nself-Session header and a new session
-//          that replaces any earlier one of the node.
+//          that replaces any earlier one of the node, and the agent version and slot use it reported (agent_control.go).
 // Constraints: the body is capped at one frame (1 MiB) and decoded strictly; the node key is pinned on
 //          the first hello of a node and compared in constant time later (pki.CA.CheckNodeKey); a
 //          rejected hello creates no session and pins nothing; welcome carries heartbeat_ms and
@@ -82,6 +82,7 @@ func (s *Server) serveHello(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sess := s.startSession(q.node)
+	s.noteHello(q.node, hello.AgentVersion, hello.Slots.Used)
 	welcome := reply.(protocol.Welcome)
 	welcome.SessionID = sess.id
 	w.Header().Set(HeaderSession, sess.id)

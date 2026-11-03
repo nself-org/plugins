@@ -7,7 +7,9 @@ package main
 // Inputs:  the address from --agent-addr; the coordinator's store and data dir (useAgentStore; the
 //          fallback opens the default CI home); an optional public URL whose host becomes the SANs of the
 //          server certificate; the lease sink and lease source other units install (agentSink, agentLeases).
-// Outputs: a running agentapi.Server until stop; stop shuts it down and waits for its goroutines.
+// Outputs: a running agentapi.Server until stop, registered as this process's update.AgentControl so `nself ci nodes
+//          upgrade` run here (or sent here with --coordinator) reaches the connected pull agents; stop unregisters it,
+//          shuts it down and waits for its goroutines.
 // Constraints: no client certificate, a user-kind or coordinator-kind certificate, or a revoked node
 //          certificate never reaches a handler (pki.TLSServerConfig + pki.RequestGuard); the server
 //          certificate is renewed at 2/3 of its life; the default sink REFUSES logs and results until
@@ -27,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/agent/update"
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
@@ -156,6 +159,9 @@ func agentSANs(publicURL, bindAddr string) (dns []string, ips []net.IP, err erro
 	return dns, ips, nil
 }
 
+// The listener's server is the coordinator side of an agent upgrade.
+var _ update.AgentControl = (*agentapi.Server)(nil)
+
 func startAgentListener(ctx context.Context, addr string, _ *coordinator.Coordinator) (func(context.Context) error, error) {
 	src, err := agentStoreSource()
 	if err != nil {
@@ -213,12 +219,15 @@ func startAgentListener(ctx context.Context, addr string, _ *coordinator.Coordin
 		done <- e
 	}()
 	activeAgent.Store(srv)
+	update.RegisterAgentControl(srv) // `nself ci nodes upgrade` in this process reaches the connected pull agents
 	agentLogf("agent listener (mTLS, node certificates only) on %s", ln.Addr())
 	var once sync.Once
 	var stopErr error
 	return func(sctx context.Context) error {
 		once.Do(func() {
-			activeAgent.CompareAndSwap(srv, nil)
+			if activeAgent.CompareAndSwap(srv, nil) {
+				update.RegisterAgentControl(nil)
+			}
 			stopErr = srv.Shutdown(sctx)
 			select {
 			case e := <-done:

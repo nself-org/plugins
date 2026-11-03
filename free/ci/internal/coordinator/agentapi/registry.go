@@ -52,6 +52,7 @@ type nodeState struct {
 	leases  []protocol.Lease
 	ctl     []protocol.Message
 	upgrade *protocol.UpgradeResult // the agent's answer to the last upgrade frame; Upgrade clears it
+	hello   helloNote               // the last accepted hello and heartbeat slot count (agent_control.go)
 	changed chan struct{}
 }
 
