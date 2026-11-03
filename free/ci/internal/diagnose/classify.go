@@ -102,7 +102,7 @@ func (s signature) matches(in Input, tail string) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return s.id != SigOOM && in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
+	return !s.resource && in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
 }
 
 // externalKill reports whether a signal can come from outside the job (the
