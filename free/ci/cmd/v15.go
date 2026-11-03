@@ -30,6 +30,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 // RunOptions are the options of a bare run; option hooks change them.
@@ -83,6 +84,8 @@ func init() {
 
 // runV15 selects the longest v1.5-only command, the bare run, or a legacy key.
 func runV15(args []string) int {
+	end := trace.Start("v15.total")
+	defer end()
 	if problems := model.CodeProblems(); len(problems) != 0 {
 		fmt.Fprintln(os.Stderr, "invalid error-code registry:", strings.Join(problems, "; "))
 		return 2
@@ -204,7 +207,9 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	}
 	cfg := model.PipelineConfig{Version: 1}
 	path := firstOf(bare.cfg, filepath.Join(o.Root, config.FileName))
+	end := trace.Start("v15.config_load")
 	loaded, err := config.Load(path)
+	end()
 	switch {
 	case err == nil:
 		cfg = loaded.Config
@@ -224,12 +229,19 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	if o.Full {
 		rev.BaseKnown, rev.Changed = false, nil
 	}
+	end = trace.Start("v15.detect")
 	facts, checks, err := planChecks(o.Root, cfg, fullSelection(rev))
+	end()
 	if err != nil {
 		return nil, "", nil, err
 	}
+	end = trace.Start("v15.policy_world")
+	world := planWorld(cfg, checks)
+	end()
+	end = trace.Start("v15.plan")
 	p, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
-		World: planWorld(cfg, checks), Pipeline: o.Pipeline, Trigger: model.Trigger(o.Trigger)})
+		World: world, Pipeline: o.Pipeline, Trigger: model.Trigger(o.Trigger)})
+	end()
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -274,7 +286,9 @@ func runBare(args []string) int {
 	}
 	attachPlacement(ctx, o)
 	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: <-outside, Substantive: subst, Out: os.Stdout}
+	end := trace.Start("v15.coordinator_run")
 	res, err := c.Run(ctx)
+	end()
 	if err != nil {
 		return exitForError(err)
 	}

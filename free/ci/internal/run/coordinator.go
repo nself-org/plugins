@@ -29,6 +29,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 // Coordinator runs one planned pipeline on this host.
@@ -200,7 +201,9 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	end := trace.Start("v15.store_open")
 	st, err := OpenStore(c.storePath())
+	end()
 	if err != nil {
 		return Result{}, err
 	}
@@ -259,9 +262,11 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	post.Notes = append(post.Notes, dispatchNotes(runID)...)
+	end = trace.Start("v15.finish")
 	res := c.conclude(finishIn{Context: ctx, St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
 		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
 	rs.render.Done(res.Summary)
+	end()
 	return res, nil
 }
 

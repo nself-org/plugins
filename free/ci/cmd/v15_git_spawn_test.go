@@ -9,12 +9,49 @@ package main
 // installed advisory scanners cannot change the coordinator's process budget.
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
+
+func TestRunV15EmitsTraceSpans(t *testing.T) {
+	if os.Getenv("NSELF_CI_TRACE_TEST_CHILD") == "1" {
+		_, out, code := tinyGitRun(t, false)
+		if code != 0 {
+			t.Fatalf("tiny run exit %d: %s", code, out)
+		}
+		return
+	}
+	path := filepath.Join(t.TempDir(), "trace.jsonl")
+	t.Setenv("NSELF_CI_TRACE", path)
+	t.Setenv("NSELF_CI_TRACE_TEST_CHILD", "1")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunV15EmitsTraceSpans$")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("trace run: %v\n%s", err, out)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spans := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		var span trace.Span
+		if err := json.Unmarshal([]byte(line), &span); err != nil {
+			t.Fatalf("invalid trace line %q: %v", line, err)
+		}
+		if strings.HasPrefix(span.Name, "v15.") {
+			spans[span.Name] = true
+		}
+	}
+	if !spans["v15.total"] || len(spans) < 4 {
+		t.Fatalf("want v15.total and at least three other V15 spans, got %v", spans)
+	}
+}
 
 func TestTinyRunGitSpawnBudget(t *testing.T) {
 	calls, out, code := tinyGitRun(t, false)
