@@ -18,6 +18,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 type runState struct {
@@ -147,6 +148,8 @@ func (rs *runState) runOne(ctx context.Context, i int, pj plan.PlannedJob) JobOu
 	if ctx.Err() != nil {
 		return cancelled(o, "", "run cancelled")
 	}
+	end := trace.Start("run.step:" + pj.ID)
+	defer end()
 	return rs.runAttempt(ctx, i, pj, o)
 }
 

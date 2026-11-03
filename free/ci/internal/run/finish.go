@@ -22,6 +22,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trace"
 )
 
 // statusPost is what prepareStatus resolved.
@@ -149,6 +150,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	if trig == "" {
 		trig = "local"
 	}
+	endEvidence := trace.Start("run.finish.evidence")
 	ev, digest, err := buildEvidence(evidenceInput{RunID: f.RunID, Project: c.Opts.Root, Revision: f.Rev.SHA, ConfigDigest: c.ConfigDigest,
 		PolicyDigest: f.Policy.Digest, Source: f.Source, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
 		Trigger: trig, Jobs: f.Jobs, Start: f.Start, End: time.Now()})
@@ -191,6 +193,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		ev.Result = "error"
 		notes = append(notes, "evidence not built: "+firstLineOf(err.Error()))
 	}
+	endEvidence()
 	if err = f.St.FinishPipeline(bg, f.RunID, pipelineStatus(ev.Result)); err != nil {
 		notes = append(notes, "run row not finished: "+firstLineOf(err.Error()))
 	}
@@ -202,15 +205,19 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	}
 	// the status has its own budget: slow hooks must not eat it
 	pctx, pdone := context.WithTimeout(context.WithoutCancel(context.Background()), 60*time.Second)
+	endStatus := trace.Start("run.finish.status")
 	line, pnotes := c.postStatus(pctx, f, info, ev)
+	endStatus()
 	pdone()
 	notes = append(notes, pnotes...)
 	exit = max(exit, runAfter(bg, f.Hooks.AfterRuns, false, info, &notes))
+	endHygiene := trace.Start("run.finish.hygiene")
 	for _, fin := range f.Hooks.Finalizers {
 		if err = guard("finalizer", func() error { return fin.Finalize(bg, info) }); err != nil {
 			notes = append(notes, "finalizer "+fin.Name()+": "+firstLineOf(err.Error()))
 		}
 	}
+	endHygiene()
 	nctx, ndone := context.WithTimeout(bg, 30*time.Second) // a hung sink must not hold the run after its status went out
 	notes = append(notes, notifyRun(nctx, f.Hooks, NotifyRequest{Ref: c.Opts.Ref, Root: c.Opts.Root, Run: info, Status: line, Notes: append([]string(nil), notes...)})...)
 	ndone()

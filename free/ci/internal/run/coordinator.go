@@ -193,10 +193,13 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	// the evidence's start reads git only: it runs beside admission, policy and the store (P7-CI-46)
 	begun := make(chan any, 1)
 	go func() { begun <- c.beginEvidence(ctx, h, rev) }()
+	endClassify := trace.Start("run.classify")
 	admitted, source, err := c.classify(ctx, h, rev)
+	endClassify()
 	if err != nil {
 		return Result{}, err
 	}
+	endPrepare := trace.Start("run.prepare")
 	pol, err := c.policy(ctx, h, model.TrustClass(admitted))
 	if err != nil {
 		return Result{}, err
@@ -255,12 +258,19 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	sess.AdmitTrust = model.TrustClass(admitted)
 	sess.LocalOnly = rs.localOnly
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
+	endPrepare()
 	start := time.Now()
+	endRace := trace.Start("run.race")
 	c.race(ctx, h, runID)
+	endRace()
+	endDispatch := trace.Start("run.dispatch")
 	c.drive(ctx, rs, st, coord.ID)
+	endDispatch()
+	endRev := trace.Start("run.end_revision")
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
+	endRev()
 	post.Notes = append(post.Notes, dispatchNotes(runID)...)
 	end = trace.Start("v15.finish")
 	res := c.conclude(finishIn{Context: ctx, St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
