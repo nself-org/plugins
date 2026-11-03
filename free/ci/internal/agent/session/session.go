@@ -7,13 +7,11 @@
 // Outputs: protocol frames on the carrier; <state>/coordinators.json on welcome.
 // Constraints: one goroutine owns the lease table and every decision; job
 // goroutines only send frames (serialised by a mutex) and report back on a
-// channel. The slot table caps leases across every coordinator and carrier; a
-// lease beyond it is refused with E654 (a log line plus a heartbeat naming the
-// lease state "refused", because v1 has no agent-side reject frame); with
-// Config.Contention the node's battery, interactive and reservation policy
-// gates the lease too (contention.go). A stale
-// epoch is ignored. Nothing here decides trust: a lease is run as the carrier
-// delivered it, and a result is signed only by the registered Signer.
+// channel. The slot table caps leases across every coordinator and carrier; a lease beyond it is refused with E654
+// (a log line plus a heartbeat naming the lease state "refused", because v1 has no agent-side reject frame); with
+// Config.Contention the node's battery, interactive and reservation policy gates the lease too (contention.go). A
+// stale epoch is ignored. Nothing here decides trust: a lease is run as the carrier delivered it, and a result is
+// signed only by the registered Signer.
 package session
 
 import (
