@@ -129,9 +129,11 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 }
 
 // queueJob is the dispatcher's input for one attempt. Only an interactive run
-// (a person at a terminal) keeps the implicit foreground queue cap.
+// (a person at a terminal) keeps the implicit foreground queue cap. A TEAM job with secrets carries its
+// node form (nodeJob): the run's --container and --timeout travel inside the job the node receives.
 func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
-	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.checkoutRevision(), Head: sess.Revision, Foreground: s.Foreground,
+	job, _ := nodeJob(sess, *s.Job)
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: job, Revision: sess.checkoutRevision(), Head: sess.Revision, Foreground: s.Foreground,
 		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 

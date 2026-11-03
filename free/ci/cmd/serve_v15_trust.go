@@ -17,6 +17,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/serve"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -124,7 +125,9 @@ func dispatchTrustFacts(row store.IntakeRow, legacy pipelineFacts) (model.Trigge
 	return f, f.Validate()
 }
 
-// authorizeDispatchRelease checks every selected job before the coordinator can execute any.
+// authorizeDispatchRelease checks every selected job before the coordinator can execute any. A submitter
+// without release.start is refused a job that reads secrets with E677 (secrets.RefuseSubmitter); an
+// authorized TEAM run's secrets are then resolved on the leased node, never here (D-1534).
 func authorizeDispatchRelease(ctx context.Context, st *store.Store, submitter, project string, p *plan.Plan) (bool, error) {
 	if submitter == "" {
 		return false, nil
@@ -139,6 +142,9 @@ func authorizeDispatchRelease(ctx context.Context, st *store.Store, submitter, p
 			return false, err
 		}
 		if err := roles.AuthorizeAction(ctx, actor, roles.ActReleaseStart, project); err != nil {
+			if j.Job.Kind != "release" { // a job that only reads secrets: E677 before any lease, no value read (D-1534)
+				return false, secrets.RefuseSubmitter(err.Error())
+			}
 			return false, err
 		}
 		return true, nil

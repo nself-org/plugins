@@ -84,8 +84,12 @@ func (rs *runState) swept(id string) bool {
 // in prepare), secrets (no value is sent to a node), services, requirements the world
 // cannot verify (labels, tools, an isolation floor, a container: the local runner reports no
 // measured facts for them) unless the job is remote-only, and the invocation's own controls
-// (--container, --network, --service, --timeout), which the agent never receives.
+// (--container, --network, --service, --timeout), which the agent never receives. The one exception is
+// a TEAM job with secrets (rs.nodeSecretJob): it must run on a leased node, never here.
 func (rs *runState) localOnly(job model.Job) bool {
+	if _, node := rs.nodeSecretJob(job); node { // a TEAM job with secrets runs on a leased node only (secrets_node.go)
+		return false
+	}
 	o := rs.c.Opts
 	if o.Container || o.Network != "" || o.Timeout > 0 || len(o.Services) > 0 {
 		return true
