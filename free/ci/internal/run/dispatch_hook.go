@@ -11,7 +11,8 @@ package run
 // this machine and every registered node (dispatch_world.go); a remote placement
 // is delivered by the dispatcher (NewTransportAdapter) and awaited by the run
 // loop (remote_await.go). The local admission policy (battery, reservations, the
-// foreground floor) still runs first, as in LocalAdmit.
+// foreground floor) still runs first, as in LocalAdmit. The economics env is bound
+// before the dispatcher starts and approval holds are noted through econ_seam.go (D-1280).
 
 import (
 	"context"
@@ -46,6 +47,9 @@ type runDispatch struct {
 	polM sync.Mutex
 	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
 	qp   schedpolicy.QueuePolicy
+	// spend is the spend policy resolved with pol (nil = none resolved: the defaults, nothing paid).
+	spend       *schedpolicy.SpendPolicy
+	econRestore func() // restores the economics env bound for this run's dispatcher
 
 	sink *remoteSink // what the carriers of this run's remote leases report to
 
@@ -76,6 +80,9 @@ func dispatchRelease(runID string) {
 		rd := v.(*runDispatch)
 		rd.d.Close()
 		rd.sink.release()
+		if rd.econRestore != nil {
+			rd.econRestore()
+		}
 	}
 }
 
@@ -184,12 +191,18 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
-	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
+	rd.bindEconomics(ctx) // before the dispatcher starts: an unbound process refuses metered and ephemeral runners
+	cfg := dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
 		Transport:     transportAdapter{sink: rd.sink, reg: rd.sink, root: rd.row.Project, st: rd.sink.st, hosted: rd.hostedRevision},
-		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
+		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }}
+	cfg.Sink = econSink{DecisionSink: dispatch.DefaultSink(cfg), rd: rd}
+	rd.d, err = dispatch.New(cfg)
 	if err != nil {
+		if rd.econRestore != nil {
+			rd.econRestore()
+		}
 		return nil, err
 	}
 	runDispatchers.Store(sess.RunID, rd)

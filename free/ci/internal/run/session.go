@@ -66,6 +66,8 @@ type Session struct {
 	// means the dispatcher resolves its own.
 	Placement *sched.Policy
 	Queue     *schedpolicy.QueuePolicy
+	// Spend is the spend policy of the same resolution (nil = none: nothing paid is placed).
+	Spend *schedpolicy.SpendPolicy
 	// Dirty, ConfigOutside and Subset are the state the run started in (D-1075): a dirty tree,
 	// a config the commit does not hold, or --job. A later clean probe never undoes them; the
 	// release gate reads them with the live worktree probe.
