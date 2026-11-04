@@ -17,7 +17,7 @@ free/cdn/internal/handlers.go	813
 free/claw-cli/cmd/claw_pair.go	301
 free/cloudflare/internal/handlers.go	614
 free/compliance/internal/handlers.go	788
-free/compliance/internal/soc2.go	922
+free/compliance/internal/soc2.go	871
 free/content-acquisition/internal/db.go	339
 free/content-acquisition/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/content-acquisition/third_party/sdk/identity.go	338
@@ -29,7 +29,6 @@ free/cron/third_party/sdk/identity.go	338
 free/ddns/internal/handlers.go	755
 free/devices/internal/handlers.go	908
 free/documents/internal/handlers.go	876
-free/donorbox/internal/db.go	306
 free/donorbox/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/donorbox/third_party/sdk/identity.go	338
 free/dr/cmd/main.go	302

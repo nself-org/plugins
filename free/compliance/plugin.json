@@ -362,23 +362,9 @@
   },
   "status": "stable",
   "tables": [
-    "np_compliance_dsars",
-    "np_compliance_dsar_activities",
-    "np_compliance_consents",
-    "np_compliance_consent_history",
-    "np_compliance_privacy_policies",
-    "np_compliance_policy_acceptances",
-    "np_compliance_retention_policies",
-    "np_compliance_retention_executions",
-    "np_compliance_processing_records",
-    "np_compliance_data_processors",
-    "np_compliance_data_breaches",
-    "np_compliance_breach_notifications",
-    "np_compliance_audit_log",
-    "np_compliance_audit_events",
-    "np_compliance_audit_retention_policies",
-    "np_compliance_audit_alert_rules",
-    "np_compliance_audit_webhook_events"
+    "np_change_log",
+    "np_access_reviews",
+    "np_vendor_registry"
   ],
   "tags": [
     "compliance",

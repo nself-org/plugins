@@ -1,0 +1,9 @@
+# D-0832: the codemod build made these only in np_e2ee; the public tables first appear with 003.
+np_e2ee_identity_keys
+np_e2ee_signed_prekeys
+np_e2ee_one_time_prekeys
+np_e2ee_kyber_prekeys
+np_e2ee_prekey_bundles_served
+np_e2ee_verification_states
+np_e2ee_safety_numbers
+np_e2ee_audit_log

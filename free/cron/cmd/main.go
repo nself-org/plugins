@@ -25,11 +25,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Boot migrations own the whole schema (public tables, D-0832); there is no Go DDL.
 	internal.MustBootMigrations(context.Background(), pool)
-
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("database migration failed: %v", err)
-	}
 
 	// Seed env-declared jobs (CRON_JOB_<N>_SCHEDULE + CRON_JOB_<N>_COMMAND).
 	// This upserts any CRON_JOB_* jobs declared in the environment into Postgres,

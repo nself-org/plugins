@@ -1,0 +1,8 @@
+# D-0832: the np_donorbox copies 001 made under the pinned search_path; the converted boot must leave them.
+np_donorbox.np_donorbox_campaigns
+np_donorbox.np_donorbox_donors
+np_donorbox.np_donorbox_donations
+np_donorbox.np_donorbox_plans
+np_donorbox.np_donorbox_events
+np_donorbox.np_donorbox_tickets
+np_donorbox.np_donorbox_webhook_events

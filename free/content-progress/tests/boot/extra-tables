@@ -1,0 +1,6 @@
+# D-0832: the np_content_progress copies 001 made under the pinned search_path; the converted boot must leave them.
+np_content_progress.np_progress_positions
+np_content_progress.np_progress_history
+np_content_progress.np_progress_watchlists
+np_content_progress.np_progress_favorites
+np_content_progress.np_progress_webhook_events

@@ -1,0 +1,12 @@
+# D-0832: the np_compliance copies 001 made under the pinned search_path; the converted boot must leave them.
+np_compliance.np_change_log
+np_compliance.np_access_reviews
+np_compliance.np_vendor_registry
+# The core tables stay out of plugin.json: a manifest table must start with np_ (E106).
+compliance_dsars
+compliance_dsar_activities
+compliance_consents
+compliance_consent_history
+compliance_privacy_policies
+compliance_data_exports
+compliance_webhook_events

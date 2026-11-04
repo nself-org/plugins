@@ -31,10 +31,8 @@ func main() {
 
 	internal.MustBootMigrations(context.Background(), pool)
 
+	// Boot migrations own the whole schema (public tables and views, D-0832); there is no Go DDL.
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("[nself-donorbox] schema init failed: %v", err)
-	}
 
 	apiKey := os.Getenv("DONORBOX_API_KEY")
 	email := os.Getenv("DONORBOX_EMAIL")
