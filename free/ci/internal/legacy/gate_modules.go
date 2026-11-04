@@ -5,12 +5,14 @@ package legacy
 // Purpose: Find the Go modules a repo holds when go.mod is not at the root
 //   (D-0922). In a Rust-rooted repo such as nself-org/bundles the Go code
 //   lives in paid/*/go.mod, so a root-only check detected only "rust" and
-//   ran no Go gate at all.
+//   ran no Go gate at all. A repo with no root Cargo.toml is left alone: plugins
+//   has about 130 modules under free/ and gates them in its own workflows.
 // Inputs:  root string — repo root
 // Outputs: goModuleDirs → sorted module dirs relative to root ("." = root)
 // Constraints: A root go.mod wins and is the only module (behaviour
-//   unchanged). Otherwise only depth 1 and 2 below root are searched;
-//   vendor, node_modules, testdata and dot-dirs are skipped.
+//   unchanged). Nested modules count only under a root Cargo.toml, the case
+//   that hid Go; then depth 1 and 2 below root are searched, and vendor,
+//   node_modules, testdata and dot-dirs are skipped.
 
 import (
 	"os"
@@ -30,6 +32,9 @@ func skipModuleDir(name string) bool {
 func goModuleDirs(root string) []string {
 	if fileExists(filepath.Join(root, "go.mod")) {
 		return []string{"."}
+	}
+	if !fileExists(filepath.Join(root, "Cargo.toml")) {
+		return nil
 	}
 	var mods []string
 	for _, d1 := range subDirs(root) {
