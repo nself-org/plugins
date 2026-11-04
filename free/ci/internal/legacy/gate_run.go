@@ -161,7 +161,7 @@ func Run(cfg Config) (*Result, error) {
 }
 
 // detectStacks returns which stacks are present in the repo.
-// Go is detected at the root or in nested modules (depth 1-2, see goModuleDirs).
+// Go is detected at the root, or in nested modules under a root Cargo.toml (see goModuleDirs).
 // Rust is detected by Cargo.toml presence.
 func detectStacks(root string) []string {
 	var stacks []string

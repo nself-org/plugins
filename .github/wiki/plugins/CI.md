@@ -118,7 +118,7 @@ No license key required.
 
 ## Description
 
-Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart/Rust; Go is found at the root or in nested `go.mod` dirs 1-2 levels down, skipping vendor, node_modules, testdata and dot-dirs, and each module is gated separately with its dir as a gate-name prefix), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.
+Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart/Rust; Go is found at the root, or under a root `Cargo.toml` in nested `go.mod` dirs 1-2 levels down, skipping vendor, node_modules, testdata and dot-dirs, and each module is gated separately with its dir as a gate-name prefix), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.
 
 This is a CLI plugin: it installs the `nself-ci` binary into your plugin path and runs as a command, not a background service.
 
