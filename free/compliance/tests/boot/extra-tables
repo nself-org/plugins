@@ -1,0 +1,4 @@
+# D-0832: the np_compliance copies 001 made under the pinned search_path; the converted boot must leave them.
+np_compliance.np_change_log
+np_compliance.np_access_reviews
+np_compliance.np_vendor_registry

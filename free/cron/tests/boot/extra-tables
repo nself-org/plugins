@@ -1,0 +1,3 @@
+# D-0832: the np_cron copies 001 made under the pinned search_path; the converted boot must leave them (and their rows).
+np_cron.np_cron_jobs
+np_cron.np_cron_runs
