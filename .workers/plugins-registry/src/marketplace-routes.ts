@@ -2,6 +2,7 @@ import { jsonResponse } from "./http.ts";
 import { fetchAllPlugins, cacheTtl } from "./registry.ts";
 import type { Env } from "./registry.ts";
 import { handleMarketplace, handleGetRating, handlePostRating, handleInstallEvent, checkGetRateLimit } from "./marketplace.ts";
+import { getConnectingIP, isRateLimited } from "./marketplace-rate-limit.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
 
 export async function handleMarketplaceRoute(request: Request, url: URL, resolvedPath: string, method: string, env: Env, ctx: ExecutionContext): Promise<Response | null> {
@@ -36,6 +37,15 @@ export async function handleMarketplaceRoute(request: Request, url: URL, resolve
         const pluginName = parts[1];
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
+        }
+        // D-1545: same per-IP POST limit as ratings (5/min), checked before any lookup or KV write.
+        const rlPost = await isRateLimited(env as MarketplaceEnv, getConnectingIP(request));
+        if (rlPost.limited) {
+          return jsonResponse(
+            { error: `Rate limit exceeded. Retry after ${rlPost.retryAfter}s.` },
+            429,
+            { "Retry-After": String(rlPost.retryAfter) },
+          );
         }
         // Only count plugins that exist: an unknown name must not create KV keys.
         const { all: known } = await fetchAllPlugins(env, ctx);

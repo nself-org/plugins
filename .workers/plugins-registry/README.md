@@ -132,7 +132,7 @@ within `CACHE_TTL`. `/stats` keeps the frozen `registryHits`/`registryFetches`
 totals the retired index.js stored; `lastSync` is the newest sync that changed
 a KV copy.
 
-Rate limits (60 GETs, 5 rating POSTs per IP per minute) use the
+Rate limits (60 GETs, 5 POSTs per IP per minute, shared by rating and install-event) use the
 `MARKETPLACE_GET_LIMITER` / `MARKETPLACE_POST_LIMITER` rate limit bindings when
 bound, else a per-data-center Cache API counter. Cache API entries are local to
 each data center and may be evicted; catalog entries remain available for stale
