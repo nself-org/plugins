@@ -4,7 +4,8 @@ package main
 // through the P7-CI-32 executor and assembles its ci.evidence/v1 document with
 // the P7-CI-38 builder. It is the entrypoint hosted workflows (P7-HOST) call,
 // and runSpec is what `serve` runs for each lease (inside the node's
-// contention Isolator: contention_wire.go).
+// contention Isolator: contention_wire.go; on a system node every process
+// step goes through the job shim: job_shim_run.go).
 // Inputs:  a JSON job spec file (execSpec); the agent state dir for the
 // executor's private work area.
 // Outputs: the job's output on stdout, the evidence file (0600, atomic).
@@ -233,6 +234,11 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	iso := cirun.Hooks{}.Resolved().Isolation
 	if iso == nil {
 		return ciexec.AttemptResult{}, "", errors.New("no isolator is registered; the agent will not run a job without one")
+	}
+	// A system node runs process steps through the job shim (job_shim_run.go); the contention layer wraps
+	// outside it, so priority and the cgroup are applied by the agent before sudo.
+	if wrap := systemShim(in.Slot); wrap != nil {
+		iso = wrap(iso)
 	}
 	if in.Isolate != nil {
 		iso = in.Isolate(iso)

@@ -35,6 +35,12 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
 	s.Command, env = foldEnvPrefix(s.Command, env) // an env wrapper is applied here, not by another exec
+	if s.Shim != nil {
+		// the payload reaches the job user only through the chain's stdin; the agent never execs it
+		if env, s.Stdin, err = s.Shim.launch(workdir, env, s.Stdin); err != nil {
+			return -1, "", err
+		}
+	}
 	if !e.GatedStart {
 		return e.runCommandSig(ctx, s.Stdin, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
 			return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)

@@ -1,7 +1,8 @@
 package hygiene
 
 // Purpose: Separation, the policy that picks the host UID a job runs under. Hygiene supplies the
-// policy; P7-NODE-06 creates the users and the sudoers rule, the agent runs the shim.
+// policy; P7-NODE-06 creates the users and the sudoers rule, the agent runs each process step through
+// the shim as JobUserName(slot) (cmd/agent/job_shim_run.go, D-1230).
 // Inputs:  the node's provisioning facts and the slot of the attempt.
 // Outputs: a Plan (mode, UID, serial flag) or E682 when no separation exists and no exception applies.
 // Constraints (Epic D12, invariant I17): never the agent's or the coordinator's UID outside the one
@@ -42,7 +43,8 @@ type Facts struct {
 	// is refused rather than guessed, because a wrong guess would open I17.
 	AgentUID, CoordinatorUID int
 	NoCoordinator            bool
-	// JobShim is true when the agent's job-shim sudo rule exists (system install).
+	// JobShim is true only when the system installer's probe proved the job-shim sudo chain and the
+	// node key's EACCES from a job user (D-1230); the rule existing on disk is never enough.
 	JobShim bool
 	// JobUIDs are the host UIDs of nself-ci-job-1..n, index = slot (slot s is user number s+1).
 	JobUIDs []int
