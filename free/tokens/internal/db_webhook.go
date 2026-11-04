@@ -116,4 +116,3 @@ func (d *DB) GetStats() (*TokensStats, error) {
 
 	return &stats, nil
 }
-

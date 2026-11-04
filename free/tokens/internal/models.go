@@ -192,15 +192,15 @@ type CheckEntitlementResponse struct {
 
 // TokensStats holds aggregate counts for the stats endpoint.
 type TokensStats struct {
-	TotalSigningKeys   int `json:"totalSigningKeys"`
-	ActiveSigningKeys  int `json:"activeSigningKeys"`
-	TotalTokensIssued  int `json:"totalTokensIssued"`
-	ActiveTokens       int `json:"activeTokens"`
-	RevokedTokens      int `json:"revokedTokens"`
-	ExpiredTokens      int `json:"expiredTokens"`
+	TotalSigningKeys    int `json:"totalSigningKeys"`
+	ActiveSigningKeys   int `json:"activeSigningKeys"`
+	TotalTokensIssued   int `json:"totalTokensIssued"`
+	ActiveTokens        int `json:"activeTokens"`
+	RevokedTokens       int `json:"revokedTokens"`
+	ExpiredTokens       int `json:"expiredTokens"`
 	TotalEncryptionKeys int `json:"totalEncryptionKeys"`
-	TotalEntitlements  int `json:"totalEntitlements"`
-	ActiveEntitlements int `json:"activeEntitlements"`
+	TotalEntitlements   int `json:"totalEntitlements"`
+	ActiveEntitlements  int `json:"activeEntitlements"`
 }
 
 // InsertTokenParams gathers all fields needed to insert an issued token.

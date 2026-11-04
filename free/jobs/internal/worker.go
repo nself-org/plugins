@@ -23,12 +23,12 @@ import (
 // via FailJob; when attempts >= max_attempts the job moves to the DLQ
 // (dlq=TRUE). Jobs with no callback_url are ack-processed (legacy behavior).
 type Worker struct {
-	db              *DB
-	interval        time.Duration
-	maxAttempts     int
-	client          *http.Client
-	signingSecret   string
-	requestTimeout  time.Duration
+	db             *DB
+	interval       time.Duration
+	maxAttempts    int
+	client         *http.Client
+	signingSecret  string
+	requestTimeout time.Duration
 }
 
 // NewWorker creates a Worker with S18 dispatcher config.
@@ -136,8 +136,10 @@ func (w *Worker) process(ctx context.Context, job *Job) {
 // If the job has no callback_url, it is treated as ack-only (always succeeds)
 // so legacy callers keep working. With callback_url set, a POST is issued with
 // optional HMAC-SHA256 signature headers matching the webhooks plugin format:
-//   X-Webhook-Signature: t=<unix_ts>,v1=<hex>
-//   X-Webhook-Signature-Version: v1
+//
+//	X-Webhook-Signature: t=<unix_ts>,v1=<hex>
+//	X-Webhook-Signature-Version: v1
+//
 // Size-cap exception: 56L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (w *Worker) execute(ctx context.Context, job *Job) (bool, *int, *string) {
 	callbackURL, sign, err := w.db.GetCallbackURL(ctx, job.ID)

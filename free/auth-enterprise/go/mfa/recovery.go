@@ -16,10 +16,10 @@ import (
 
 // MaskedCode is a recovery code with all but the last 4 characters redacted.
 type MaskedCode struct {
-	ID       string `json:"id"`
-	Masked   string `json:"masked"`
-	Used     bool   `json:"used"`
-	UsedAt   *time.Time `json:"used_at,omitempty"`
+	ID     string     `json:"id"`
+	Masked string     `json:"masked"`
+	Used   bool       `json:"used"`
+	UsedAt *time.Time `json:"used_at,omitempty"`
 }
 
 // RecoveryService provides read-only and management operations over backup

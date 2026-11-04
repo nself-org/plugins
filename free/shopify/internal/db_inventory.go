@@ -56,4 +56,3 @@ func (db *DB) DeleteInventoryLevel(ctx context.Context, inventoryItemID, locatio
 	_, err := db.Pool.Exec(ctx, `DELETE FROM np_shopify_inventory WHERE inventory_item_id = $1 AND location_id = $2 AND source_account_id = $3`, inventoryItemID, locationID, db.SourceAccountID)
 	return err
 }
-

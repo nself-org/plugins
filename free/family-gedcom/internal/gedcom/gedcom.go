@@ -1,7 +1,8 @@
 // Package gedcom provides GEDCOM 5.5.1 parsing for the family-gedcom plugin.
 //
 // Purpose: Parse a GEDCOM file and extract individuals and families into the
-//          family plugin's expected JSON schema types.
+//
+//	family plugin's expected JSON schema types.
 //
 // Inputs:  path — filesystem path to a GEDCOM 5.5.1 file.
 // Outputs: *ParseResult on success; error on file/parse failure.

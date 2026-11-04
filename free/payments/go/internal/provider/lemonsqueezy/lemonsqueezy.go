@@ -84,7 +84,7 @@ func (a *Adapter) CreateCheckout(ctx context.Context, params provider.CheckoutPa
 					},
 				},
 				"product_options": map[string]interface{}{
-					"redirect_url":    params.SuccessURL,
+					"redirect_url":     params.SuccessURL,
 					"receipt_link_url": params.SuccessURL,
 				},
 			},
@@ -249,12 +249,12 @@ func (a *Adapter) VerifyWebhookSignature(signature string, body []byte, secret s
 
 func (a *Adapter) ParseWebhookEvent(eventType string, body []byte) (*provider.Subscription, error) {
 	subEvents := map[string]bool{
-		"subscription_created":       true,
-		"subscription_updated":       true,
-		"subscription_cancelled":     true,
-		"subscription_resumed":       true,
+		"subscription_created":        true,
+		"subscription_updated":        true,
+		"subscription_cancelled":      true,
+		"subscription_resumed":        true,
 		"subscription_payment_failed": true,
-		"subscription_expired":       true,
+		"subscription_expired":        true,
 	}
 	if !subEvents[eventType] {
 		return nil, nil
@@ -273,15 +273,15 @@ func (a *Adapter) ParseWebhookEvent(eventType string, body []byte) (*provider.Su
 type lsSubscriptionData struct {
 	ID         string `json:"id"`
 	Attributes struct {
-		CustomerID       string `json:"customer_id"`
-		ProductID        string `json:"product_id"`
-		VariantID        string `json:"variant_id"`
-		Status           string `json:"status"`
-		RenewsAt         string `json:"renews_at"`
-		CreatedAt        string `json:"created_at"`
-		TrialEndsAt      string `json:"trial_ends_at"`
-		EndsAt           string `json:"ends_at"`
-		CancelledAt      string `json:"cancelled_at"`
+		CustomerID  string `json:"customer_id"`
+		ProductID   string `json:"product_id"`
+		VariantID   string `json:"variant_id"`
+		Status      string `json:"status"`
+		RenewsAt    string `json:"renews_at"`
+		CreatedAt   string `json:"created_at"`
+		TrialEndsAt string `json:"trial_ends_at"`
+		EndsAt      string `json:"ends_at"`
+		CancelledAt string `json:"cancelled_at"`
 	} `json:"attributes"`
 }
 

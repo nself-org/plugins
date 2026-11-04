@@ -9,9 +9,9 @@ import (
 // env var for non-tiered installations and defaults to 90 days when unset.
 func TestSweeperDefault(t *testing.T) {
 	tests := []struct {
-		name    string
-		envVal  string
-		want    int
+		name   string
+		envVal string
+		want   int
 	}{
 		{"default (unset)", "", defaultRetentionDays},
 		{"custom 180d", "180", 180},
@@ -46,7 +46,7 @@ func TestSweeperTierOverride(t *testing.T) {
 		tier Tier
 		want int
 	}{
-		{TierDefault, 30},              // env var respected
+		{TierDefault, 30}, // env var respected
 		{TierBusiness, businessRetentionDays},
 		{TierEnterprise, enterpriseRetentionDays},
 	}

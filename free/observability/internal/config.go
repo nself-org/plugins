@@ -3,12 +3,12 @@ package internal
 import "os"
 
 type Config struct {
-	DatabaseURL              string
-	Port                     string
-	CheckIntervalSeconds     int
-	WatchdogTimeoutSeconds   int
-	HealthHistoryRetainDays  int
-	WatchdogEnabled          bool
+	DatabaseURL             string
+	Port                    string
+	CheckIntervalSeconds    int
+	WatchdogTimeoutSeconds  int
+	HealthHistoryRetainDays int
+	WatchdogEnabled         bool
 }
 
 func LoadConfig() Config {

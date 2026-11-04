@@ -172,4 +172,3 @@ func (c *ShopifyAPIClient) ListInventoryLevels(_ context.Context) ([]shopifyInve
 	}
 	return all, nil
 }
-

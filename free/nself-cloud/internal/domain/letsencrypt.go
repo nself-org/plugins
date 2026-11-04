@@ -127,9 +127,11 @@ func (c *LEClient) RenewCert(ctx context.Context, tenantID, hostname string, cur
 // storage/meta logic without a live ACME endpoint.
 //
 // To activate: add to go.mod:
-//   require (
-//     github.com/go-acme/lego/v4 v4.x.x
-//   )
+//
+//	require (
+//	  github.com/go-acme/lego/v4 v4.x.x
+//	)
+//
 // and uncomment the import + implementation below.
 func (c *LEClient) issueCertLego(ctx context.Context, hostname string) (certPEM, keyPEM []byte, expiresAt time.Time, err error) {
 	// ── Stub implementation ──────────────────────────────────────────────────

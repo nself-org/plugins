@@ -18,10 +18,10 @@ type config struct {
 	BrokerType string // nats | redpanda | kafka
 
 	// NATS settings
-	NATSEmbedded    bool
-	NATSClientPort  int    // port for the embedded server
-	NATSStoreDir    string // JetStream persistence dir
-	NATSURL         string // used when NATSEmbedded=false
+	NATSEmbedded   bool
+	NATSClientPort int    // port for the embedded server
+	NATSStoreDir   string // JetStream persistence dir
+	NATSURL        string // used when NATSEmbedded=false
 
 	// Redpanda / Kafka settings
 	RedpandaBrokers []string
@@ -40,14 +40,14 @@ type config struct {
 
 func loadConfig() *config {
 	c := &config{
-		BrokerType:   envOr("EVENT_BUS", "nats"),
-		NATSURL:      envOr("NATS_URL", ""),
+		BrokerType:     envOr("EVENT_BUS", "nats"),
+		NATSURL:        envOr("NATS_URL", ""),
 		NATSClientPort: envIntOr("NATS_PORT", defaultNATSPort),
-		NATSStoreDir:  envOr("NATS_STORE_DIR", defaultStoreDir),
-		RetentionMS:  envInt64Or("EVENT_BUS_RETENTION_MS", defaultRetentionMS),
-		MaxBytes:     envInt64Or("EVENT_BUS_MAX_BYTES", defaultMaxBytes),
-		ListenAddr:   envOr("LISTEN_ADDR", ":8212"),
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
+		NATSStoreDir:   envOr("NATS_STORE_DIR", defaultStoreDir),
+		RetentionMS:    envInt64Or("EVENT_BUS_RETENTION_MS", defaultRetentionMS),
+		MaxBytes:       envInt64Or("EVENT_BUS_MAX_BYTES", defaultMaxBytes),
+		ListenAddr:     envOr("LISTEN_ADDR", ":8212"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
 	}
 
 	embedded := envOr("NATS_EMBEDDED", "true")

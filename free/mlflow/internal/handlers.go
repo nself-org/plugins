@@ -9,8 +9,8 @@ import (
 
 // Handler holds the HTTP handlers for the mlflow management proxy.
 type Handler struct {
-	client     *MLflowClient
-	mlflowURL  string
+	client    *MLflowClient
+	mlflowURL string
 }
 
 // NewHandler creates a Handler backed by the given MLflowClient.
@@ -40,9 +40,9 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // Health returns a liveness check for this management service.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
-		"status":      "healthy",
-		"service":     "nself-mlflow",
-		"mlflow_url":  h.mlflowURL,
+		"status":     "healthy",
+		"service":    "nself-mlflow",
+		"mlflow_url": h.mlflowURL,
 	})
 }
 

@@ -105,4 +105,3 @@ func (d *DB) UpdateDownloadStatus(ctx context.Context, id, status string, errMsg
 		status, errMsg, id, d.sourceAccountID)
 	return err
 }
-

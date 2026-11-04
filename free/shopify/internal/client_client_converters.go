@@ -13,7 +13,7 @@ func convertProduct(sp *shopifyProduct) Product {
 	p := Product{
 		ShopifyID:   sp.ID,
 		Title:       sp.Title,
-		BodyHTML:     strPtr(sp.BodyHTML),
+		BodyHTML:    strPtr(sp.BodyHTML),
 		Vendor:      strPtr(sp.Vendor),
 		ProductType: strPtr(sp.ProductType),
 		Handle:      strPtr(sp.Handle),
@@ -56,7 +56,7 @@ func convertCollection(sc *shopifyCollection) Collection {
 	c := Collection{
 		ShopifyID:      sc.ID,
 		Title:          sc.Title,
-		BodyHTML:        strPtr(sc.BodyHTML),
+		BodyHTML:       strPtr(sc.BodyHTML),
 		Handle:         strPtr(sc.Handle),
 		SortOrder:      strPtr(sc.SortOrder),
 		CollectionType: strPtr(sc.CollectionType),
@@ -151,4 +151,3 @@ func strPtr(s string) *string {
 	}
 	return &s
 }
-

@@ -1,13 +1,16 @@
 // monitoring plugin entrypoint — config-render init container.
 //
 // Purpose: Read monitoring config templates, substitute env vars, write rendered
-//          configs to the output directory so the compose stack can start cleanly.
-//          Designed to run as an init container before the Prometheus/Grafana/Loki
-//          compose services launch.
+//
+//	configs to the output directory so the compose stack can start cleanly.
+//	Designed to run as an init container before the Prometheus/Grafana/Loki
+//	compose services launch.
 //
 // Inputs:  MONITORING_CONFIGS_SRC (default: /monitoring/configs)
-//          MONITORING_CONFIGS_OUT (default: /monitoring/out)
-//          PROMETHEUS_SCRAPE_INTERVAL (default: 15s)
+//
+//	MONITORING_CONFIGS_OUT (default: /monitoring/out)
+//	PROMETHEUS_SCRAPE_INTERVAL (default: 15s)
+//
 // Outputs: Rendered config files in MONITORING_CONFIGS_OUT.
 // Constraints: Exits 0 on success, non-zero on any I/O error.
 // SPORT: PLUGINS-MONITORING-000

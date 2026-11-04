@@ -2,9 +2,9 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -22,23 +22,23 @@ import (
 
 // mockProvider implements provider.Provider for testing.
 type mockProvider struct {
-	name            string
-	checkoutResult  *provider.CheckoutResult
-	checkoutErr     error
-	sub             *provider.Subscription
-	subErr          error
-	portalResult    *provider.PortalResult
-	portalErr       error
-	cancelErr       error
-	pauseErr        error
-	retryResult     *provider.RetryResult
-	retryErr        error
-	plans           []provider.Plan
-	plansErr        error
-	sigEventType    string
-	sigErr          error
-	parsedSub       *provider.Subscription
-	parseErr        error
+	name           string
+	checkoutResult *provider.CheckoutResult
+	checkoutErr    error
+	sub            *provider.Subscription
+	subErr         error
+	portalResult   *provider.PortalResult
+	portalErr      error
+	cancelErr      error
+	pauseErr       error
+	retryResult    *provider.RetryResult
+	retryErr       error
+	plans          []provider.Plan
+	plansErr       error
+	sigEventType   string
+	sigErr         error
+	parsedSub      *provider.Subscription
+	parseErr       error
 }
 
 func (m *mockProvider) Name() string { return m.name }

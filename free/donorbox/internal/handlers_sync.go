@@ -2,10 +2,10 @@ package internal
 
 import (
 	"context"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"strconv"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // --- Sync operations ---------------------------------------------------------
@@ -58,4 +58,3 @@ func handleReconcile(db *DB, client *DonorboxClient) http.HandlerFunc {
 		sdk.Respond(w, status, result)
 	}
 }
-

@@ -3,10 +3,10 @@ package internal
 import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"os"
 	"strconv"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleGetUserStats(db *DB) http.HandlerFunc {

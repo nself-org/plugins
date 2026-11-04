@@ -184,4 +184,3 @@ func handleListEncryptionKeys(db *DB) http.HandlerFunc {
 		})
 	}
 }
-

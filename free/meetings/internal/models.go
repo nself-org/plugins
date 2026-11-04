@@ -40,30 +40,30 @@ type Room struct {
 }
 
 type Event struct {
-	ID                  string         `json:"id"`
-	SourceAccountID     string         `json:"source_account_id"`
-	CreatedAt           time.Time      `json:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at"`
-	Title               string         `json:"title"`
-	Description         *string        `json:"description,omitempty"`
-	Location            *string        `json:"location,omitempty"`
-	VideoLink           *string        `json:"video_link,omitempty"`
-	StartTime           time.Time      `json:"start_time"`
-	EndTime             time.Time      `json:"end_time"`
-	AllDay              bool           `json:"all_day"`
-	Timezone            string         `json:"timezone"`
-	IsRecurring         bool           `json:"is_recurring"`
-	RecurrenceRule      map[string]any `json:"recurrence_rule,omitempty"`
-	RecurrenceParentID  *string        `json:"recurrence_parent_id,omitempty"`
-	OrganizerID         string         `json:"organizer_id"`
-	CalendarID          *string        `json:"calendar_id,omitempty"`
-	RoomID              *string        `json:"room_id,omitempty"`
-	Status              string         `json:"status"`
-	Visibility          string         `json:"visibility"`
-	GoogleEventID       *string        `json:"google_event_id,omitempty"`
-	OutlookEventID      *string        `json:"outlook_event_id,omitempty"`
-	IcalUID             *string        `json:"ical_uid,omitempty"`
-	Metadata            map[string]any `json:"metadata"`
+	ID                 string         `json:"id"`
+	SourceAccountID    string         `json:"source_account_id"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	Title              string         `json:"title"`
+	Description        *string        `json:"description,omitempty"`
+	Location           *string        `json:"location,omitempty"`
+	VideoLink          *string        `json:"video_link,omitempty"`
+	StartTime          time.Time      `json:"start_time"`
+	EndTime            time.Time      `json:"end_time"`
+	AllDay             bool           `json:"all_day"`
+	Timezone           string         `json:"timezone"`
+	IsRecurring        bool           `json:"is_recurring"`
+	RecurrenceRule     map[string]any `json:"recurrence_rule,omitempty"`
+	RecurrenceParentID *string        `json:"recurrence_parent_id,omitempty"`
+	OrganizerID        string         `json:"organizer_id"`
+	CalendarID         *string        `json:"calendar_id,omitempty"`
+	RoomID             *string        `json:"room_id,omitempty"`
+	Status             string         `json:"status"`
+	Visibility         string         `json:"visibility"`
+	GoogleEventID      *string        `json:"google_event_id,omitempty"`
+	OutlookEventID     *string        `json:"outlook_event_id,omitempty"`
+	IcalUID            *string        `json:"ical_uid,omitempty"`
+	Metadata           map[string]any `json:"metadata"`
 }
 
 type Attendee struct {

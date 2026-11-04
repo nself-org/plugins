@@ -54,4 +54,3 @@ func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, cfg *Config) {
 	// API: Webhook Events
 	r.Get("/api/events", handleListEvents(db))
 }
-

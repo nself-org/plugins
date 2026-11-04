@@ -8,14 +8,14 @@ import (
 
 // Metrics holds all Prometheus counters, histograms, and gauges for the payments plugin.
 type Metrics struct {
-	WebhookDuration      *prometheus.HistogramVec
-	WebhookTotal         *prometheus.CounterVec
-	CheckoutDuration     *prometheus.HistogramVec
-	SubscriptionStatus   *prometheus.CounterVec
-	DunningTransitions   *prometheus.CounterVec
-	DunningRetry         *prometheus.CounterVec
-	UsageRecords         *prometheus.CounterVec
-	QueueDepth           prometheus.Gauge
+	WebhookDuration    *prometheus.HistogramVec
+	WebhookTotal       *prometheus.CounterVec
+	CheckoutDuration   *prometheus.HistogramVec
+	SubscriptionStatus *prometheus.CounterVec
+	DunningTransitions *prometheus.CounterVec
+	DunningRetry       *prometheus.CounterVec
+	UsageRecords       *prometheus.CounterVec
+	QueueDepth         prometheus.Gauge
 }
 
 // New creates and registers all metrics.

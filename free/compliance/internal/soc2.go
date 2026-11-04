@@ -48,16 +48,16 @@ type SOC2Control struct {
 
 // ChangeLogEntry is a row from np_change_log.
 type ChangeLogEntry struct {
-	ID          string    `json:"id"`
-	TenantID    *string   `json:"tenant_id,omitempty"`
-	ChangedBy   *string   `json:"changed_by,omitempty"`
-	ChangeType  string    `json:"change_type"`
-	Description string    `json:"description"`
-	TicketRef   *string   `json:"ticket_ref,omitempty"`
-	ApprovedBy  *string   `json:"approved_by,omitempty"`
-	AppliedAt   time.Time `json:"applied_at"`
+	ID          string     `json:"id"`
+	TenantID    *string    `json:"tenant_id,omitempty"`
+	ChangedBy   *string    `json:"changed_by,omitempty"`
+	ChangeType  string     `json:"change_type"`
+	Description string     `json:"description"`
+	TicketRef   *string    `json:"ticket_ref,omitempty"`
+	ApprovedBy  *string    `json:"approved_by,omitempty"`
+	AppliedAt   time.Time  `json:"applied_at"`
 	RollbackAt  *time.Time `json:"rollback_at,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // CreateChangeLogRequest is the body for POST /compliance/change-log.

@@ -195,4 +195,3 @@ func (d *DB) Ping() error {
 	_, err := d.pool.Exec(ctx, "SELECT 1")
 	return err
 }
-

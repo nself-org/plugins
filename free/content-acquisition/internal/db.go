@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-
 const queryTimeout = 5 * time.Second
 
 // DB wraps the connection pool and provides all database operations.
@@ -338,4 +337,3 @@ CREATE TABLE IF NOT EXISTS np_contentacquisition_download_queue (
 CREATE INDEX IF NOT EXISTS idx_np_contacq_queue_priority
   ON np_contentacquisition_download_queue(priority DESC, created_at ASC);
 `
-

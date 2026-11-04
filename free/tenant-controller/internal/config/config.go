@@ -60,15 +60,15 @@ type Config struct {
 	LogLevel     string
 
 	// E10: Cloud metering feature flag + settings.
-	CloudMeteringEnabled  bool
-	HetznerNselfToken     string
-	StripePriceVcpuHour   string
+	CloudMeteringEnabled      bool
+	HetznerNselfToken         string
+	StripePriceVcpuHour       string
 	StripePriceStorageGBMonth string
-	StripePriceEgressGB   string
-	CloudFreeVcpuHours    int
-	CloudFreeStorageGB    int
-	CloudFreeEgressGB     int
-	CloudUsageAlertPct    int
+	StripePriceEgressGB       string
+	CloudFreeVcpuHours        int
+	CloudFreeStorageGB        int
+	CloudFreeEgressGB         int
+	CloudUsageAlertPct        int
 }
 
 // Load reads configuration from environment variables.

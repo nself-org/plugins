@@ -1,7 +1,9 @@
 // Package pty implements PTY session management for plugin-pty.
 //
 // Purpose: Create, track, and close PTY sessions in Postgres.
-//          Enforce per-tenant session limits.
+//
+//	Enforce per-tenant session limits.
+//
 // Inputs:  Postgres pool, source_account_id from JWT header.
 // Outputs: Session rows; audit log entries.
 // Constraints:

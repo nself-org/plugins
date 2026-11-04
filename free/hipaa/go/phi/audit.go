@@ -15,18 +15,18 @@ import (
 
 // PHIAuditEntry represents one row in np_phi_audit_log.
 type PHIAuditEntry struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	TenantID         *string   `json:"tenant_id,omitempty"`
-	AccessorID       *string   `json:"accessor_id,omitempty"`
-	AccessorEmail    *string   `json:"accessor_email,omitempty"`
-	TableName        string    `json:"table_name"`
-	ColumnNames      []string  `json:"column_names"`
-	RowCount         int       `json:"row_count"`
-	Purpose          *string   `json:"purpose,omitempty"`
-	QueryHash        *string   `json:"query_hash,omitempty"`
-	AccessedAt       time.Time `json:"accessed_at"`
-	RetainUntil      string    `json:"retain_until"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	TenantID        *string   `json:"tenant_id,omitempty"`
+	AccessorID      *string   `json:"accessor_id,omitempty"`
+	AccessorEmail   *string   `json:"accessor_email,omitempty"`
+	TableName       string    `json:"table_name"`
+	ColumnNames     []string  `json:"column_names"`
+	RowCount        int       `json:"row_count"`
+	Purpose         *string   `json:"purpose,omitempty"`
+	QueryHash       *string   `json:"query_hash,omitempty"`
+	AccessedAt      time.Time `json:"accessed_at"`
+	RetainUntil     string    `json:"retain_until"`
 }
 
 // LogPHIAccessRequest is the body for manually appending a PHI access entry.

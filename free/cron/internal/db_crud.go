@@ -2,9 +2,9 @@ package internal
 
 import (
 	"context"
-	"time"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func CreateJob(pool *pgxpool.Pool, name, cronExpr, callbackURL string, payload *string, enabled bool) (*CronJob, error) {

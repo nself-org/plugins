@@ -1,8 +1,8 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"context"
+	pgx "github.com/jackc/pgx/v5"
 )
 
 func (d *DB) RecordJobRun(ctx context.Context, jobID string, attempt int, success bool, statusCode *int, errMsg *string, durationMs int64) error {

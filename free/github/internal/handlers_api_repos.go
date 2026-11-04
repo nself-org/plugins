@@ -2,9 +2,9 @@ package internal
 
 import (
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"net/url"
-	"github.com/go-chi/chi/v5"
 )
 
 // --- API endpoints -----------------------------------------------------------
@@ -288,4 +288,3 @@ func (s *Server) handleListLabels(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, ListResponse{Data: labels, Total: total, Limit: limit, Offset: offset})
 }
-

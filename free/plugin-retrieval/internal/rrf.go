@@ -1,8 +1,9 @@
 // Package internal provides Reciprocal Rank Fusion (RRF) scoring for hybrid retrieval.
 //
 // Purpose: Merge ranked result lists from pgvector ANN and tsvector BM25 using RRF.
-//   RRF formula: score(doc) = Σ 1/(k + rank_in_list) for each list containing the doc.
-//   k=60 is the standard smoothing constant (Cormack et al. 2009).
+//
+//	RRF formula: score(doc) = Σ 1/(k + rank_in_list) for each list containing the doc.
+//	k=60 is the standard smoothing constant (Cormack et al. 2009).
 //
 // Inputs: two ranked lists (vector results, text results) of DocumentResult.
 // Outputs: single merged list sorted by RRF score descending.
@@ -24,15 +25,17 @@ type DocumentResult struct {
 	SourceAccountID string  `json:"source_account_id"`
 	Title           string  `json:"title"`
 	Content         string  `json:"content"`
-	Similarity      float64 `json:"similarity,omitempty"`  // pgvector cosine similarity
-	TextRank        float64 `json:"text_rank,omitempty"`   // tsvector ts_rank
+	Similarity      float64 `json:"similarity,omitempty"` // pgvector cosine similarity
+	TextRank        float64 `json:"text_rank,omitempty"`  // tsvector ts_rank
 	RRFScore        float64 `json:"rrf_score"`
 }
 
 // RRFMerge merges two ranked result lists using Reciprocal Rank Fusion.
-//   vectorResults: ranked by pgvector cosine similarity (index 0 = most similar).
-//   textResults:   ranked by tsvector ts_rank (index 0 = highest rank).
-//   topK:          maximum results to return (0 = return all).
+//
+//	vectorResults: ranked by pgvector cosine similarity (index 0 = most similar).
+//	textResults:   ranked by tsvector ts_rank (index 0 = highest rank).
+//	topK:          maximum results to return (0 = return all).
+//
 // Returns results sorted by RRF score descending.
 func RRFMerge(vectorResults, textResults []DocumentResult, topK int) []DocumentResult {
 	scores := make(map[string]float64)

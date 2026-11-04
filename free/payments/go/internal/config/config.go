@@ -20,14 +20,14 @@ type Config struct {
 	StripePriceIDs      string // JSON map
 
 	// LemonSqueezy
-	LemonSqueezyAPIKey       string
-	LemonSqueezyStoreID      string
+	LemonSqueezyAPIKey        string
+	LemonSqueezyStoreID       string
 	LemonSqueezyWebhookSecret string
 
 	// Paddle
-	PaddleAPIKey       string
+	PaddleAPIKey        string
 	PaddleWebhookSecret string
-	PaddlePublicKey    string
+	PaddlePublicKey     string
 
 	// Dunning
 	DunningGraceDays      int
@@ -49,8 +49,8 @@ func Load() *Config {
 		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 		StripePriceIDs:      os.Getenv("STRIPE_PRICE_IDS"),
 
-		LemonSqueezyAPIKey:       os.Getenv("LEMONSQUEEZY_API_KEY"),
-		LemonSqueezyStoreID:      os.Getenv("LEMONSQUEEZY_STORE_ID"),
+		LemonSqueezyAPIKey:        os.Getenv("LEMONSQUEEZY_API_KEY"),
+		LemonSqueezyStoreID:       os.Getenv("LEMONSQUEEZY_STORE_ID"),
 		LemonSqueezyWebhookSecret: os.Getenv("LEMONSQUEEZY_WEBHOOK_SECRET"),
 
 		PaddleAPIKey:        os.Getenv("PADDLE_API_KEY"),

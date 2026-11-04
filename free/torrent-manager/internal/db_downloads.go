@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 	pgx "github.com/jackc/pgx/v5"
+	"time"
 )
 
 // ============================================================================
@@ -177,4 +177,3 @@ func (d *DB) DeleteDownload(id string) error {
 	}
 	return nil
 }
-

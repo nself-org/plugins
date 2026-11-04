@@ -1,15 +1,20 @@
 // ollama plugin entrypoint — lifecycle hook handler.
 //
 // Purpose: Handle nSelf plugin lifecycle actions (install, start, stop) for the
-//          Ollama plugin. Dispatches to the lifecycle package for all logic.
+//
+//	Ollama plugin. Dispatches to the lifecycle package for all logic.
 //
 // Inputs:  PLUGIN_ACTION env (install | start | stop)
-//          OLLAMA_MODEL   env (default: gemma-3-4b)
-//          OLLAMA_HOST    env (default: http://localhost:11434)
-//          DATABASE_URL   env (optional; when set, migrations/*.sql are applied at boot)
+//
+//	OLLAMA_MODEL   env (default: gemma-3-4b)
+//	OLLAMA_HOST    env (default: http://localhost:11434)
+//	DATABASE_URL   env (optional; when set, migrations/*.sql are applied at boot)
+//
 // Outputs: Exit 0 on success, non-zero on failure. Logs to stdout.
 // Constraints: Requires Docker daemon accessible; Ollama container must be
-//              running before "start" action is called.
+//
+//	running before "start" action is called.
+//
 // SPORT: PLUGINS-OLLAMA-000
 package main
 

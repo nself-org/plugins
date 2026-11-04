@@ -154,4 +154,3 @@ func (d *DB) DeactivateSigningKey(id string) error {
 	)
 	return err
 }
-

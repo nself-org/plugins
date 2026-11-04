@@ -27,14 +27,14 @@ type Config struct {
 
 // SubtitleRecord maps to a row in np_subtmgr_subtitles.
 type SubtitleRecord struct {
-	ID              string   `json:"id"`
-	SourceAccountID string   `json:"source_account_id"`
-	MediaID         string   `json:"media_id"`
-	MediaType       string   `json:"media_type"`
-	Language        string   `json:"language"`
-	FilePath        string   `json:"file_path"`
-	Source          string   `json:"source"`
-	SyncScore       *float64 `json:"sync_score,omitempty"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	MediaID         string    `json:"media_id"`
+	MediaType       string    `json:"media_type"`
+	Language        string    `json:"language"`
+	FilePath        string    `json:"file_path"`
+	Source          string    `json:"source"`
+	SyncScore       *float64  `json:"sync_score,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -56,23 +56,23 @@ type UpsertSubtitleInput struct {
 
 // DownloadRecord maps to a row in np_subtmgr_downloads.
 type DownloadRecord struct {
-	ID                   string           `json:"id"`
-	SourceAccountID      string           `json:"source_account_id"`
-	SubtitleID           *string          `json:"subtitle_id,omitempty"`
-	MediaID              string           `json:"media_id"`
-	MediaType            string           `json:"media_type"`
-	MediaTitle           *string          `json:"media_title,omitempty"`
-	Language             string           `json:"language"`
-	FilePath             string           `json:"file_path"`
-	FileSizeBytes        *int64           `json:"file_size_bytes,omitempty"`
-	OpensubtitlesFileID  *int             `json:"opensubtitles_file_id,omitempty"`
-	FileHash             *string          `json:"file_hash,omitempty"`
-	SyncScore            *float64         `json:"sync_score,omitempty"`
-	Source               string           `json:"source"`
-	QCStatus             *string          `json:"qc_status,omitempty"`
-	QCDetails            *json.RawMessage `json:"qc_details,omitempty"`
-	CreatedAt            time.Time        `json:"created_at"`
-	UpdatedAt            time.Time        `json:"updated_at"`
+	ID                  string           `json:"id"`
+	SourceAccountID     string           `json:"source_account_id"`
+	SubtitleID          *string          `json:"subtitle_id,omitempty"`
+	MediaID             string           `json:"media_id"`
+	MediaType           string           `json:"media_type"`
+	MediaTitle          *string          `json:"media_title,omitempty"`
+	Language            string           `json:"language"`
+	FilePath            string           `json:"file_path"`
+	FileSizeBytes       *int64           `json:"file_size_bytes,omitempty"`
+	OpensubtitlesFileID *int             `json:"opensubtitles_file_id,omitempty"`
+	FileHash            *string          `json:"file_hash,omitempty"`
+	SyncScore           *float64         `json:"sync_score,omitempty"`
+	Source              string           `json:"source"`
+	QCStatus            *string          `json:"qc_status,omitempty"`
+	QCDetails           *json.RawMessage `json:"qc_details,omitempty"`
+	CreatedAt           time.Time        `json:"created_at"`
+	UpdatedAt           time.Time        `json:"updated_at"`
 }
 
 // InsertDownloadInput is the input for inserting a new download record.
@@ -179,13 +179,13 @@ type QualityCheckDetails struct {
 
 // SyncResult holds the output of the subtitle sync pipeline.
 type SyncResult struct {
-	OriginalPath    string             `json:"original_path"`
-	SyncedPath      string             `json:"synced_path"`
-	Confidence      float64            `json:"confidence"`
-	OffsetMs        float64            `json:"offset_ms"`
-	Method          string             `json:"method"`
-	AlassResult     *AlassSyncResult   `json:"alass_result,omitempty"`
-	FfsubsyncResult *FfsubsyncResult   `json:"ffsubsync_result,omitempty"`
+	OriginalPath    string           `json:"original_path"`
+	SyncedPath      string           `json:"synced_path"`
+	Confidence      float64          `json:"confidence"`
+	OffsetMs        float64          `json:"offset_ms"`
+	Method          string           `json:"method"`
+	AlassResult     *AlassSyncResult `json:"alass_result,omitempty"`
+	FfsubsyncResult *FfsubsyncResult `json:"ffsubsync_result,omitempty"`
 }
 
 // AlassSyncResult holds the output from alass.
@@ -203,7 +203,7 @@ type FfsubsyncResult struct {
 
 // SyncOptions controls which sync tools to use.
 type SyncOptions struct {
-	AlassOnly    bool
+	AlassOnly     bool
 	FfsubsyncOnly bool
 }
 
@@ -238,12 +238,12 @@ type HashSearchRequest struct {
 
 // DownloadRequest is the body for POST /v1/download.
 type DownloadRequest struct {
-	FileID    int    `json:"file_id"`
-	MediaID   string `json:"media_id"`
-	MediaType string `json:"media_type,omitempty"`
+	FileID     int    `json:"file_id"`
+	MediaID    string `json:"media_id"`
+	MediaType  string `json:"media_type,omitempty"`
 	MediaTitle string `json:"media_title,omitempty"`
-	Language  string `json:"language,omitempty"`
-	RunQC     bool   `json:"run_qc,omitempty"`
+	Language   string `json:"language,omitempty"`
+	RunQC      bool   `json:"run_qc,omitempty"`
 }
 
 // SyncRequest is the body for POST /v1/sync.
@@ -255,9 +255,9 @@ type SyncRequest struct {
 
 // QCRequest is the body for POST /v1/qc.
 type QCRequest struct {
-	SubtitlePath   string `json:"subtitle_path"`
+	SubtitlePath    string `json:"subtitle_path"`
 	VideoDurationMs *int64 `json:"video_duration_ms,omitempty"`
-	DownloadID     string `json:"download_id,omitempty"`
+	DownloadID      string `json:"download_id,omitempty"`
 }
 
 // NormalizeRequest is the body for POST /v1/normalize.

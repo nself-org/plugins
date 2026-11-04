@@ -61,4 +61,3 @@ func (db *DB) DeleteObject(ctx context.Context, objectType string, objectID stri
 		return err
 	}
 }
-

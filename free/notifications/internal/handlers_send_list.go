@@ -3,13 +3,13 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"strconv"
-	"time"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
+	"strconv"
+	"time"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 70L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.

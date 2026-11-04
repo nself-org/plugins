@@ -87,4 +87,3 @@ func (d *DB) ListProfiles(accountID string) ([]QualityProfile, error) {
 	}
 	return profiles, rows.Err()
 }
-

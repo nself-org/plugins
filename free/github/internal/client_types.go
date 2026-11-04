@@ -108,14 +108,14 @@ type ghIssue struct {
 }
 
 type ghPullRequest struct {
-	ID     int64   `json:"id"`
-	NodeID string  `json:"node_id"`
-	Number int     `json:"number"`
-	Title  string  `json:"title"`
-	Body   *string `json:"body"`
-	State  string  `json:"state"`
-	Draft  bool    `json:"draft"`
-	Locked bool    `json:"locked"`
+	ID     int64    `json:"id"`
+	NodeID string   `json:"node_id"`
+	Number int      `json:"number"`
+	Title  string   `json:"title"`
+	Body   *string  `json:"body"`
+	State  string   `json:"state"`
+	Draft  bool     `json:"draft"`
+	Locked bool     `json:"locked"`
 	User   *ghOwner `json:"user"`
 	Head   struct {
 		Ref  string  `json:"ref"`
@@ -153,8 +153,8 @@ type ghCommit struct {
 	SHA    string `json:"sha"`
 	NodeID string `json:"node_id"`
 	Commit struct {
-		Message   string `json:"message"`
-		Author    struct {
+		Message string `json:"message"`
+		Author  struct {
 			Name  string     `json:"name"`
 			Email string     `json:"email"`
 			Date  *time.Time `json:"date"`
@@ -218,22 +218,22 @@ type ghWorkflowsResp struct {
 }
 
 type ghWorkflowRun struct {
-	ID              int64    `json:"id"`
-	NodeID          string   `json:"node_id"`
-	WorkflowID      int64    `json:"workflow_id"`
-	Name            string   `json:"name"`
-	HeadBranch      string   `json:"head_branch"`
-	HeadSHA         string   `json:"head_sha"`
-	RunNumber       int      `json:"run_number"`
-	RunAttempt      int      `json:"run_attempt"`
-	Event           string   `json:"event"`
-	Status          string   `json:"status"`
-	Conclusion      *string  `json:"conclusion"`
-	Actor           *ghOwner `json:"actor"`
-	TriggeringActor *ghOwner `json:"triggering_actor"`
-	HTMLURL         string   `json:"html_url"`
-	JobsURL         string   `json:"jobs_url"`
-	LogsURL         string   `json:"logs_url"`
+	ID              int64      `json:"id"`
+	NodeID          string     `json:"node_id"`
+	WorkflowID      int64      `json:"workflow_id"`
+	Name            string     `json:"name"`
+	HeadBranch      string     `json:"head_branch"`
+	HeadSHA         string     `json:"head_sha"`
+	RunNumber       int        `json:"run_number"`
+	RunAttempt      int        `json:"run_attempt"`
+	Event           string     `json:"event"`
+	Status          string     `json:"status"`
+	Conclusion      *string    `json:"conclusion"`
+	Actor           *ghOwner   `json:"actor"`
+	TriggeringActor *ghOwner   `json:"triggering_actor"`
+	HTMLURL         string     `json:"html_url"`
+	JobsURL         string     `json:"jobs_url"`
+	LogsURL         string     `json:"logs_url"`
 	RunStartedAt    *time.Time `json:"run_started_at"`
 	CreatedAt       *time.Time `json:"created_at"`
 	UpdatedAt       *time.Time `json:"updated_at"`

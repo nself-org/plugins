@@ -30,4 +30,3 @@ func (d *DB) SourceAccountID() string {
 func (d *DB) Pool() *pgxpool.Pool {
 	return d.pool
 }
-

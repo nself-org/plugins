@@ -30,4 +30,3 @@ func RegisterRoutes(r chi.Router, db *DB, client *DonorboxClient, webhookSecret 
 	r.Get("/api/stats", handleGetStats(db))
 	r.Get("/api/events", handleListWebhookEvents(db))
 }
-

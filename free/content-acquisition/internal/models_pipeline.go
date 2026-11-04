@@ -6,22 +6,22 @@ import (
 )
 
 type AcquisitionHistoryItem struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	ContentType     string     `json:"content_type"`
-	ContentName     string     `json:"content_name"`
-	Year            *int       `json:"year,omitempty"`
-	Season          *int       `json:"season,omitempty"`
-	Episode         *int       `json:"episode,omitempty"`
-	TorrentTitle    *string    `json:"torrent_title,omitempty"`
-	TorrentSource   *string    `json:"torrent_source,omitempty"`
-	Quality         *string    `json:"quality,omitempty"`
-	SizeBytes       *int64     `json:"size_bytes,omitempty"`
-	DownloadID      *string    `json:"download_id,omitempty"`
-	Status          string     `json:"status"`
-	AcquiredFrom    string     `json:"acquired_from"`
-	UpgradeOf       *string    `json:"upgrade_of,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	ContentType     string    `json:"content_type"`
+	ContentName     string    `json:"content_name"`
+	Year            *int      `json:"year,omitempty"`
+	Season          *int      `json:"season,omitempty"`
+	Episode         *int      `json:"episode,omitempty"`
+	TorrentTitle    *string   `json:"torrent_title,omitempty"`
+	TorrentSource   *string   `json:"torrent_source,omitempty"`
+	Quality         *string   `json:"quality,omitempty"`
+	SizeBytes       *int64    `json:"size_bytes,omitempty"`
+	DownloadID      *string   `json:"download_id,omitempty"`
+	Status          string    `json:"status"`
+	AcquiredFrom    string    `json:"acquired_from"`
+	UpgradeOf       *string   `json:"upgrade_of,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // ---------------------------------------------------------------------------
@@ -85,25 +85,25 @@ type MovieMonitoring struct {
 // ---------------------------------------------------------------------------
 
 type Download struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	UserID          string     `json:"user_id"`
-	ContentType     string     `json:"content_type"`
-	Title           string     `json:"title"`
-	State           string     `json:"state"`
-	Progress        float32    `json:"progress"`
-	MagnetURI       *string    `json:"magnet_uri,omitempty"`
-	TorrentID       *string    `json:"torrent_id,omitempty"`
-	EncodingJobID   *string    `json:"encoding_job_id,omitempty"`
-	QualityProfile  string     `json:"quality_profile"`
-	RetryCount      int        `json:"retry_count"`
-	ErrorMessage    *string    `json:"error_message,omitempty"`
-	ShowID          *string    `json:"show_id,omitempty"`
-	SeasonNumber    *int       `json:"season_number,omitempty"`
-	EpisodeNumber   *int       `json:"episode_number,omitempty"`
-	TmdbID          *int       `json:"tmdb_id,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	UserID          string    `json:"user_id"`
+	ContentType     string    `json:"content_type"`
+	Title           string    `json:"title"`
+	State           string    `json:"state"`
+	Progress        float32   `json:"progress"`
+	MagnetURI       *string   `json:"magnet_uri,omitempty"`
+	TorrentID       *string   `json:"torrent_id,omitempty"`
+	EncodingJobID   *string   `json:"encoding_job_id,omitempty"`
+	QualityProfile  string    `json:"quality_profile"`
+	RetryCount      int       `json:"retry_count"`
+	ErrorMessage    *string   `json:"error_message,omitempty"`
+	ShowID          *string   `json:"show_id,omitempty"`
+	SeasonNumber    *int      `json:"season_number,omitempty"`
+	EpisodeNumber   *int      `json:"episode_number,omitempty"`
+	TmdbID          *int      `json:"tmdb_id,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // DownloadStateTransition records a state change in the download lifecycle.

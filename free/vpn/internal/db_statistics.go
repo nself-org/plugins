@@ -121,4 +121,3 @@ func (d *DB) GetStatistics(ctx context.Context) (*Statistics, error) {
 
 	return stats, nil
 }
-

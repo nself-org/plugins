@@ -78,9 +78,9 @@ func TestLoad_Overrides(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	cases := []struct {
-		name   string
-		c      Config
-		want   string // substring of error or "" for OK
+		name string
+		c    Config
+		want string // substring of error or "" for OK
 	}{
 		{"missing db", Config{DefaultProvider: "stripe", StripeSecretKey: "k"}, "DATABASE_URL"},
 		{"missing provider", Config{DatabaseURL: "x"}, "PROVIDER"},

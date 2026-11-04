@@ -104,4 +104,3 @@ func (s *Server) Router() http.Handler {
 
 	return r
 }
-

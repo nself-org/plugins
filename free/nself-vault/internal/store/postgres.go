@@ -56,14 +56,14 @@ func (db *DB) RunMigration(ctx context.Context, sql string) error {
 
 // Device represents a registered end-user device.
 type Device struct {
-	ID          string
-	UserID      string
-	TenantID    string
+	ID           string
+	UserID       string
+	TenantID     string
 	DevicePubkey []byte
-	DeviceLabel string
-	Platform    string
-	LastSeenAt  time.Time
-	RevokedAt   *time.Time
+	DeviceLabel  string
+	Platform     string
+	LastSeenAt   time.Time
+	RevokedAt    *time.Time
 }
 
 // CreateDevice inserts a new device row and returns its UUID.

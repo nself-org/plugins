@@ -71,11 +71,11 @@ type PreKeyBundleResponse struct {
 
 // ReplenishStatus reports remaining unconsumed prekey counts for a device.
 type ReplenishStatus struct {
-	UserID          string `json:"user_id"`
-	DeviceID        string `json:"device_id"`
-	OneTimeRemaining int   `json:"one_time_remaining"`
-	KyberRemaining   int   `json:"kyber_remaining"`
-	NeedsReplenish   bool  `json:"needs_replenish"`
+	UserID           string `json:"user_id"`
+	DeviceID         string `json:"device_id"`
+	OneTimeRemaining int    `json:"one_time_remaining"`
+	KyberRemaining   int    `json:"kyber_remaining"`
+	NeedsReplenish   bool   `json:"needs_replenish"`
 }
 
 // SafetyNumberRequest posts a computed safety number + verification flag.

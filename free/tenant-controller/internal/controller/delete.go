@@ -32,6 +32,7 @@ type DeleteInput struct {
 //  7. Flush Redis keys matching proj:{slug}:*.
 //  8. Drop MinIO bucket.
 //  9. DROP SCHEMA project_{slug} CASCADE.
+//
 // 10. DROP ROLE nself_project_{slug}.
 // 11. Remove port_map + projects rows (soft-delete via deleted_at then hard-delete).
 // 12. Emit audit log complete.

@@ -17,8 +17,8 @@ func TestValidateHostname(t *testing.T) {
 		"a.b.c.d.e",
 		"foo123.bar",
 		"123.456.com",
-		"a",            // single alnum label
-		"a1",           // two-char alnum
+		"a",  // single alnum label
+		"a1", // two-char alnum
 		"a-b.c-d.net",
 	}
 

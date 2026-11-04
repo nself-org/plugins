@@ -152,4 +152,3 @@ func UpsertCommit(ctx context.Context, pool *pgxpool.Pool, c *Commit) error {
 		c.HTMLURL, c.Verified, c.VerificationReason)
 	return err
 }
-

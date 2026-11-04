@@ -1,6 +1,8 @@
 // recall_scorer_test.go — golden-set regression tests for RecallScorer.
 // Purpose: Verify fact_f1 >= 0.80 with synthetic data; verify ErrPreconditionNotMet when
-//   plugin-retrieval is unavailable.
+//
+//	plugin-retrieval is unavailable.
+//
 // Ref: eval-harness-foundation-spec.md §5b, §9.
 package scorer_test
 

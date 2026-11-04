@@ -135,4 +135,3 @@ func (d *DB) ListPipelineRuns(status *string, limit, offset int) ([]PipelineRun,
 	}
 	return runs, total, rows.Err()
 }
-

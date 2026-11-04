@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func syncSubscriptionPlans(ctx context.Context, pool *pgxpool.Pool, client *PayPalClient, accountID string) (int, error) {

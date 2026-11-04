@@ -43,4 +43,3 @@ func (db *DB) MarkEventProcessed(ctx context.Context, eventID string, errMsg str
 	)
 	return err
 }
-

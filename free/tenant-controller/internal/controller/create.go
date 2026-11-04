@@ -96,7 +96,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 	hClient := hasura.NewClient(cfg.HasuraEndpoint, cfg.HasuraAdminSecret)
 	sourceDSN := buildProjectDSN(cfg.DatabaseURL, roleName, rolePassword)
 	if err := hClient.AddSource(ctx, hasura.AddSourceInput{
-		Name:       hasuraSource,
+		Name:        hasuraSource,
 		DatabaseURL: sourceDSN,
 	}); err != nil {
 		return nil, fmt.Errorf("register hasura source: %w", err)
@@ -106,10 +106,10 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 	slog.Info("project.create step:nginx", "slug", input.Slug, "domain", input.Domain)
 	nClient := nginx.NewClient(cfg.NginxConfPath)
 	if err := nClient.AddVhost(ctx, nginx.VhostInput{
-		Slug:        input.Slug,
-		Domain:      input.Domain,
-		HasuraPort:  port,
-		BaseDomain:  cfg.BaseDomain,
+		Slug:       input.Slug,
+		Domain:     input.Domain,
+		HasuraPort: port,
+		BaseDomain: cfg.BaseDomain,
 	}); err != nil {
 		return nil, fmt.Errorf("nginx vhost: %w", err)
 	}
@@ -144,12 +144,12 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 
 	// 8. Audit log.
 	detail, _ := json.Marshal(map[string]interface{}{
-		"domain":       input.Domain,
-		"schema_name":  schemaName,
+		"domain":        input.Domain,
+		"schema_name":   schemaName,
 		"hasura_source": hasuraSource,
-		"hasura_port":  port,
-		"nginx_reload": nginxReloadOK,
-		"latency_ms":   time.Since(start).Milliseconds(),
+		"hasura_port":   port,
+		"nginx_reload":  nginxReloadOK,
+		"latency_ms":    time.Since(start).Milliseconds(),
 	})
 	_ = db.WriteAuditLog(ctx, pool, EventProjectCreate, input.Slug, initiatedBy, detail)
 

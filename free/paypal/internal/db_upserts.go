@@ -236,4 +236,3 @@ func InsertWebhookEvent(ctx context.Context, pool *pgxpool.Pool, e *WebhookEvent
 	`, e.PayPalEventID, e.EventType, e.ResourceType, resource, e.Summary, e.CreateTime, e.Processed, e.SourceAccountID)
 	return err
 }
-

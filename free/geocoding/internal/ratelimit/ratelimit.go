@@ -8,18 +8,18 @@ import (
 
 // Bucket is a token bucket for a single key.
 type Bucket struct {
-	tokens    float64
-	capacity  float64
-	rate      float64 // tokens per second
+	tokens     float64
+	capacity   float64
+	rate       float64 // tokens per second
 	lastRefill time.Time
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 func newBucket(capacity, ratePerSec float64) *Bucket {
 	return &Bucket{
-		tokens:    capacity,
-		capacity:  capacity,
-		rate:      ratePerSec,
+		tokens:     capacity,
+		capacity:   capacity,
+		rate:       ratePerSec,
 		lastRefill: time.Now(),
 	}
 }

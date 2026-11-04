@@ -2,10 +2,10 @@ package internal
 
 import (
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"runtime"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // =========================================================================
@@ -43,16 +43,16 @@ func handleLive(db *DB) http.HandlerFunc {
 			"version": "1.0.0",
 			"uptime":  time.Since(startTime).Seconds(),
 			"memory": map[string]interface{}{
-				"alloc_mb":       float64(memStats.Alloc) / 1024 / 1024,
-				"sys_mb":         float64(memStats.Sys) / 1024 / 1024,
-				"num_gc":         memStats.NumGC,
-				"goroutines":     runtime.NumGoroutine(),
+				"alloc_mb":   float64(memStats.Alloc) / 1024 / 1024,
+				"sys_mb":     float64(memStats.Sys) / 1024 / 1024,
+				"num_gc":     memStats.NumGC,
+				"goroutines": runtime.NumGoroutine(),
 			},
 			"stats": map[string]interface{}{
-				"totalUsers":      stats.TotalUsers,
-				"totalPositions":  stats.TotalPositions,
-				"totalCompleted":  stats.TotalCompleted,
-				"lastActivity":    stats.LastActivity,
+				"totalUsers":     stats.TotalUsers,
+				"totalPositions": stats.TotalPositions,
+				"totalCompleted": stats.TotalCompleted,
+				"lastActivity":   stats.LastActivity,
 			},
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		})
@@ -79,4 +79,3 @@ func handleStatus(db *DB, cfg Config) http.HandlerFunc {
 		})
 	}
 }
-

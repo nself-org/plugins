@@ -11,7 +11,7 @@ import (
 
 // fixedScorer always returns a fixed score.
 type fixedScorer struct {
-	score    float64
+	score     float64
 	callCount *atomic.Int64
 }
 

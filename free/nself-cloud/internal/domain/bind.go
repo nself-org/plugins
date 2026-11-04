@@ -82,15 +82,15 @@ func (b *Binder) BindDomain(ctx context.Context, tenant TenantRecord, instance I
 	// Step 4 — Persist success.
 	now := time.Now().UTC()
 	rec := &DomainRecord{
-		TenantID:     tenant.ID,
-		InstanceID:   instance.ID,
-		Hostname:     hostname,
-		CNAMETarget:  cnameTarget,
-		Status:       "verified",
+		TenantID:      tenant.ID,
+		InstanceID:    instance.ID,
+		Hostname:      hostname,
+		CNAMETarget:   cnameTarget,
+		Status:        "verified",
 		DNSVerifiedAt: &now,
-		SSLIssuedAt:  &meta.IssuedAt,
-		SSLExpiresAt: &meta.ExpiresAt,
-		SSLStatus:    "issued",
+		SSLIssuedAt:   &meta.IssuedAt,
+		SSLExpiresAt:  &meta.ExpiresAt,
+		SSLStatus:     "issued",
 	}
 	saved, err := b.DomainRepo.Upsert(ctx, rec)
 	if err != nil {

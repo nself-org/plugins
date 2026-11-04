@@ -41,10 +41,10 @@ type DiscoveryLogRecord struct {
 
 // MdnsStats holds aggregate statistics for the plugin.
 type MdnsStats struct {
-	TotalServices      int `json:"total_services"`
-	ActiveServices     int `json:"active_services"`
-	AdvertisedServices int `json:"advertised_services"`
-	TotalDiscovered    int `json:"total_discovered"`
+	TotalServices       int `json:"total_services"`
+	ActiveServices      int `json:"active_services"`
+	AdvertisedServices  int `json:"advertised_services"`
+	TotalDiscovered     int `json:"total_discovered"`
 	AvailableDiscovered int `json:"available_discovered"`
 }
 
@@ -75,8 +75,8 @@ type UpdateServiceRequest struct {
 
 // DiscoverRequest is the JSON body for POST /api/discover.
 type DiscoverRequest struct {
-	ServiceType string           `json:"service_type,omitempty"`
-	Services    []DiscoverEntry  `json:"services,omitempty"`
+	ServiceType string          `json:"service_type,omitempty"`
+	Services    []DiscoverEntry `json:"services,omitempty"`
 }
 
 // DiscoverEntry represents a single discovered service to upsert.

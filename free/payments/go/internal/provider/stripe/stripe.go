@@ -230,11 +230,11 @@ func (a *Adapter) RetryInvoice(ctx context.Context, providerSubID string) (*prov
 func (a *Adapter) ListPlans(ctx context.Context) ([]provider.Plan, error) {
 	var result struct {
 		Data []struct {
-			ID       string `json:"id"`
-			Nickname string `json:"nickname"`
-			UnitAmount int64 `json:"unit_amount"`
-			Currency string `json:"currency"`
-			Recurring struct {
+			ID         string `json:"id"`
+			Nickname   string `json:"nickname"`
+			UnitAmount int64  `json:"unit_amount"`
+			Currency   string `json:"currency"`
+			Recurring  struct {
 				Interval string `json:"interval"`
 			} `json:"recurring"`
 		} `json:"data"`
@@ -321,11 +321,11 @@ func (a *Adapter) VerifyWebhookSignature(signature string, body []byte, secret s
 func (a *Adapter) ParseWebhookEvent(eventType string, body []byte) (*provider.Subscription, error) {
 	// Events that carry subscription data.
 	subEvents := map[string]bool{
-		"customer.subscription.created":          true,
-		"customer.subscription.updated":          true,
-		"customer.subscription.deleted":          true,
-		"invoice.payment_succeeded":              true,
-		"invoice.payment_failed":                 true,
+		"customer.subscription.created": true,
+		"customer.subscription.updated": true,
+		"customer.subscription.deleted": true,
+		"invoice.payment_succeeded":     true,
+		"invoice.payment_failed":        true,
 	}
 	if !subEvents[eventType] {
 		return nil, nil // non-subscription event — caller should acknowledge

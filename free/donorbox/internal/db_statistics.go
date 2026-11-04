@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-
 // GetStats returns counts per entity for the current source account.
 func (db *DB) GetStats(ctx context.Context) (*SyncStats, error) {
 	stats := &SyncStats{}
@@ -45,4 +44,3 @@ func (db *DB) GetStats(ctx context.Context) (*SyncStats, error) {
 
 	return stats, nil
 }
-

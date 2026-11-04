@@ -40,15 +40,15 @@ func goldenFixture(t *testing.T) (*EventEnvelope, []byte, uuid.UUID, []byte) {
 
 	// Expected signing material — must match the Rust golden_fixture test byte-for-byte.
 	var expected []byte
-	expected = append(expected, userID[:]...)   // 16
-	expected = append(expected, eventID[:]...)  // 16
+	expected = append(expected, userID[:]...)      // 16
+	expected = append(expected, eventID[:]...)     // 16
 	expected = append(expected, []byte("Note")...) // 4
-	expected = append(expected, entityID[:]...) // 16
+	expected = append(expected, entityID[:]...)    // 16
 	var le [8]byte
 	binary.LittleEndian.PutUint64(le[:], uint64(1_715_626_800_000))
 	expected = append(expected, le[:]...) // 8
 	binary.LittleEndian.PutUint64(le[:], 17)
-	expected = append(expected, le[:]...) // 8
+	expected = append(expected, le[:]...)       // 8
 	expected = append(expected, deviceID[:]...) // 16
 	expected = append(expected, 0)              // op Insert
 	expected = append(expected, []byte(`{"k":"v"}`)...)

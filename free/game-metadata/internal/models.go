@@ -23,18 +23,18 @@ type Platform struct {
 }
 
 type Genre struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	Name            string     `json:"name"`
-	Slug            string     `json:"slug"`
-	IgdbID          *int       `json:"igdb_id,omitempty"`
-	Description     *string    `json:"description,omitempty"`
-	ParentID        *string    `json:"parent_id,omitempty"`
-	IsActive        bool       `json:"is_active"`
-	SortOrder       int        `json:"sort_order"`
-	Metadata        []byte     `json:"metadata"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	Name            string    `json:"name"`
+	Slug            string    `json:"slug"`
+	IgdbID          *int      `json:"igdb_id,omitempty"`
+	Description     *string   `json:"description,omitempty"`
+	ParentID        *string   `json:"parent_id,omitempty"`
+	IsActive        bool      `json:"is_active"`
+	SortOrder       int       `json:"sort_order"`
+	Metadata        []byte    `json:"metadata"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Game struct {

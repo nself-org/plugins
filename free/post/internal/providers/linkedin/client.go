@@ -1,13 +1,18 @@
 // Package linkedin implements a LinkedIn UGC Posts API publishing client.
 //
 // Purpose: Publish text posts to a LinkedIn member or organization page via
-//          the UGC (User Generated Content) Posts v2 API.
+//
+//	the UGC (User Generated Content) Posts v2 API.
+//
 // Inputs: access_token (OAuth 2.0 Bearer), person_urn (urn:li:person:<id>) or
-//         organization_urn (urn:li:organization:<id>), and post content.
+//
+//	organization_urn (urn:li:organization:<id>), and post content.
+//
 // Outputs: post URN and URL on success.
 // Constraints: Requires w_member_social OAuth2 scope. The access_token is
-//              obtained via the linkedin plugin's OAuth flow and passed here
-//              as a credential. Images delegated to a future adapter.
+//
+//	obtained via the linkedin plugin's OAuth flow and passed here
+//	as a credential. Images delegated to a future adapter.
 package linkedin
 
 import (
@@ -57,7 +62,7 @@ func (c *Client) Post(ctx context.Context, args PostArgs) (*PostResult, error) {
 	}
 
 	payload := map[string]interface{}{
-		"author": args.AuthorURN,
+		"author":         args.AuthorURN,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]interface{}{
 			"com.linkedin.ugc.ShareContent": map[string]interface{}{

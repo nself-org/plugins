@@ -2,10 +2,10 @@ package internal
 
 import (
 	"context"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"strconv"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // --- API query handlers ------------------------------------------------------
@@ -143,4 +143,3 @@ func handleListWebhookEvents(db *DB) http.HandlerFunc {
 		})
 	}
 }
-

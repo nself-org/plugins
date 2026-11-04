@@ -26,10 +26,10 @@ import (
 
 // Policy represents a tenant's MFA enforcement configuration.
 type Policy struct {
-	TenantID       string
-	Required       bool
+	TenantID        string
+	Required        bool
 	GracePeriodDays int
-	MethodsAllowed []string
+	MethodsAllowed  []string
 }
 
 // PolicyService reads and enforces per-tenant MFA policies.
@@ -49,10 +49,10 @@ func (s *PolicyService) GetPolicy(ctx context.Context, tenantID string) (*Policy
 	defer cancel()
 
 	p := &Policy{
-		TenantID:       tenantID,
-		Required:       false,
+		TenantID:        tenantID,
+		Required:        false,
 		GracePeriodDays: 7,
-		MethodsAllowed: []string{"totp", "webauthn"},
+		MethodsAllowed:  []string{"totp", "webauthn"},
 	}
 
 	var methodsRaw []string

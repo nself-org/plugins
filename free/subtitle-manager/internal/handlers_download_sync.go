@@ -3,12 +3,12 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 124L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
@@ -292,4 +292,3 @@ func handleNormalize(norm *Normalizer, cfg *Config) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 // POST /v1/fetch-best
 // ---------------------------------------------------------------------------
-

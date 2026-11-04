@@ -62,16 +62,16 @@ type ProgressPosition struct {
 
 // ProgressHistory represents a row in np_progress_history.
 type ProgressHistory struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	UserID          string     `json:"user_id"`
-	ContentType     string     `json:"content_type"`
-	ContentID       string     `json:"content_id"`
-	Action          string     `json:"action"`
-	PositionSeconds *float64   `json:"position_seconds"`
-	DeviceID        *string    `json:"device_id"`
-	SessionID       *string    `json:"session_id"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	UserID          string    `json:"user_id"`
+	ContentType     string    `json:"content_type"`
+	ContentID       string    `json:"content_id"`
+	Action          string    `json:"action"`
+	PositionSeconds *float64  `json:"position_seconds"`
+	DeviceID        *string   `json:"device_id"`
+	SessionID       *string   `json:"session_id"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // WatchlistItem represents a row in np_progress_watchlists.
@@ -153,38 +153,38 @@ type UserStats struct {
 
 // PluginStats contains aggregated plugin-wide statistics.
 type PluginStats struct {
-	TotalUsers        int64      `json:"total_users"`
-	TotalPositions    int64      `json:"total_positions"`
-	TotalCompleted    int64      `json:"total_completed"`
-	TotalInProgress   int64      `json:"total_in_progress"`
-	TotalWatchlist    int64      `json:"total_watchlist"`
-	TotalFavorites    int64      `json:"total_favorites"`
-	TotalHistoryEvts  int64      `json:"total_history_events"`
-	LastActivity      *time.Time `json:"last_activity"`
+	TotalUsers       int64      `json:"total_users"`
+	TotalPositions   int64      `json:"total_positions"`
+	TotalCompleted   int64      `json:"total_completed"`
+	TotalInProgress  int64      `json:"total_in_progress"`
+	TotalWatchlist   int64      `json:"total_watchlist"`
+	TotalFavorites   int64      `json:"total_favorites"`
+	TotalHistoryEvts int64      `json:"total_history_events"`
+	LastActivity     *time.Time `json:"last_activity"`
 }
 
 // --- Request types ---
 
 // UpdateProgressRequest is the JSON body for updating playback progress.
 type UpdateProgressRequest struct {
-	UserID          string                  `json:"user_id"`
-	ContentType     string                  `json:"content_type"`
-	ContentID       string                  `json:"content_id"`
-	PositionSeconds float64                 `json:"position_seconds"`
-	DurationSeconds *float64                `json:"duration_seconds,omitempty"`
-	DeviceID        *string                 `json:"device_id,omitempty"`
-	AudioTrack      *string                 `json:"audio_track,omitempty"`
-	SubtitleTrack   *string                 `json:"subtitle_track,omitempty"`
-	Quality         *string                 `json:"quality,omitempty"`
-	Metadata        map[string]interface{}  `json:"metadata,omitempty"`
+	UserID          string                 `json:"user_id"`
+	ContentType     string                 `json:"content_type"`
+	ContentID       string                 `json:"content_id"`
+	PositionSeconds float64                `json:"position_seconds"`
+	DurationSeconds *float64               `json:"duration_seconds,omitempty"`
+	DeviceID        *string                `json:"device_id,omitempty"`
+	AudioTrack      *string                `json:"audio_track,omitempty"`
+	SubtitleTrack   *string                `json:"subtitle_track,omitempty"`
+	Quality         *string                `json:"quality,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // AddToWatchlistRequest is the JSON body for adding an item to the watchlist.
 type AddToWatchlistRequest struct {
-	UserID      string `json:"user_id"`
-	ContentType string `json:"content_type"`
-	ContentID   string `json:"content_id"`
-	Priority    *int   `json:"priority,omitempty"`
+	UserID      string  `json:"user_id"`
+	ContentType string  `json:"content_type"`
+	ContentID   string  `json:"content_id"`
+	Priority    *int    `json:"priority,omitempty"`
 	AddedFrom   *string `json:"added_from,omitempty"`
 	Notes       *string `json:"notes,omitempty"`
 }

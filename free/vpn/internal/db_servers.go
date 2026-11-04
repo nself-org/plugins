@@ -95,4 +95,3 @@ func scanServer(rows pgx.Rows) (Server, error) {
 	}
 	return s, nil
 }
-

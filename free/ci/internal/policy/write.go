@@ -156,7 +156,7 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		if value, err = checkValue(spec, c.Value); err != nil {
 			return Result{}, err
 		}
-	pw.Op, pw.Value = store.PolicySet, value
+		pw.Op, pw.Value = store.PolicySet, value
 		res.Value = shown(spec, value)
 	}
 	var branch *trust.Scope

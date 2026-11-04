@@ -28,15 +28,15 @@ var ErrFunctionNotFound = errors.New("function not found")
 
 // Function represents a deployed edge function.
 type Function struct {
-	ID               uuid.UUID
-	Name             string
-	Description      string
-	Status           string
-	InvokeCount      int64
-	ErrorCount       int64
-	SourceAccountID  string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID              uuid.UUID
+	Name            string
+	Description     string
+	Status          string
+	InvokeCount     int64
+	ErrorCount      int64
+	SourceAccountID string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Version represents a deployed version of a function.

@@ -53,14 +53,14 @@ func NewTOTPService(db *pgxpool.Pool, issuer string) *TOTPService {
 // EnrollmentResult is returned by BeginEnrollment. The plaintext secret and
 // backup codes are included exactly once; they are not stored in plaintext.
 type EnrollmentResult struct {
-	EnrollmentID string   `json:"enrollment_id"`
+	EnrollmentID string `json:"enrollment_id"`
 	// TOTP URI suitable for QR code rendering.
-	OTPURI       string   `json:"otp_uri"`
+	OTPURI string `json:"otp_uri"`
 	// Plaintext secret for manual entry; display once, do not store.
-	Secret       string   `json:"secret"`
-	BackupCodes  []string `json:"backup_codes"`
-	Digits       int      `json:"digits"`
-	Period       int      `json:"period"`
+	Secret      string   `json:"secret"`
+	BackupCodes []string `json:"backup_codes"`
+	Digits      int      `json:"digits"`
+	Period      int      `json:"period"`
 }
 
 // BeginEnrollment creates a pending (unverified) TOTP enrollment for userID.

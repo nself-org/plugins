@@ -18,14 +18,14 @@ const DefaultTimestampTolerance = 300 * time.Second
 
 // StripeEvent represents a parsed Stripe webhook event payload.
 type StripeEvent struct {
-	ID              string          `json:"id"`
-	Type            string          `json:"type"`
-	APIVersion      string          `json:"api_version"`
-	Created         int64           `json:"created"`
-	Livemode        bool            `json:"livemode"`
-	PendingWebhooks int32           `json:"pending_webhooks"`
-	Request         *EventRequest   `json:"request"`
-	Data            EventData       `json:"data"`
+	ID              string        `json:"id"`
+	Type            string        `json:"type"`
+	APIVersion      string        `json:"api_version"`
+	Created         int64         `json:"created"`
+	Livemode        bool          `json:"livemode"`
+	PendingWebhooks int32         `json:"pending_webhooks"`
+	Request         *EventRequest `json:"request"`
+	Data            EventData     `json:"data"`
 }
 
 // EventRequest contains the request metadata from a Stripe event.
@@ -127,18 +127,18 @@ func (wh *WebhookHandler) HandleEvent(ctx ContextKey, event *StripeEvent) error 
 
 	// Build the webhook event record
 	record := &StripeWebhookEvent{
-		ID:         event.ID,
-		Type:       event.Type,
-		APIVersion: NullString{String: event.APIVersion, Valid: event.APIVersion != ""},
-		Data:       event.Data.Object,
-		ObjectType: NullString{String: objectType, Valid: objectType != ""},
-		ObjectID:   NullString{String: objectID, Valid: objectID != ""},
-		Livemode:   event.Livemode,
+		ID:              event.ID,
+		Type:            event.Type,
+		APIVersion:      NullString{String: event.APIVersion, Valid: event.APIVersion != ""},
+		Data:            event.Data.Object,
+		ObjectType:      NullString{String: objectType, Valid: objectType != ""},
+		ObjectID:        NullString{String: objectID, Valid: objectID != ""},
+		Livemode:        event.Livemode,
 		PendingWebhooks: event.PendingWebhooks,
-		Processed:  false,
-		RetryCount: 0,
-		CreatedAt:  NullTime{Time: time.Unix(event.Created, 0), Valid: true},
-		ReceivedAt: NullTime{Time: time.Now(), Valid: true},
+		Processed:       false,
+		RetryCount:      0,
+		CreatedAt:       NullTime{Time: time.Unix(event.Created, 0), Valid: true},
+		ReceivedAt:      NullTime{Time: time.Now(), Valid: true},
 	}
 
 	if event.Request != nil {

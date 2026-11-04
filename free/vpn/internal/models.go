@@ -8,26 +8,26 @@ import "time"
 
 // Provider represents a row in np_vpn_providers.
 type Provider struct {
-	ID                       string                 `json:"id"`
-	Name                     string                 `json:"name"`
-	DisplayName              string                 `json:"display_name"`
-	CLIAvailable             bool                   `json:"cli_available"`
-	CLICommand               *string                `json:"cli_command,omitempty"`
-	APIAvailable             bool                   `json:"api_available"`
-	APIEndpoint              *string                `json:"api_endpoint,omitempty"`
-	PortForwardingSupported  bool                   `json:"port_forwarding_supported"`
-	P2PAllServers            bool                   `json:"p2p_all_servers"`
-	P2PServerCount           int                    `json:"p2p_server_count"`
-	TotalServers             int                    `json:"total_servers"`
-	TotalCountries           int                    `json:"total_countries"`
-	WireguardSupported       bool                   `json:"wireguard_supported"`
-	OpenVPNSupported         bool                   `json:"openvpn_supported"`
-	KillSwitchAvailable      bool                   `json:"kill_switch_available"`
-	SplitTunnelingAvailable  bool                   `json:"split_tunneling_available"`
-	Config                   map[string]interface{} `json:"config"`
-	SourceAccountID          string                 `json:"source_account_id"`
-	CreatedAt                time.Time              `json:"created_at"`
-	UpdatedAt                time.Time              `json:"updated_at"`
+	ID                      string                 `json:"id"`
+	Name                    string                 `json:"name"`
+	DisplayName             string                 `json:"display_name"`
+	CLIAvailable            bool                   `json:"cli_available"`
+	CLICommand              *string                `json:"cli_command,omitempty"`
+	APIAvailable            bool                   `json:"api_available"`
+	APIEndpoint             *string                `json:"api_endpoint,omitempty"`
+	PortForwardingSupported bool                   `json:"port_forwarding_supported"`
+	P2PAllServers           bool                   `json:"p2p_all_servers"`
+	P2PServerCount          int                    `json:"p2p_server_count"`
+	TotalServers            int                    `json:"total_servers"`
+	TotalCountries          int                    `json:"total_countries"`
+	WireguardSupported      bool                   `json:"wireguard_supported"`
+	OpenVPNSupported        bool                   `json:"openvpn_supported"`
+	KillSwitchAvailable     bool                   `json:"kill_switch_available"`
+	SplitTunnelingAvailable bool                   `json:"split_tunneling_available"`
+	Config                  map[string]interface{} `json:"config"`
+	SourceAccountID         string                 `json:"source_account_id"`
+	CreatedAt               time.Time              `json:"created_at"`
+	UpdatedAt               time.Time              `json:"updated_at"`
 }
 
 // Credential represents a row in np_vpn_credentials.
@@ -143,16 +143,16 @@ type ConnectionLog struct {
 
 // ServerPerformance represents a row in np_vpn_server_performance.
 type ServerPerformance struct {
-	ID                 string    `json:"id"`
-	ServerID           string    `json:"server_id"`
-	Timestamp          time.Time `json:"timestamp"`
-	PingMs             *int      `json:"ping_ms,omitempty"`
-	DownloadSpeedMbps  *float64  `json:"download_speed_mbps,omitempty"`
-	UploadSpeedMbps    *float64  `json:"upload_speed_mbps,omitempty"`
-	LoadPercentage     *int      `json:"load_percentage,omitempty"`
-	SuccessRate        *float64  `json:"success_rate,omitempty"`
-	AvgConnectionTimeMs *int     `json:"avg_connection_time_ms,omitempty"`
-	SourceAccountID    string    `json:"source_account_id"`
+	ID                  string    `json:"id"`
+	ServerID            string    `json:"server_id"`
+	Timestamp           time.Time `json:"timestamp"`
+	PingMs              *int      `json:"ping_ms,omitempty"`
+	DownloadSpeedMbps   *float64  `json:"download_speed_mbps,omitempty"`
+	UploadSpeedMbps     *float64  `json:"upload_speed_mbps,omitempty"`
+	LoadPercentage      *int      `json:"load_percentage,omitempty"`
+	SuccessRate         *float64  `json:"success_rate,omitempty"`
+	AvgConnectionTimeMs *int      `json:"avg_connection_time_ms,omitempty"`
+	SourceAccountID     string    `json:"source_account_id"`
 }
 
 // LeakTest represents a row in np_vpn_leak_tests.
@@ -186,14 +186,14 @@ type ConnectRequest struct {
 
 // ConnectResponse is the response for POST /api/connect.
 type ConnectResponse struct {
-	ConnectionID string     `json:"connection_id"`
-	Provider     string     `json:"provider"`
-	Server       string     `json:"server"`
-	VPNIP        string     `json:"vpn_ip"`
-	Interface    string     `json:"interface"`
-	DNSServers   []string   `json:"dns_servers"`
-	PortForwarded *int      `json:"port_forwarded,omitempty"`
-	ConnectedAt  *time.Time `json:"connected_at"`
+	ConnectionID  string     `json:"connection_id"`
+	Provider      string     `json:"provider"`
+	Server        string     `json:"server"`
+	VPNIP         string     `json:"vpn_ip"`
+	Interface     string     `json:"interface"`
+	DNSServers    []string   `json:"dns_servers"`
+	PortForwarded *int       `json:"port_forwarded,omitempty"`
+	ConnectedAt   *time.Time `json:"connected_at"`
 }
 
 // DownloadRequest is the JSON body for POST /api/download.
@@ -207,12 +207,12 @@ type DownloadRequest struct {
 
 // DownloadResponse is the response for POST /api/download.
 type DownloadResponse struct {
-	DownloadID string     `json:"download_id"`
-	Name       *string    `json:"name,omitempty"`
-	Status     string     `json:"status"`
-	Provider   string     `json:"provider"`
-	Server     *string    `json:"server,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	DownloadID string    `json:"download_id"`
+	Name       *string   `json:"name,omitempty"`
+	Status     string    `json:"status"`
+	Provider   string    `json:"provider"`
+	Server     *string   `json:"server,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // CredentialRequest is the JSON body for POST /api/providers/{id}/credentials.
@@ -240,29 +240,29 @@ type HealthResponse struct {
 
 // StatusResponse is the response for GET /api/status.
 type StatusResponse struct {
-	Connected        bool    `json:"connected"`
-	ConnectionID     *string `json:"connection_id,omitempty"`
-	Provider         *string `json:"provider,omitempty"`
-	Server           *string `json:"server,omitempty"`
-	VPNIP            *string `json:"vpn_ip,omitempty"`
-	Interface        *string `json:"interface,omitempty"`
-	Protocol         *string `json:"protocol,omitempty"`
-	UptimeSeconds    *int    `json:"uptime_seconds,omitempty"`
-	BytesSent        *int64  `json:"bytes_sent,omitempty"`
-	BytesReceived    *int64  `json:"bytes_received,omitempty"`
-	PortForwarded    *int    `json:"port_forwarded,omitempty"`
-	KillSwitchEnabled *bool  `json:"kill_switch_enabled,omitempty"`
+	Connected         bool    `json:"connected"`
+	ConnectionID      *string `json:"connection_id,omitempty"`
+	Provider          *string `json:"provider,omitempty"`
+	Server            *string `json:"server,omitempty"`
+	VPNIP             *string `json:"vpn_ip,omitempty"`
+	Interface         *string `json:"interface,omitempty"`
+	Protocol          *string `json:"protocol,omitempty"`
+	UptimeSeconds     *int    `json:"uptime_seconds,omitempty"`
+	BytesSent         *int64  `json:"bytes_sent,omitempty"`
+	BytesReceived     *int64  `json:"bytes_received,omitempty"`
+	PortForwarded     *int    `json:"port_forwarded,omitempty"`
+	KillSwitchEnabled *bool   `json:"kill_switch_enabled,omitempty"`
 }
 
 // Statistics is the response for GET /api/stats.
 type Statistics struct {
-	TotalConnections    int              `json:"total_connections"`
-	ActiveConnections   int              `json:"active_connections"`
-	TotalDownloads      int              `json:"total_downloads"`
-	ActiveDownloads     int              `json:"active_downloads"`
-	TotalBytesDownloaded string          `json:"total_bytes_downloaded"`
-	Providers           []ProviderStat   `json:"providers"`
-	TopServers          []ServerStat     `json:"top_servers"`
+	TotalConnections     int            `json:"total_connections"`
+	ActiveConnections    int            `json:"active_connections"`
+	TotalDownloads       int            `json:"total_downloads"`
+	ActiveDownloads      int            `json:"active_downloads"`
+	TotalBytesDownloaded string         `json:"total_bytes_downloaded"`
+	Providers            []ProviderStat `json:"providers"`
+	TopServers           []ServerStat   `json:"top_servers"`
 }
 
 // ProviderStat is a sub-object in Statistics.

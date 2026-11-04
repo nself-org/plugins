@@ -16,11 +16,11 @@ import (
 // Outputs: returned to HTTP handler and CLI for display/storage.
 // Constraints: PassRate and SuiteScore in [0,1]; Passed = SuiteScore >= suite threshold.
 type EvalRunResult struct {
-	PassRate   float64         `json:"pass_rate"`
-	SuiteScore float64         `json:"suite_score"`
-	Passed     bool            `json:"passed"`
+	PassRate   float64             `json:"pass_rate"`
+	SuiteScore float64             `json:"suite_score"`
+	Passed     bool                `json:"passed"`
 	Results    []schema.TaskResult `json:"tasks"`
-	DurationMS int             `json:"duration_ms"`
+	DurationMS int                 `json:"duration_ms"`
 }
 
 // AggregateScorer runs all tasks in a suite in parallel, collects results, and computes

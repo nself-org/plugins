@@ -4,8 +4,9 @@
 // Inputs:    DATABASE_URL (required), E2EE_PLUGIN_PORT/HOST (optional).
 // Outputs:   HTTP server on cfg.Port; graceful shutdown on SIGINT/SIGTERM.
 // Constraints: This process stores PUBLIC keys only. Request bodies for key
-//   endpoints are NOT logged (no body-logging middleware is installed) so no
-//   key material can leak into logs.
+//
+//	endpoints are NOT logged (no body-logging middleware is installed) so no
+//	key material can leak into logs.
 package main
 
 import (

@@ -12,11 +12,11 @@ import (
 
 // EncryptionAuditResult summarises the encryption posture of the deployment.
 type EncryptionAuditResult struct {
-	Timestamp    time.Time       `json:"timestamp"`
-	PGCrypto     PGCryptoStatus  `json:"pgcrypto"`
-	TLS          TLSStatus       `json:"tls"`
-	Verdict      string          `json:"verdict"` // pass | warn | fail
-	Findings     []string        `json:"findings"`
+	Timestamp time.Time      `json:"timestamp"`
+	PGCrypto  PGCryptoStatus `json:"pgcrypto"`
+	TLS       TLSStatus      `json:"tls"`
+	Verdict   string         `json:"verdict"` // pass | warn | fail
+	Findings  []string       `json:"findings"`
 }
 
 // PGCryptoStatus reflects pgcrypto extension availability.
