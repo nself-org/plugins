@@ -2,10 +2,11 @@ package main
 
 // Purpose: the composition root of the V15 coordinator's lifecycle pieces (P7-NODE-20): it hands the
 //          coordinator's own store to the agent and enroll listeners, registers the pairing service that
-//          burst offers use in this process, and builds the graceful drain that runs on SIGTERM.
+//          burst offers use in this process, builds the graceful drain that runs on SIGTERM, and starts the
+//          hosted lease poll loop on the same lease engine as the expiry sweeper (D-1297).
 // Inputs:  the open coordinator store, the data dir and the serve Config being built.
 // Outputs: serveWire sets Config.Drain and registers the default pairing service; the returned func undoes
-//          the registration.
+//          the registration and stops the hosted poll loop before the store is released.
 // Constraints: the drain runs after intake has stopped (coordinator.Run pauses it first) and before the
 //          running dispatches are cancelled; cancels reach agents through the live agent server; with no
 //          agent listener running there is nothing to cancel, and the drain only waits out the deadline.
@@ -85,6 +86,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		return func() {}, err
 	}
 	undoHosted := serveHosted(st, home, cfg.AllowedRepos)
+	stopHostedPoll := serveHostedLeases(st, eng) // D-1297: hosted lease profiles and their poll loop
 	undoNetscope := serveNetscope(st, home)
 	cfg.Rereport = rereportDone(st)
 	cfg.Drain = func(dctx context.Context) error {
@@ -104,7 +106,14 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); undoNetscope(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
+	return func() {
+		stopHostedPoll()
+		stopBeat()
+		undoNetscope()
+		undoHosted()
+		pairing.Use(nil)
+		agentOnAck = nil
+	}, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
