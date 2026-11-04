@@ -4,7 +4,8 @@ package main
 // Inputs: lease cache plan, agent state, pinned workspace and registered secrets.
 // Outputs: tool environment, read-only container mounts and scanned cache uploads.
 // Constraints: a failed or cancelled job sends nothing; a secret in any planned
-// directory refuses the entire save set before the first transfer frame.
+// directory refuses the entire save set before the first transfer frame. A
+// process job on a system node (job shim, D-1230) gets no node cache.
 
 import (
 	"context"
@@ -52,7 +53,8 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 	if ns.Trust == "untrusted" && l.Cache.Access == "rw" {
 		return setup, fmt.Errorf("E711 not_planned: untrusted writable cache")
 	}
-	if l.Cache.Access == "ro" && !container {
+	if !container && (l.Cache.Access == "ro" || systemNode()) {
+		// a system node's process job runs as a job user that cannot write the agent's cache work area: it runs uncached
 		return setup, nil
 	}
 	if err := validateCachePlan(l.Cache); err != nil {

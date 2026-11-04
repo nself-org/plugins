@@ -566,7 +566,7 @@ Two-box advice: do not run a TEAM coordinator on the same box as a node that run
 
 | Node | Layout | Eligible for | Notes |
 |---|---|---|---|
-| System install (`nself ci nodes add user@mac --system`) | Hidden agent user, one hidden job user per slot, a LaunchDaemon, a root-owned uninstall copy | Separated layout; secrets and signing eligible; TEAM eligible | Recorded as separated only once D-1230 closes. Until then the node is recorded not UID-separated and the agent does not yet run jobs through the job shim |
+| System install (`nself ci nodes add user@mac --system`) | Hidden agent user, one hidden job user per slot, a LaunchDaemon, a root-owned uninstall copy | Separated layout; secrets and signing eligible; TEAM eligible | Recorded as separated only when the installer proved the job-shim chain and the node key's EACCES from a job user; the agent then runs every process step through the job shim ([Nodes and Runners](./Nodes-and-Runners.md#vps)) |
 | User mode | The agent runs as your own user | The I17 exception only: owner work from a PERSONAL coordinator, no secrets, never signing | A TEAM coordinator refuses it (`isolation.uid_separation`, `E657`) |
 
 For a system install the ssh user needs passwordless sudo, and the Xcode license must be accepted first (`sudo xcodebuild -license accept`). Remove the node with the root-owned copy: `sudo /Library/PrivilegedHelperTools/org.nself.ci-agent uninstall --system`. The `vm` level uses Tart and is limited by Apple to two VMs at once on one Mac.

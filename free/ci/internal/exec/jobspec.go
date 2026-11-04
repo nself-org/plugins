@@ -68,4 +68,7 @@ type JobSpec struct {
 	// NetEnv, when an Isolator sets it, is added to the job environment after the job's own env, so the job
 	// cannot override it: the proxy variables of a restricted or internet scope (P7-TRUST-08).
 	NetEnv []string
+	// Shim, when an Isolator sets it, makes a process job's Command the shim chain and hands the payload,
+	// workdir and environment to it as one request line on stdin (step_shim.go, D-1230). Process jobs only.
+	Shim *StepShim
 }

@@ -5,8 +5,10 @@ package main
 // start one job step under that user's UID, so a job never runs as the agent and cannot read the
 // agent's node key or age identity.
 // Inputs:  one JSON line on stdin: {"argv":[...],"dir":"/abs","env":["K=V",...]}; every byte after the
-// newline stays on stdin for the job.
-// Outputs: none; the process becomes argv[0] (execve) with exactly the given environment.
+// newline stays on stdin for the job. A line with "op" set is one of the job user's own housekeeping
+// operations instead (job_shim_ops.go: stage-in, stage-out, clean, kill, with "attempt").
+// Outputs: none; the process becomes argv[0] (execve) with exactly the given environment. An op exits 0
+// when it is done, 1 when it failed.
 // Constraints: argv comes from the lease and is never handed to a shell; the shim refuses to run as root
 // or as any account that is not nself-ci-job-<n> (exit 1), reads the request a byte at a time with a
 // 1 MiB cap, accepts no unknown field, keeps nothing of sudo's environment, and changes into dir only
@@ -39,6 +41,10 @@ type shimRequest struct {
 	Argv []string `json:"argv"`
 	Dir  string   `json:"dir"`
 	Env  []string `json:"env"`
+	// Op names a housekeeping operation (shimOps); empty runs Argv.
+	Op string `json:"op,omitempty"`
+	// Attempt is the attempt an op works on (stage-in, stage-out, clean).
+	Attempt string `json:"attempt,omitempty"`
 }
 
 // readShimRequest reads one line of at most max bytes, a byte at a time.
@@ -67,6 +73,9 @@ func parseShimRequest(raw []byte) (shimRequest, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
 		return req, fmt.Errorf("bad job request: %w", err)
+	}
+	if req.Op != "" || req.Attempt != "" {
+		return req, checkShimOp(req)
 	}
 	if len(req.Argv) == 0 || req.Argv[0] == "" {
 		return req, errors.New("bad job request: argv is empty")
@@ -115,6 +124,13 @@ func runJobShim(_ context.Context, args []string, sio IO) int {
 	if err != nil {
 		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 2
+	}
+	if req.Op != "" {
+		if err := runShimOp(req, name, sio.Stdin, sio.Stdout); err != nil {
+			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
+			return 1
+		}
+		return 0
 	}
 	return execShimRequest(req, sio)
 }

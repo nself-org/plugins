@@ -4,13 +4,16 @@ package main
 // through the P7-CI-32 executor and assembles its ci.evidence/v1 document with
 // the P7-CI-38 builder. It is the entrypoint hosted workflows (P7-HOST) call,
 // and runSpec is what `serve` runs for each lease (inside the node's
-// contention Isolator: contention_wire.go).
+// contention Isolator: contention_wire.go; on a system node every process
+// step goes through the job shim: job_shim_run.go, and its attempt is cleaned
+// as the job user afterwards: job_shim_cleanup.go; a failed cleanup drains the node).
 // Inputs:  a JSON job spec file (execSpec); the agent state dir for the
 // executor's private work area.
 // Outputs: the job's output on stdout, the evidence file (0600, atomic).
 // Constraints: exit 0 when the job passed, 1 when it failed or could not run,
 // 2 on bad usage; the job runs only through internal/exec; the evidence is
 // checked against schemas/ci-evidence.v1.schema.json before it is written.
+// writeEvidence (the schema check and atomic write) lives in evidence_file.go.
 
 import (
 	"bytes"
@@ -21,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -122,34 +124,6 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 	return 0
 }
 
-// writeEvidence validates the document against the published schema and
-// writes it atomically with mode 0600.
-func writeEvidence(path string, doc []byte) error {
-	schemas, err := model.Schemas()
-	if err != nil {
-		return err
-	}
-	if err := model.ValidateJSON(schemas["ci-evidence.v1.schema.json"], doc); err != nil {
-		return fmt.Errorf("evidence does not validate against ci.evidence/v1: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".evidence-")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(doc); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}
-
 // runSpec runs the job once (or, for in.Skip, records why it did not run) and
 // returns its outcome and evidence document.
 func runSpec(ctx context.Context, spec execSpec, in jobInputs) (session.JobResult, error) {
@@ -203,6 +177,9 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: now,
 			Err: &ciexec.Error{Code: "E612", Message: "declared secrets were not delivered before the lease expired"}}, "", nil
 	}
+	if derr := drainedError(); derr != nil { // a failed job cleanup drained this node: nothing more runs here
+		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: now, Err: derr, Refused: true}, derr.Error(), nil
+	}
 	base, err := workBase()
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
@@ -234,6 +211,13 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	if iso == nil {
 		return ciexec.AttemptResult{}, "", errors.New("no isolator is registered; the agent will not run a job without one")
 	}
+	// A system node runs process steps through the job shim (job_shim_run.go); the contention layer wraps
+	// outside it, so priority and the cgroup are applied by the agent before sudo.
+	var shim *shimIsolator
+	if wrap := systemShim(in.Slot); wrap != nil {
+		iso = wrap(iso)
+		shim, _ = iso.(*shimIsolator)
+	}
 	if in.Isolate != nil {
 		iso = in.Isolate(iso)
 	}
@@ -253,6 +237,18 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 				in.Output(b)
 			}
 		}})
+	if shim != nil && shim.handed.Load() {
+		// the job user's processes and its copy of the workspace are cleaned as that user; a failure drains the node
+		if cerr := cleanupShimAttempt(ctx, shim.user, home, spec.AttemptID); cerr != nil {
+			raw.Write([]byte(fmt.Sprintln(cerr)))
+			if res.Err == nil {
+				res.Err = cerr
+			}
+			if res.Attempt.State == "passed" {
+				res.Attempt.State, res.Attempt.FailureClass = "failed", "infra"
+			}
+		}
+	}
 	if in.Tail != nil { // the session's tail has the lease's secret values masked
 		return res, clipTail(in.Tail()), nil
 	}
