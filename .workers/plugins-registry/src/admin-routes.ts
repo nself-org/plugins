@@ -1,8 +1,10 @@
+/** Health, stats and the authenticated POST /api/sync (the only registry KV writer, D-1543). */
 import { jsonResponse } from "./http.ts";
 import { fetchFreeRegistry, fetchProRegistry, kvGet, KV_BUNDLES_JSON, KV_BUNDLES_SCHEMA } from "./registry.ts";
 import type { Env } from "./registry.ts";
-import { fetchCatalog } from "./catalog.ts";
+import { fetchCatalog, KV_CATALOG } from "./catalog.ts";
 import { edgeDelete } from "./edge-cache.ts";
+import { readSynced } from "./synced-store.ts";
 import { signingConfigured } from "./sign.ts";
 
 /** Ed25519 public key hex: PUBLIC_KEY_HEX, or the retired index.js name SIGNING_PUBLIC_KEY. */
@@ -36,8 +38,17 @@ export async function handleHealth(env: Env): Promise<Response> {
   });
 }
 
+
+// ---------------------------------------------------------------------------
+// GET /stats
+//
+// D-1543: nothing writes stats:global any more. registryHits and
+// registryFetches are the totals the retired index.js last stored there (frozen).
+// lastSync is the newest sync that changed a registry copy in KV, else the
+// legacy stats:global value.
 // ---------------------------------------------------------------------------
 const KV_STATS = "stats:global";
+const SYNCED_KEYS = ["registry:free", "registry:pro", KV_CATALOG];
 
 interface StatsRecord {
   registryHits?: number;
@@ -54,14 +65,32 @@ export async function handleStats(env: Env): Promise<Response> {
     if (raw) {
       stats = raw.data ?? (raw as unknown as StatsRecord);
     }
+    const synced = await Promise.all(SYNCED_KEYS.map((key) => readSynced<unknown>(env, key)));
+    const newest = Math.max(0, ...synced.map((s) => s?.timestamp ?? 0));
+    if (newest > 0) stats = { ...stats, lastSync: new Date(newest).toISOString() };
   }
 
   return jsonResponse(stats);
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/sync — bust edge cache and fetch fresh from GitHub
+// POST /api/sync — bust this colo's edge cache, refetch from GitHub and store
+// changed copies in KV (each key at most once, nothing when the hash matches).
 // ---------------------------------------------------------------------------
+
+interface SyncSummary {
+  success: true;
+  message: string;
+  freeCount: number;
+  proCount: number;
+  totalCount: number;
+  freeError: string | null;
+  proError: string | null;
+  catalogSynced: boolean;
+}
+
+/** Concurrent syncs in one isolate share one run, so a burst writes KV once. */
+let inflightSync: Promise<SyncSummary> | null = null;
 
 export async function handleSync(
   request: Request,
@@ -77,8 +106,17 @@ export async function handleSync(
     return jsonResponse({ error: "invalid token" }, 403);
   }
 
-  const kv = env.REGISTRY ?? env.PLUGINS_KV;
+  if (!inflightSync) {
+    inflightSync = runSync(env, ctx).finally(() => {
+      inflightSync = null;
+    });
+  }
+  const summary = await inflightSync;
+  return jsonResponse({ ...summary, timestamp: new Date().toISOString() });
+}
 
+async function runSync(env: Env, ctx: ExecutionContext): Promise<SyncSummary> {
+  // Cache API entries of this data center only; other colos expire within CACHE_TTL.
   await Promise.all([
     "registry:free",
     "registry:pro",
@@ -103,20 +141,7 @@ export async function handleSync(
   const proError =
     proResult.status === "rejected" ? (proResult.reason as Error).message : null;
 
-  if (kv) {
-    ctx.waitUntil(
-      (async () => {
-        const existing = await kvGet<StatsRecord>(kv, KV_STATS);
-        const s: StatsRecord = existing
-          ? (existing.data ?? (existing as unknown as StatsRecord))
-          : { registryHits: 0, registryFetches: 0 };
-        s.lastSync = new Date().toISOString();
-        await kv.put(KV_STATS, JSON.stringify(s));
-      })(),
-    );
-  }
-
-  return jsonResponse({
+  return {
     success: true,
     message: "registry caches refreshed",
     freeCount,
@@ -125,6 +150,5 @@ export async function handleSync(
     freeError,
     proError,
     catalogSynced: catalogResult.status === "fulfilled" && catalogResult.value?.cache === "MISS",
-    timestamp: new Date().toISOString(),
-  });
+  };
 }
