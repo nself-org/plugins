@@ -4,7 +4,7 @@ package main
 // `sudo -n -u nself-ci-job-<s+1> /opt/nself-ci-agent/bin/nself-ci-agent job-shim` with the payload in the
 // request line, a failed sudo fails the step with nothing run as the agent, the system binary outside
 // the system user refuses process jobs, and every other node behaves as before.
-// Inputs:  the system-mode seams and a fake sudo script. Constraints: no real sudo, no real node.
+// Inputs:  the system-mode seams, a fake sudo script and the fake shim runner (job_shim_stage_test.go). Constraints: no real sudo, no real node.
 
 import (
 	"context"
@@ -80,6 +80,7 @@ func TestSystemBinaryOutsideTheSystemUserRefusesProcessJobs(t *testing.T) {
 }
 
 func TestFailedSudoFailsTheStepAndRunsNothingAsTheAgent(t *testing.T) {
+	fakeShim(t) // the workspace hand-off succeeds; the step's own sudo is the one that fails
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "ran-as-agent")
 	argvFile, stdinFile := filepath.Join(dir, "argv"), filepath.Join(dir, "stdin")

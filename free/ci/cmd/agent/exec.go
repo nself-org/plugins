@@ -5,7 +5,8 @@ package main
 // the P7-CI-38 builder. It is the entrypoint hosted workflows (P7-HOST) call,
 // and runSpec is what `serve` runs for each lease (inside the node's
 // contention Isolator: contention_wire.go; on a system node every process
-// step goes through the job shim: job_shim_run.go).
+// step goes through the job shim: job_shim_run.go, and its attempt is cleaned
+// as the job user afterwards: job_shim_cleanup.go; a failed cleanup drains the node).
 // Inputs:  a JSON job spec file (execSpec); the agent state dir for the
 // executor's private work area.
 // Outputs: the job's output on stdout, the evidence file (0600, atomic).
@@ -204,6 +205,9 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: now,
 			Err: &ciexec.Error{Code: "E612", Message: "declared secrets were not delivered before the lease expired"}}, "", nil
 	}
+	if derr := drainedError(); derr != nil { // a failed job cleanup drained this node: nothing more runs here
+		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: now, Err: derr, Refused: true}, derr.Error(), nil
+	}
 	base, err := workBase()
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
@@ -237,8 +241,10 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	// A system node runs process steps through the job shim (job_shim_run.go); the contention layer wraps
 	// outside it, so priority and the cgroup are applied by the agent before sudo.
+	var shim *shimIsolator
 	if wrap := systemShim(in.Slot); wrap != nil {
 		iso = wrap(iso)
+		shim, _ = iso.(*shimIsolator)
 	}
 	if in.Isolate != nil {
 		iso = in.Isolate(iso)
@@ -259,6 +265,18 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 				in.Output(b)
 			}
 		}})
+	if shim != nil && shim.handed.Load() {
+		// the job user's processes and its copy of the workspace are cleaned as that user; a failure drains the node
+		if cerr := cleanupShimAttempt(ctx, shim.user, home, spec.AttemptID); cerr != nil {
+			raw.Write([]byte(fmt.Sprintln(cerr)))
+			if res.Err == nil {
+				res.Err = cerr
+			}
+			if res.Attempt.State == "passed" {
+				res.Attempt.State, res.Attempt.FailureClass = "failed", "infra"
+			}
+		}
+	}
 	if in.Tail != nil { // the session's tail has the lease's secret values masked
 		return res, clipTail(in.Tail()), nil
 	}

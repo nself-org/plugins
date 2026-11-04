@@ -5,8 +5,11 @@ package main
 // /var/db/nself-ci-agent on macOS: the pull-mode service `nodes add --system` installs), a step of slot s starts as
 // `sudo -n -u nself-ci-job-<s+1> /opt/nself-ci-agent/bin/nself-ci-agent job-shim` with the payload on
 // stdin (internal/exec StepShim), so it runs under the job user's UID and cannot read the node key.
+// Before the step the workspace is handed to the job user (shimStager: its own 0700 copy under its
+// slot root), and after the attempt its processes and files are cleaned as that user (job_shim_cleanup.go).
 // Inputs:  the agent's environment, user and executable path (package vars, replaced by tests).
-// Outputs: an Isolator wrapper, nil when the node is not a system node (today's behaviour).
+// Outputs: an Isolator wrapper, nil when the node is not a system node (today's behaviour); the wrapper
+//          reports whether it handed a process step to the shim (handed), so execute cleans exactly those.
 // Constraints: fail closed. A failed sudo or shim is the step's failure, never a start as the agent's UID.
 //          The system binary (/opt/nself-ci-agent/bin/nself-ci-agent) serving as anyone else (push mode as
 //          the ssh user) refuses process jobs: the node is recorded uid-separated, so a job must never run
@@ -18,6 +21,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync/atomic"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
@@ -50,6 +54,13 @@ var (
 // shimEnv is the chain's own environment (sudo resets it; the job's environment is in the request).
 var shimEnv = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin"}
 
+// systemNode reports whether this agent is the system binary or serves as the system agent user.
+func systemNode() bool {
+	home := shimAgentHome()
+	return (home == bootstrap.StateDir || home == darwin.StateDir) && shimUserName() == bootstrap.AgentUser ||
+		shimExecutable() == bootstrap.AgentPath
+}
+
 // systemShim returns the wrapper that runs process jobs of slot through the shim (or, for the system
 // binary serving outside the system agent user, refuses them), nil on a node that is not a system node.
 func systemShim(slot int) func(ciexec.Isolator) ciexec.Isolator {
@@ -72,6 +83,8 @@ func shimChain(user string) []string {
 type shimIsolator struct {
 	inner ciexec.Isolator
 	user  string
+	// handed is set once a process step was put behind the chain (its attempt needs the shim's cleanup).
+	handed atomic.Bool
 }
 
 // Prepare runs the inner isolator, then puts the chain in front of a process job.
@@ -86,7 +99,8 @@ func (i *shimIsolator) Prepare(ctx context.Context, s *ciexec.JobSpec) error {
 		return fmt.Errorf("E682: this is a system node and the agent serves as %q, not as %s with its system NSELF_CI_AGENT_HOME; process jobs run only through the job shim (run the system service: pull mode)",
 			shimUserName(), bootstrap.AgentUser)
 	}
-	s.Shim = &ciexec.StepShim{Payload: s.Command, Env: append([]string{}, shimEnv...)}
+	s.Shim = &ciexec.StepShim{Payload: s.Command, Env: append([]string{}, shimEnv...), Stage: shimStager{user: i.user}}
 	s.Command = shimChain(i.user)
+	i.handed.Store(true)
 	return nil
 }
