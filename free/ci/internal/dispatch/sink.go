@@ -84,6 +84,9 @@ func RegisterSinkFactory(f SinkFactory) error {
 }
 
 // defaultSink is the registered factory's sink, or the no-op sink.
+// DefaultSink is the sink New uses when Config.Sink is nil, for a caller that wraps it.
+func DefaultSink(cfg Config) DecisionSink { return defaultSink(cfg) }
+
 func defaultSink(cfg Config) DecisionSink {
 	sinkMu.Lock()
 	f := sinkFactory

@@ -230,7 +230,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	sess.Plan, sess.Record = c.Plan, c.Opts.Record
 	sess.PolicyRun, sess.Interactive, sess.ProviderRepo = c.Opts.PolicyRun, c.Opts.Interactive, c.Opts.ProviderRepo
 	sess.User, sess.Team = c.Opts.User, c.Opts.Team
-	sess.Placement, sess.Queue = pol.Placement, pol.Queue
+	sess.Placement, sess.Queue, sess.Spend = pol.Placement, pol.Queue, pol.Spend
 	sess.Capacity = c.Capacity
 	if sess.Capacity == nil {
 		sess.Capacity = ciexec.Probe

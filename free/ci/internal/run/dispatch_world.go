@@ -4,6 +4,7 @@ package run
 // world, its effective scheduling policy and the scheduler job of an attempt.
 // Inputs:  the run Session, the pipeline row and the attempt being placed.
 // Outputs: sched.World + digest, sched.Policy, sched.Job.
+// The policy carries the spend keys (economics hooks, econ_seam.go, D-1280).
 // Constraints: the job mapping is planview.SchedJobs, the one `ci plan` uses, and
 // the world is world.BuildForLocal, so a plan and a run describe the same
 // machine and the same registered nodes the same way (D-1042, D-0989). The
@@ -25,6 +26,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -106,8 +108,11 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 		return *rd.pol, nil
 	}
 	if sp := rd.sess.Placement; sp != nil && rd.sess.Queue != nil { // the coordinator's one resolution: the digest it recorded describes this policy (D-1087)
-		rd.pol, rd.qp = sp, *rd.sess.Queue
-		return *sp, nil
+		cp := *sp
+		rd.spend = rd.sess.Spend
+		rd.applySpend(&cp)
+		rd.pol, rd.qp = &cp, *rd.sess.Queue
+		return cp, nil
 	}
 	root := rd.row.Project
 	if root == "" {
@@ -122,6 +127,10 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	if err != nil {
 		return sched.Policy{}, err
 	}
+	if sp, serr := schedpolicy.Spend(&got); serr == nil { // a refused spend policy leaves the defaults: nothing paid
+		rd.spend = &sp
+	}
+	rd.applySpend(&p)
 	rd.pol, rd.qp = &p, qp
 	return p, nil
 }

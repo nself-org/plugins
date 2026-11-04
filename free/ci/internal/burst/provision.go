@@ -29,6 +29,9 @@ type Request struct {
 	// ExpectedWaitMs is the job's expected wait; QueuedDemand the queued jobs the machine would serve.
 	ExpectedWaitMs int64
 	QueuedDemand   int
+	// PipelineTimeoutsMs are the timeouts of every job of the pipeline (optional): an approval.pending
+	// refusal then notes the pipeline's worst case, not just this machine's reservation.
+	PipelineTimeoutsMs []int64
 }
 
 // Result is the outcome of Provision. Token and Resource are empty when the decision was no.
@@ -104,6 +107,7 @@ func (e *Engine) admit(ctx context.Context, p Provider, req Request) (Decision, 
 		BreakerOpen: br.OpenUntil > now.UnixMilli(), TeardownFailed: counts.TeardownFailed, ReservationFits: true}
 	if cloud {
 		if ferr := e.fits(ctx, token, p.ID(), req.Pipeline); ferr != nil {
+			e.notePending(ctx, req, ferr)
 			in.ReservationFits, in.FitReason = false, fitReason(ferr)
 		}
 	}
@@ -181,6 +185,7 @@ func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req
 	})
 	var se *economics.SpendError
 	if errors.As(err, &se) {
+		e.notePending(ctx, req, err)
 		return refused(string(se.Reason), err, "%s", se.Detail)
 	}
 	if errors.Is(err, errCapsMoved) {

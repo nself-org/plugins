@@ -11,12 +11,15 @@ package run
 // this machine and every registered node (dispatch_world.go); a remote placement
 // is delivered by the dispatcher (NewTransportAdapter) and awaited by the run
 // loop (remote_await.go). The local admission policy (battery, reservations, the
-// foreground floor) still runs first, as in LocalAdmit.
+// foreground floor) still runs first, as in LocalAdmit. The economics env is bound
+// before the dispatcher starts and approval holds are noted through econ_seam.go (D-1280).
+// The dispatcher lifecycle (release, wake, incarnation) is in dispatch_lifecycle.go.
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -46,45 +49,14 @@ type runDispatch struct {
 	polM sync.Mutex
 	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
 	qp   schedpolicy.QueuePolicy
+	// spend is the spend policy resolved with pol (nil = none resolved: the defaults, nothing paid).
+	spend       *schedpolicy.SpendPolicy
+	econRestore func() // restores the economics env bound for this run's dispatcher
 
 	sink *remoteSink // what the carriers of this run's remote leases report to
 
 	notesMu sync.Mutex
 	notes   []string // run notes from delivery (offload_hook_hosted.go)
-}
-
-var (
-	runDispatchers sync.Map   // run id -> *runDispatch
-	runDispatchMu  sync.Mutex // one construction at a time: OnStart hooks run once per dispatcher
-)
-
-// dispatchCleanup closes a run's dispatcher when the run is recorded.
-type dispatchCleanup struct{}
-
-func (dispatchCleanup) AfterRun(_ context.Context, r RunInfo) error {
-	dispatchRelease(r.RunID)
-	return nil
-}
-
-// dispatchRelease closes the dispatcher of a run. Coordinator.Run defers it, so a run that
-// ends on an error path before AfterRun does not leave its dispatcher in the process map (D-1044).
-func dispatchRelease(runID string) {
-	ctx, cancel := background(context.Background())
-	defer cancel()
-	_ = (remoteCacheFinalize{}).AfterRun(ctx, RunInfo{RunID: runID})
-	if v, ok := runDispatchers.LoadAndDelete(runID); ok {
-		rd := v.(*runDispatch)
-		rd.d.Close()
-		rd.sink.release()
-	}
-}
-
-// dispatchWake lets the run's queued jobs tick now: an attempt ended and its
-// host reservation is free.
-func dispatchWake(runID string) {
-	if v, ok := runDispatchers.Load(runID); ok {
-		v.(*runDispatch).d.Wake()
-	}
 }
 
 func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
@@ -184,12 +156,20 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
-	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
+	if err := rd.bindEconomics(ctx); err != nil { // before the dispatcher starts: an unbound process refuses metered and ephemeral runners
+		return nil, fail(CodeRun, "run %s: %v", sess.RunID, err)
+	}
+	cfg := dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
 		Transport:     transportAdapter{sink: rd.sink, reg: rd.sink, root: rd.row.Project, st: rd.sink.st, hosted: rd.hostedRevision},
-		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
+		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }}
+	cfg.Sink = econSink{DecisionSink: dispatch.DefaultSink(cfg), rd: rd}
+	rd.d, err = dispatch.New(cfg)
 	if err != nil {
+		if rd.econRestore != nil {
+			rd.econRestore()
+		}
 		return nil, err
 	}
 	runDispatchers.Store(sess.RunID, rd)
@@ -285,11 +265,27 @@ func leaseSecretRefs(d dispatch.Delivery) ([]protocol.SecretRef, error) {
 	return out, nil
 }
 
-// highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a
-// leased epoch after a `serve restore` exceeds every epoch granted before the backup (P7-NODE-20).
-func highestIncarnation(st *store.Store) int64 {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	n, _ := st.HighestIncarnation(ctx) // a failed read is 1, the old behaviour
-	return n
+// never reaches the budget step, so ApproveSpend would find no figure.
+type econSink struct {
+	dispatch.DecisionSink
+	rd *runDispatch
+}
+
+func (s econSink) Record(ctx context.Context, d dispatch.Decision) {
+	if d.Outcome == dispatch.OutcomeAwaitingAppr && econHooks != nil && econHooks.Pending != nil && econHooks.Worst != nil && d.World != nil {
+		timeouts := []int64{d.Job.TimeoutMs}
+		if pl := s.rd.sess.Plan; pl != nil && len(pl.Jobs) > 0 {
+			timeouts = timeouts[:0]
+			for _, pj := range pl.Jobs {
+				timeouts = append(timeouts, jobTimeoutMs(pj.Job.Timeout))
+			}
+		}
+		if est := econHooks.Worst(d.World.Costs, timeouts); est > 0 {
+			if err := econHooks.Pending(ctx, d.Job.Pipeline.ID, est); err != nil {
+				// Fail closed: with no figure noted, ApproveSpend refuses ("no spend awaiting approval").
+				slog.Warn("economics: pending spend estimate not recorded", "run", d.Job.Pipeline.ID, "err", err)
+			}
+		}
+	}
+	s.DecisionSink.Record(ctx, d)
 }

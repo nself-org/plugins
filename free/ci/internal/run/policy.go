@@ -33,6 +33,8 @@ type PolicyResult struct {
 	// none; the dispatcher then resolves its own.
 	Placement *sched.Policy
 	Queue     *schedpolicy.QueuePolicy
+	// Spend is the spend policy of the same resolution; nil when it did not resolve (the defaults apply).
+	Spend *schedpolicy.SpendPolicy
 	SecretsInfo
 }
 

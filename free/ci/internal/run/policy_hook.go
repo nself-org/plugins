@@ -68,6 +68,9 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 	if p, qp, err := schedulingOf(&got.Effective); err == nil { // a refusal is left to the dispatcher, which reports it on the first job
 		out.Placement, out.Queue = &p, &qp
 	}
+	if sp, err := schedpolicy.Spend(&got); err == nil { // a refusal leaves the defaults: nothing paid
+		out.Spend = &sp
+	}
 	for _, ig := range got.Ignored {
 		if ig.Scope == policy.SourceRun {
 			out.IgnoredRun = append(out.IgnoredRun, ig.Key+": "+ig.Reason)
