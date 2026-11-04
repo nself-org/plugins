@@ -13,6 +13,7 @@ package main
 // Constraints: exit 0 when the job passed, 1 when it failed or could not run,
 // 2 on bad usage; the job runs only through internal/exec; the evidence is
 // checked against schemas/ci-evidence.v1.schema.json before it is written.
+// writeEvidence (the schema check and atomic write) lives in evidence_file.go.
 
 import (
 	"bytes"
@@ -23,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -122,34 +122,6 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	return 0
-}
-
-// writeEvidence validates the document against the published schema and
-// writes it atomically with mode 0600.
-func writeEvidence(path string, doc []byte) error {
-	schemas, err := model.Schemas()
-	if err != nil {
-		return err
-	}
-	if err := model.ValidateJSON(schemas["ci-evidence.v1.schema.json"], doc); err != nil {
-		return fmt.Errorf("evidence does not validate against ci.evidence/v1: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".evidence-")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(doc); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }
 
 // runSpec runs the job once (or, for in.Skip, records why it did not run) and

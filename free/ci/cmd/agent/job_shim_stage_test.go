@@ -164,8 +164,14 @@ func TestProcessJobReachesTheShimInAWorkspaceTheJobUserOwns(t *testing.T) {
 	if !strings.Contains(env, "HOME="+filepath.Join(attempt, "home")+"\n") || !strings.Contains(env, "TMPDIR="+filepath.Join(attempt, "tmp")) {
 		t.Fatalf("HOME and TMPDIR are not the job user's: %q", req.Env)
 	}
-	if strings.Count(env, "HOME=") != 1 {
-		t.Fatalf("HOME is set twice: %q", req.Env)
+	homes := 0 // whole entries only: JAVA_HOME= and the like on a runner are other variables
+	for _, e := range req.Env {
+		if strings.HasPrefix(e, "HOME=") {
+			homes++
+		}
+	}
+	if homes != 1 {
+		t.Fatalf("HOME is set %d times: %q", homes, req.Env)
 	}
 	if got, _ := os.ReadFile(filepath.Join(attempt, "ws", "pkg", "main.go")); string(got) != "package main\n" {
 		t.Fatalf("the source did not reach the job user's copy: %q", got)

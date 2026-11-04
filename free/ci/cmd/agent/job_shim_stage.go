@@ -22,8 +22,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	osexec "os/exec"
 	"strings"
+
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 )
 
 // shimCall runs one op as user; in feeds the op after the request line and out receives its stdout.
@@ -33,40 +34,15 @@ var shimCall = func(ctx context.Context, user string, req shimRequest, in io.Rea
 	if err != nil {
 		return err
 	}
-	chain := shimChain(user)
-	cmd := osexec.CommandContext(ctx, chain[0], chain[1:]...)
-	cmd.Env = append([]string{}, shimEnv...)
-	cmd.Dir = "/"
 	stdin := io.Reader(bytes.NewReader(append(line, '\n')))
 	if in != nil {
 		stdin = io.MultiReader(stdin, in)
 	}
-	cmd.Stdin = stdin
-	if out == nil {
-		out = io.Discard
-	}
-	cmd.Stdout = out
-	var stderr bytes.Buffer
-	cmd.Stderr = &limitedWriter{w: &stderr, n: 4096}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("job-shim %s as %s: %v: %s", req.Op, user, err, strings.TrimSpace(stderr.String()))
+	stderr, err := ciexec.RunStreamed(ctx, shimChain(user), shimEnv, "/", stdin, out)
+	if err != nil {
+		return fmt.Errorf("job-shim %s as %s: %v: %s", req.Op, user, err, strings.TrimSpace(stderr))
 	}
 	return nil
-}
-
-// limitedWriter keeps the first n bytes and drops the rest.
-type limitedWriter struct {
-	w io.Writer
-	n int
-}
-
-func (l *limitedWriter) Write(p []byte) (int, error) {
-	if l.n > 0 {
-		k := min(len(p), l.n)
-		_, _ = l.w.Write(p[:k])
-		l.n -= k
-	}
-	return len(p), nil
 }
 
 // shimStager hands workspaces to one job user.
