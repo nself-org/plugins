@@ -9,7 +9,10 @@ package runtime
 // Constraints: a queued or running run renews the lease (a run that waits ten minutes for a hosted
 //          machine is not re-dispatched); a run the provider no longer knows, or an attempt with no
 //          handle, reports vanished, which the engine turns into a lost lease one TTL later and not
-//          before. Registering twice for one engine is refused by the engine and returned here.
+//          before. A finished run a driver Run still carries reports running, so the carrier and not
+//          the engine finishes it (carry.go). Registering twice for one engine is refused by the engine
+//          and returned here. The coordinator start registers the profiles and runs the engine's hosted
+//          poll loop (cmd serve_hosted_lease.go, D-1297).
 
 import (
 	"context"
@@ -57,6 +60,9 @@ func liveness(provider string, disp providers.Dispatcher, book Book) func(contex
 		case providers.Running:
 			return lease.LiveRunning, nil
 		case providers.Finished:
+			if defaultDriver.carry.carried(attemptID) { // the carrier reports the result (carry.go)
+				return lease.LiveRunning, nil
+			}
 			return lease.LiveFinished, nil
 		case providers.Vanished:
 			return lease.LiveVanished, nil
