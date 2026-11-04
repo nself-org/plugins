@@ -77,5 +77,3 @@ func queryInt(r *http.Request, key string, fallback int) int {
 	}
 	return n
 }
-
-

@@ -42,30 +42,30 @@ var samlClient = httpclient.New(httpclient.Options{Timeout: 30 * time.Second})
 
 // SAMLProvider holds the configuration for a single SAML 2.0 IdP.
 type SAMLProvider struct {
-	ID           string            `json:"id"`
-	TenantID     string            `json:"tenant_id"`
-	IDPName      string            `json:"idp_name"` // okta|entra|saml-generic
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	IDPName  string `json:"idp_name"` // okta|entra|saml-generic
 	// SSOURL is the IdP's SSO endpoint (HTTP-Redirect binding).
-	SSOURL       string            `json:"sso_url"`
+	SSOURL string `json:"sso_url"`
 	// EntityID is the IdP's entity ID from its metadata.
-	EntityID     string            `json:"entity_id"`
+	EntityID string `json:"entity_id"`
 	// SPEntityID is nSelf's entity ID, used as the ACS audience.
-	SPEntityID   string            `json:"sp_entity_id"`
+	SPEntityID string `json:"sp_entity_id"`
 	// ACSURL is the Assertion Consumer Service URL on nSelf's side.
-	ACSURL       string            `json:"acs_url"`
+	ACSURL string `json:"acs_url"`
 	// Certificate is the IdP's X.509 signing certificate (PEM, no header/footer).
-	Certificate  string            `json:"certificate"`
+	Certificate string `json:"certificate"`
 	// AttributeMap maps nSelf canonical names to SAML attribute names.
 	AttributeMap map[string]string `json:"attribute_map"`
 }
 
 // SAMLClaims is the parsed + mapped output of a validated SAML assertion.
 type SAMLClaims struct {
-	NameID  string
-	Email   string
-	Name    string
-	Role    string
-	Raw     map[string][]string
+	NameID string
+	Email  string
+	Name   string
+	Role   string
+	Raw    map[string][]string
 }
 
 // AuthnRequestURL builds the IdP SSO URL with an AuthnRequest embedded.
@@ -257,7 +257,7 @@ func EntraSAML(tenantID, spEntityID, acsURL string) *SAMLProvider {
 type ProviderRecord struct {
 	ID           string          `json:"id"`
 	TenantID     string          `json:"tenant_id"`
-	Protocol     string          `json:"protocol"`     // saml|oidc
+	Protocol     string          `json:"protocol"` // saml|oidc
 	IDPName      string          `json:"idp_name"`
 	Metadata     json.RawMessage `json:"metadata"`
 	AttributeMap json.RawMessage `json:"attribute_map"`

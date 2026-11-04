@@ -54,4 +54,3 @@ func writeErr(w http.ResponseWriter, msg string, err error) {
 	log.Printf("[github:server] %s: %v", msg, err)
 	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": msg})
 }
-

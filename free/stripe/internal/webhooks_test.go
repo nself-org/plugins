@@ -82,8 +82,8 @@ func TestVerifyStripeSignature_ExpiredTimestamp(t *testing.T) {
 func TestVerifyStripeSignature_MalformedHeader(t *testing.T) {
 	cases := []string{
 		"no_equals_sign",
-		"t=abc,v1=",   // missing signature
-		"v1=abc",      // missing timestamp
+		"t=abc,v1=", // missing signature
+		"v1=abc",    // missing timestamp
 	}
 	for _, h := range cases {
 		if err := VerifyStripeSignature([]byte("{}"), h, "secret"); err == nil {
@@ -117,9 +117,9 @@ func TestIsDeleteEvent(t *testing.T) {
 // TestExtractObjectInfo verifies extraction from a Stripe data object.
 func TestExtractObjectInfo(t *testing.T) {
 	cases := []struct {
-		raw        string
-		wantType   string
-		wantID     string
+		raw      string
+		wantType string
+		wantID   string
 	}{
 		{`{"object":"customer","id":"cus_123"}`, "customer", "cus_123"},
 		{`{"object":"","id":""}`, "unknown", "unknown"},

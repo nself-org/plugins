@@ -51,24 +51,24 @@ type ROMMetadata struct {
 
 // DownloadQueue maps to np_romdisc_download_queue.
 type DownloadQueue struct {
-	ID                    string     `json:"id"`
-	SourceAccountID       string     `json:"source_account_id"`
-	UserID                *string    `json:"user_id,omitempty"`
-	RomMetadataID         string     `json:"rom_metadata_id"`
-	JobID                 *string    `json:"job_id,omitempty"`
-	Status                string     `json:"status"`
-	DownloadStartedAt     *time.Time `json:"download_started_at,omitempty"`
-	DownloadCompletedAt   *time.Time `json:"download_completed_at,omitempty"`
-	DownloadProgressPct   int        `json:"download_progress_percent"`
-	DownloadedBytes       int64      `json:"downloaded_bytes"`
-	TotalBytes            int64      `json:"total_bytes"`
-	ObjectStoragePath     *string    `json:"object_storage_path,omitempty"`
-	ChecksumVerified      bool       `json:"checksum_verified"`
-	ErrorMessage          *string    `json:"error_message,omitempty"`
-	RetryCount            int        `json:"retry_count"`
-	MaxRetries            int        `json:"max_retries"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+	ID                  string     `json:"id"`
+	SourceAccountID     string     `json:"source_account_id"`
+	UserID              *string    `json:"user_id,omitempty"`
+	RomMetadataID       string     `json:"rom_metadata_id"`
+	JobID               *string    `json:"job_id,omitempty"`
+	Status              string     `json:"status"`
+	DownloadStartedAt   *time.Time `json:"download_started_at,omitempty"`
+	DownloadCompletedAt *time.Time `json:"download_completed_at,omitempty"`
+	DownloadProgressPct int        `json:"download_progress_percent"`
+	DownloadedBytes     int64      `json:"downloaded_bytes"`
+	TotalBytes          int64      `json:"total_bytes"`
+	ObjectStoragePath   *string    `json:"object_storage_path,omitempty"`
+	ChecksumVerified    bool       `json:"checksum_verified"`
+	ErrorMessage        *string    `json:"error_message,omitempty"`
+	RetryCount          int        `json:"retry_count"`
+	MaxRetries          int        `json:"max_retries"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // ScraperJob maps to np_romdisc_scraper_jobs.
@@ -94,32 +94,32 @@ type ScraperJob struct {
 
 // Popularity maps to np_romdisc_popularity.
 type Popularity struct {
-	ID                     string     `json:"id"`
-	RomMetadataID          string     `json:"rom_metadata_id"`
-	DownloadCount          int        `json:"download_count"`
-	SearchCount            int        `json:"search_count"`
-	PlayCount              int        `json:"play_count"`
-	ArchiveOrgDownloads    int        `json:"archive_org_downloads"`
-	ComputedPopularityScore int       `json:"computed_popularity_score"`
-	LastScoreUpdateAt      *time.Time `json:"last_score_update_at,omitempty"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
+	ID                      string     `json:"id"`
+	RomMetadataID           string     `json:"rom_metadata_id"`
+	DownloadCount           int        `json:"download_count"`
+	SearchCount             int        `json:"search_count"`
+	PlayCount               int        `json:"play_count"`
+	ArchiveOrgDownloads     int        `json:"archive_org_downloads"`
+	ComputedPopularityScore int        `json:"computed_popularity_score"`
+	LastScoreUpdateAt       *time.Time `json:"last_score_update_at,omitempty"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
 // AuditLog maps to np_romdisc_audit_log.
 type AuditLog struct {
-	ID            int64      `json:"id"`
-	SourceAccountID string   `json:"source_account_id"`
-	UserID        string     `json:"user_id"`
-	Action        string     `json:"action"`
-	RomMetadataID *string    `json:"rom_metadata_id,omitempty"`
-	RomName       *string    `json:"rom_name,omitempty"`
-	RomPlatform   *string    `json:"rom_platform,omitempty"`
-	RomSource     *string    `json:"rom_source,omitempty"`
-	IPAddress     *string    `json:"ip_address,omitempty"`
-	UserAgent     *string    `json:"user_agent,omitempty"`
-	Details       []byte     `json:"details"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID              int64     `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	UserID          string    `json:"user_id"`
+	Action          string    `json:"action"`
+	RomMetadataID   *string   `json:"rom_metadata_id,omitempty"`
+	RomName         *string   `json:"rom_name,omitempty"`
+	RomPlatform     *string   `json:"rom_platform,omitempty"`
+	RomSource       *string   `json:"rom_source,omitempty"`
+	IPAddress       *string   `json:"ip_address,omitempty"`
+	UserAgent       *string   `json:"user_agent,omitempty"`
+	Details         []byte    `json:"details"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // LegalAcceptance maps to np_romdisc_legal_acceptance.

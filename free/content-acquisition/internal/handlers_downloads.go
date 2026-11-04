@@ -230,4 +230,3 @@ func handleGetDownloadHistory(db *DB) http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, map[string]interface{}{"download_id": id, "history": history})
 	}
 }
-

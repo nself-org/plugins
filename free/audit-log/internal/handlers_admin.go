@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"net/http"
-	"time"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
+	"time"
 )
 
 func handleAdminList(pool *pgxpool.Pool, secret, adminSecret string) http.HandlerFunc {
@@ -61,6 +61,7 @@ func handleAdminList(pool *pgxpool.Pool, secret, adminSecret string) http.Handle
 //	actor_user_id     — optional exact match
 //	severity          — optional exact match
 //	source_account_id — optional exact match
+//
 // Size-cap exception: single-responsibility HTTP route handler — 108L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -21,9 +21,9 @@ const defaultHost = "v3.football.api-sports.io"
 
 // Client is the API-Football adapter.
 type Client struct {
-	token  string
-	host   string
-	http   *http.Client
+	token string
+	host  string
+	http  *http.Client
 }
 
 // New returns an API-Football client reading the token from env.

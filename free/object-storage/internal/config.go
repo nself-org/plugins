@@ -6,15 +6,15 @@ import (
 
 // Config holds all runtime configuration for the object-storage plugin.
 type Config struct {
-	Port              string
-	DatabaseURL       string
-	StorageEndpoint   string
-	StorageAccessKey  string
-	StorageSecretKey  string
-	StorageBasePath   string
-	DefaultProvider   string
-	APIKey            string
-	MaxUploadSize     string
+	Port             string
+	DatabaseURL      string
+	StorageEndpoint  string
+	StorageAccessKey string
+	StorageSecretKey string
+	StorageBasePath  string
+	DefaultProvider  string
+	APIKey           string
+	MaxUploadSize    string
 }
 
 // LoadConfig reads configuration from environment variables with sensible defaults.

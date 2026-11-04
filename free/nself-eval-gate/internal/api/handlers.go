@@ -84,7 +84,7 @@ type validateRequest struct {
 }
 
 type validateResponse struct {
-	Valid  bool                    `json:"valid"`
+	Valid  bool                     `json:"valid"`
 	Errors []schema.ValidationError `json:"errors,omitempty"`
 }
 

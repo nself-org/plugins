@@ -12,17 +12,17 @@ import (
 
 // ProvisionOpts holds all parameters required to provision a new cloud instance.
 type ProvisionOpts struct {
-	TenantID        string
-	InstanceID      string // UUID, must already exist in np_cloud_instances as 'pending'
+	TenantID         string
+	InstanceID       string // UUID, must already exist in np_cloud_instances as 'pending'
 	StripeCustomerID string
-	AmountCents     int
-	Currency        string
-	ServerName      string // unique slug-based name
-	ServerType      string // e.g. "cx23"
-	Region          string // e.g. "fsn1"
-	SSHKeyID        int64
-	UserData        string
-	Labels          map[string]string
+	AmountCents      int
+	Currency         string
+	ServerName       string // unique slug-based name
+	ServerType       string // e.g. "cx23"
+	Region           string // e.g. "fsn1"
+	SSHKeyID         int64
+	UserData         string
+	Labels           map[string]string
 }
 
 // Provisioner orchestrates the full provisioning saga:

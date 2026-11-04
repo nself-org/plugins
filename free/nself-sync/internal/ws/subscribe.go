@@ -5,7 +5,7 @@
 //  1. Client GETs /sync/subscribe with NO query params or Authorization header.
 //  2. Server upgrades to WebSocket.
 //  3. Client MUST send an AUTH frame within AuthDeadline (5s):
-//       {"type":"auth","token":"<JWT>","cursor":{"hlc_wall_ms":N,"hlc_lamport":M}}
+//     {"type":"auth","token":"<JWT>","cursor":{"hlc_wall_ms":N,"hlc_lamport":M}}
 //  4. Server validates the JWT (HS256, NSELF_SYNC_JWT_SECRET).
 //     On failure → close code 4001/4002.
 //  5. Server LISTENs on np_sync_user_<user_id> and streams matching rows as

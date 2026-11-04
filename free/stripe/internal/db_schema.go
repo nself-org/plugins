@@ -1,7 +1,6 @@
 package internal
 
-import (
-)
+import ()
 
 // Schema SQL
 // ============================================================================
@@ -758,4 +757,3 @@ WHERE ch.status = 'succeeded'
 GROUP BY p.id, p.name, ch.currency, ch.source_account_id
 ORDER BY total_amount DESC;
 `
-

@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	sdkconfig  "github.com/nself-org/cli/sdk/go/config"
-	sdklogger  "github.com/nself-org/cli/sdk/go/logger"
+	sdkconfig "github.com/nself-org/cli/sdk/go/config"
+	sdklogger "github.com/nself-org/cli/sdk/go/logger"
 	sdkmetrics "github.com/nself-org/cli/sdk/go/metrics"
-	sdkplugin  "github.com/nself-org/cli/sdk/go/plugin"
-	sdkserver  "github.com/nself-org/cli/sdk/go/server"
+	sdkplugin "github.com/nself-org/cli/sdk/go/plugin"
+	sdkserver "github.com/nself-org/cli/sdk/go/server"
 )
 
 const (

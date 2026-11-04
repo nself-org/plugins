@@ -249,4 +249,3 @@ func ensureJSON(raw json.RawMessage, fallback string) json.RawMessage {
 	}
 	return raw
 }
-

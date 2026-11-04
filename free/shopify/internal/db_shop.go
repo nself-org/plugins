@@ -42,4 +42,3 @@ func (db *DB) GetShop(ctx context.Context) (*Shop, error) {
 	}
 	return &s, nil
 }
-

@@ -12,17 +12,17 @@ type Config struct {
 	DatabaseURL string
 
 	// Provider settings
-	Providers       string
-	GoogleAPIKey    string
-	MapboxToken     string
-	NominatimURL    string
-	NominatimEmail  string
-	NominatimUA     string // GEOCODING_NOMINATIM_UA — required for Nominatim (OSM policy)
+	Providers      string
+	GoogleAPIKey   string
+	MapboxToken    string
+	NominatimURL   string
+	NominatimEmail string
+	NominatimUA    string // GEOCODING_NOMINATIM_UA — required for Nominatim (OSM policy)
 
 	// Cache settings
-	CacheTTLDays   int
-	CacheEnabled   bool
-	CacheTTLHours  int // GEOCODING_CACHE_TTL_HOURS — overrides CacheTTLDays when set
+	CacheTTLDays  int
+	CacheEnabled  bool
+	CacheTTLHours int // GEOCODING_CACHE_TTL_HOURS — overrides CacheTTLDays when set
 
 	// Batch settings
 	MaxBatchSize int

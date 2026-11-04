@@ -62,7 +62,7 @@ func (h *Handler) Register(r chi.Router) {
 
 // checkoutRequest is the request body for POST /payments/checkout.
 type checkoutRequest struct {
-	Provider   string            `json:"provider"`   // optional; defaults to configured default
+	Provider   string            `json:"provider"` // optional; defaults to configured default
 	UserID     string            `json:"user_id"`
 	PlanID     string            `json:"plan_id"`
 	Email      string            `json:"email"`

@@ -19,8 +19,8 @@ const (
 	msgSync      = 0
 	msgAwareness = 1
 
-	syncStep1 = 0
-	syncStep2 = 1
+	syncStep1  = 0
+	syncStep2  = 1
 	syncUpdate = 2
 )
 

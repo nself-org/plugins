@@ -1,13 +1,21 @@
 // recall_scorer.go — Recall Quality scorer for ɳClaw memory retrieval regression testing.
 // Purpose: Score a model's response against golden-set (subject, predicate, object) triples.
-//   Computes precision@k, recall@k, and fact_f1 by querying plugin-retrieval BGE-M3 hybrid
-//   search and extracting memory triples from the retrieved results.
+//
+//	Computes precision@k, recall@k, and fact_f1 by querying plugin-retrieval BGE-M3 hybrid
+//	search and extracting memory triples from the retrieved results.
+//
 // Inputs:  output (model response string), task.GoldenMemories (ground-truth triples),
-//   RetrievalURL (plugin-retrieval /search endpoint), K (top-k results to retrieve).
+//
+//	RetrievalURL (plugin-retrieval /search endpoint), K (top-k results to retrieve).
+//
 // Outputs: ScoreResult{Score: fact_f1, Metrics: {precision_at_k, recall_at_k, fact_f1}, Passed: fact_f1 >= threshold}.
-//   ErrPreconditionNotMet if plugin-retrieval is unavailable (so CLI exits code 3, not code 1).
+//
+//	ErrPreconditionNotMet if plugin-retrieval is unavailable (so CLI exits code 3, not code 1).
+//
 // Constraints: fact_f1 = 2*(precision*recall)/(precision+recall). Triple match is case-insensitive
-//   string equality on (subject, predicate, object). K defaults to 3 if 0.
+//
+//	string equality on (subject, predicate, object). K defaults to 3 if 0.
+//
 // SPORT: F03-PLUGIN-REGISTRY.md nself-eval-gate recall gate wired
 package scorer
 
@@ -31,7 +39,8 @@ import (
 // Inputs:  RetrievalURL (plugin-retrieval base URL), K (top-k hits), HTTPClient (injectable).
 // Outputs: ScoreResult{fact_f1}; ErrPreconditionNotMet if plugin-retrieval is down.
 // Constraints: Returns ErrPreconditionNotMet on any HTTP error against plugin-retrieval
-//   so CI exits code 3 (precondition failure) rather than code 1 (regression).
+//
+//	so CI exits code 3 (precondition failure) rather than code 1 (regression).
 type RecallScorer struct {
 	// RetrievalURL is the base URL of plugin-retrieval, e.g. "http://localhost:3771".
 	RetrievalURL string
@@ -45,16 +54,16 @@ type RecallScorer struct {
 
 // retrievalSearchRequest is the JSON body for POST /search on plugin-retrieval.
 type retrievalSearchRequest struct {
-	Query          string `json:"query"`
-	K              int    `json:"k"`
-	SourceAccount  string `json:"source_account_id,omitempty"`
+	Query         string `json:"query"`
+	K             int    `json:"k"`
+	SourceAccount string `json:"source_account_id,omitempty"`
 }
 
 // retrievalMemory is a single retrieved memory from plugin-retrieval.
 type retrievalMemory struct {
-	Subject   string `json:"subject"`
-	Predicate string `json:"predicate"`
-	Object    string `json:"object"`
+	Subject   string  `json:"subject"`
+	Predicate string  `json:"predicate"`
+	Object    string  `json:"object"`
 	Score     float64 `json:"score"`
 }
 
@@ -69,7 +78,8 @@ type retrievalSearchResponse struct {
 // Inputs:  ctx, output (ignored for recall mode), task (must have Query + GoldenMemories).
 // Outputs: ScoreResult{Score: fact_f1}; ErrPreconditionNotMet if retrieval is unavailable.
 // Constraints: If GoldenMemories is empty, returns Score=1.0 (vacuously true — no facts to check).
-//   Triple matching is case-insensitive equality on (subject, predicate, object).
+//
+//	Triple matching is case-insensitive equality on (subject, predicate, object).
 func (r *RecallScorer) Score(ctx context.Context, _ string, task schema.EvalTask) (ScoreResult, error) {
 	k := r.K
 	if k <= 0 {

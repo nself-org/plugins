@@ -42,24 +42,24 @@ var oidcClient = httpclient.New(httpclient.Options{Timeout: 30 * time.Second})
 
 // OIDCProvider holds the configuration for a single OIDC IdP.
 type OIDCProvider struct {
-	ID           string            `json:"id"`
-	TenantID     string            `json:"tenant_id"`
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
 	// IDPName is a human label: google|okta|entra|custom.
-	IDPName      string            `json:"idp_name"`
-	ClientID     string            `json:"client_id"`
+	IDPName  string `json:"idp_name"`
+	ClientID string `json:"client_id"`
 	// ClientSecret is never serialised to JSON.
-	ClientSecret string            `json:"-"`
+	ClientSecret string `json:"-"`
 	// DiscoveryURL is the base issuer URL; /.well-known/openid-configuration is appended.
-	DiscoveryURL string            `json:"discovery_url"`
+	DiscoveryURL string `json:"discovery_url"`
 	// AttributeMap maps nSelf canonical attribute names (email, name, sub, role)
 	// to the IdP-specific claim key to read.
 	AttributeMap map[string]string `json:"attribute_map"`
 	// RedirectURL is the nSelf OIDC callback endpoint.
-	RedirectURL  string            `json:"redirect_url"`
+	RedirectURL string `json:"redirect_url"`
 	// Scopes to request (default: openid email profile).
-	Scopes       []string          `json:"scopes"`
+	Scopes []string `json:"scopes"`
 	// metadata is populated by Discover().
-	metadata     *oidcMetadata
+	metadata *oidcMetadata
 }
 
 type oidcMetadata struct {
@@ -140,10 +140,10 @@ func (p *OIDCProvider) ExchangeCode(ctx context.Context, code string) (*OIDCClai
 
 	// POST to token endpoint.
 	body := url.Values{
-		"grant_type":   {"authorization_code"},
-		"code":         {code},
-		"redirect_uri": {p.RedirectURL},
-		"client_id":    {p.ClientID},
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {p.RedirectURL},
+		"client_id":     {p.ClientID},
 		"client_secret": {p.ClientSecret},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,

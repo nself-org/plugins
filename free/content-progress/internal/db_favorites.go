@@ -84,4 +84,3 @@ func (d *DB) RemoveFromFavorites(userID, contentType, contentID string) (bool, e
 	}
 	return tag.RowsAffected() > 0, nil
 }
-

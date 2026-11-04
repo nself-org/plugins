@@ -9,8 +9,8 @@ type AuditEvent struct {
 	ID              string         `json:"id"`
 	SourceAccountID string         `json:"source_account_id"`
 	ActorUserID     string         `json:"actor_user_id"`
-	ActorType       string         `json:"actor_type"`       // user | system | plugin
-	EventType       string         `json:"event_type"`       // auth.login | auth.logout | auth.login_failed | auth.mfa_enabled | privilege.change | secret.accessed | plugin.installed | plugin.uninstalled
+	ActorType       string         `json:"actor_type"` // user | system | plugin
+	EventType       string         `json:"event_type"` // auth.login | auth.logout | auth.login_failed | auth.mfa_enabled | privilege.change | secret.accessed | plugin.installed | plugin.uninstalled
 	ResourceType    string         `json:"resource_type"`
 	ResourceID      string         `json:"resource_id"`
 	IPAddress       string         `json:"ip_address"`
@@ -58,14 +58,14 @@ var validActorTypes = map[string]bool{
 
 // validEventTypes is the set of accepted event_type values.
 var validEventTypes = map[string]bool{
-	"auth.login":           true,
-	"auth.logout":          true,
-	"auth.login_failed":    true,
-	"auth.mfa_enabled":     true,
-	"privilege.change":     true,
-	"secret.accessed":      true,
-	"plugin.installed":     true,
-	"plugin.uninstalled":   true,
+	"auth.login":         true,
+	"auth.logout":        true,
+	"auth.login_failed":  true,
+	"auth.mfa_enabled":   true,
+	"privilege.change":   true,
+	"secret.accessed":    true,
+	"plugin.installed":   true,
+	"plugin.uninstalled": true,
 }
 
 // validSeverities is the set of accepted severity values.

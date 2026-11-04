@@ -1,10 +1,10 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"context"
 	"encoding/json"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"time"
 )
 

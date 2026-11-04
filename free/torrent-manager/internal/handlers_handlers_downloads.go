@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"log"
 	"net/http"
 	"strconv"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Download Handlers
@@ -237,4 +237,3 @@ func (h *handler) handleResumeDownload(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 	})
 }
-

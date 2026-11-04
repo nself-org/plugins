@@ -13,14 +13,14 @@ import (
 
 // Document holds the persisted state of a CRDT document.
 type Document struct {
-	ID               string
-	DocID            string
-	Engine           string // "yjs" | "automerge"
-	State            []byte
-	UpdatesCount     int
-	SourceAccountID  string
-	LastModified     time.Time
-	CreatedAt        time.Time
+	ID              string
+	DocID           string
+	Engine          string // "yjs" | "automerge"
+	State           []byte
+	UpdatesCount    int
+	SourceAccountID string
+	LastModified    time.Time
+	CreatedAt       time.Time
 }
 
 // Store wraps a pgxpool and provides CRDT document operations.

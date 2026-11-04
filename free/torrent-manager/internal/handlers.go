@@ -61,4 +61,3 @@ type handler struct {
 	cfg          *Config
 	transmission *TransmissionClient
 }
-

@@ -82,4 +82,3 @@ func (d *DB) AddToQueue(accountID, contentType, contentName string, year, season
 	)
 	return scanQueueItem(row)
 }
-

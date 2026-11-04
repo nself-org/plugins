@@ -12,7 +12,7 @@ import (
 // after init so that credential rotation requires a container restart
 // (documented in push.md — operators rotate by updating env + nself restart push).
 type Config struct {
-	Port    int
+	Port     int
 	RedisURL string
 
 	// APNs (Apple Push Notification service)
@@ -20,10 +20,10 @@ type Config struct {
 	APNsKeyID    string
 	APNsKeyPEM   string // raw PEM content (EC private key, .p8 format)
 	APNsBundleID string
-	APNsSandbox  bool   // set PUSH_APNS_SANDBOX=1 for development
+	APNsSandbox  bool // set PUSH_APNS_SANDBOX=1 for development
 
 	// FCM (Firebase Cloud Messaging v1 API)
-	FCMProjectID         string
+	FCMProjectID          string
 	FCMServiceAccountJSON string // raw JSON content of the service account key
 
 	// Retry policy
@@ -81,8 +81,9 @@ func (c *Config) Validate() error {
 }
 
 // loadSecretEnv reads a secret from an env var that may contain either:
-//   (a) raw content (preferred for containers — set directly in env)
-//   (b) a file path — content is read from disk if the value looks like a path
+//
+//	(a) raw content (preferred for containers — set directly in env)
+//	(b) a file path — content is read from disk if the value looks like a path
 //
 // The value is never logged. Returns empty string if unset.
 func loadSecretEnv(key string) string {

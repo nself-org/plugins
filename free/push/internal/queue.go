@@ -26,15 +26,15 @@ type DispatchJob struct {
 //
 // Architecture note: the spec calls for a "BullMQ retry queue". Because the push
 // plugin is Go (not Node.js), we implement the equivalent retry semantics directly:
-// - Outbox row status tracks queue state (pending → queued → delivered/retrying/failed)
-// - Exponential backoff is enforced via time.Sleep between attempts
-// - Redis dependency is declared in plugin.json so G14-T03 auto-enables it;
-//   the retry loop itself is in-process to avoid requiring a separate worker process.
+//   - Outbox row status tracks queue state (pending → queued → delivered/retrying/failed)
+//   - Exponential backoff is enforced via time.Sleep between attempts
+//   - Redis dependency is declared in plugin.json so G14-T03 auto-enables it;
+//     the retry loop itself is in-process to avoid requiring a separate worker process.
 type Dispatcher struct {
-	pool       *pgxpool.Pool
-	apns       *APNsClient
-	fcm        *FCMClient
-	cfg        *Config
+	pool *pgxpool.Pool
+	apns *APNsClient
+	fcm  *FCMClient
+	cfg  *Config
 }
 
 // NewDispatcher creates a Dispatcher with the given clients.

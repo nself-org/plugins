@@ -10,17 +10,17 @@ import (
 
 // CronJob represents a stored cron job.
 type CronJob struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	CronExpr        string     `json:"cron_expr"`
-	CallbackURL     string     `json:"callback_url"`
-	Payload         *string    `json:"payload,omitempty"`
-	Enabled         bool       `json:"enabled"`
-	LastRunAt       *time.Time `json:"last_run_at,omitempty"`
-	NextRunAt       *time.Time `json:"next_run_at,omitempty"`
-	RunCount        int64      `json:"run_count"`
-	MaxAttempts     int        `json:"max_attempts"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	CronExpr    string     `json:"cron_expr"`
+	CallbackURL string     `json:"callback_url"`
+	Payload     *string    `json:"payload,omitempty"`
+	Enabled     bool       `json:"enabled"`
+	LastRunAt   *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt   *time.Time `json:"next_run_at,omitempty"`
+	RunCount    int64      `json:"run_count"`
+	MaxAttempts int        `json:"max_attempts"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // CronRun represents a single execution record.

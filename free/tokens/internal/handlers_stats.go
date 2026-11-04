@@ -25,4 +25,3 @@ func handleStats(db *DB) http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, stats)
 	}
 }
-

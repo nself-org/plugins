@@ -5,15 +5,16 @@
 // All SSO endpoints return 403 when NSELF_SSO != "true" (ɳSelf+ gate).
 //
 // Endpoint map:
-//   GET    /auth/sso/providers            — list configured IdPs for tenant
-//   POST   /auth/sso/providers            — add new IdP configuration
-//   PATCH  /auth/sso/providers/:id        — update IdP configuration
-//   DELETE /auth/sso/providers/:id        — remove IdP configuration
-//   POST   /auth/sso/providers/:id/test   — validate IdP config (dry-run)
-//   GET    /auth/sso/metadata             — SP SAML metadata XML
-//   GET    /auth/sso/:provider/begin      — initiate SSO login
-//   POST   /auth/sso/saml/callback        — SAML ACS endpoint
-//   GET    /auth/sso/oidc/callback        — OIDC redirect callback
+//
+//	GET    /auth/sso/providers            — list configured IdPs for tenant
+//	POST   /auth/sso/providers            — add new IdP configuration
+//	PATCH  /auth/sso/providers/:id        — update IdP configuration
+//	DELETE /auth/sso/providers/:id        — remove IdP configuration
+//	POST   /auth/sso/providers/:id/test   — validate IdP config (dry-run)
+//	GET    /auth/sso/metadata             — SP SAML metadata XML
+//	GET    /auth/sso/:provider/begin      — initiate SSO login
+//	POST   /auth/sso/saml/callback        — SAML ACS endpoint
+//	GET    /auth/sso/oidc/callback        — OIDC redirect callback
 package handlers
 
 import (
@@ -31,10 +32,10 @@ import (
 
 // SSOHandlers groups all SSO HTTP handlers.
 type SSOHandlers struct {
-	db            *pgxpool.Pool
-	jit           *sso.JITProvisioner
-	spEntityID    string
-	samlACSURL    string
+	db              *pgxpool.Pool
+	jit             *sso.JITProvisioner
+	spEntityID      string
+	samlACSURL      string
 	oidcCallbackURL string
 }
 
@@ -392,15 +393,15 @@ func (h *SSOHandlers) loadOIDCProvider(ctx context.Context, providerID, tenantID
 	_ = json.Unmarshal(rec.AttributeMap, &attrMap)
 
 	return &sso.OIDCProvider{
-		ID:            rec.ID,
-		TenantID:      rec.TenantID,
-		IDPName:       rec.IDPName,
-		ClientID:      meta.ClientID,
-		ClientSecret:  meta.ClientSecret,
-		DiscoveryURL:  meta.DiscoveryURL,
-		RedirectURL:   h.oidcCallbackURL,
-		Scopes:        meta.Scopes,
-		AttributeMap:  attrMap,
+		ID:           rec.ID,
+		TenantID:     rec.TenantID,
+		IDPName:      rec.IDPName,
+		ClientID:     meta.ClientID,
+		ClientSecret: meta.ClientSecret,
+		DiscoveryURL: meta.DiscoveryURL,
+		RedirectURL:  h.oidcCallbackURL,
+		Scopes:       meta.Scopes,
+		AttributeMap: attrMap,
 	}, nil
 }
 

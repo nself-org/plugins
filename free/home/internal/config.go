@@ -8,10 +8,10 @@ import (
 )
 
 type Config struct {
-	DatabaseURL         string
-	Port                string
-	HAUrl               string
-	HAToken             string
+	DatabaseURL          string
+	Port                 string
+	HAUrl                string
+	HAToken              string
 	PluginInternalSecret string
 }
 

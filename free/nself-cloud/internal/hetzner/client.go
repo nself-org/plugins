@@ -113,8 +113,8 @@ func (c *Client) CreateServer(ctx context.Context, opts ServerOpts) (ServerResul
 
 		var parsed struct {
 			Server struct {
-				ID              int64 `json:"id"`
-				PublicNet       struct {
+				ID        int64 `json:"id"`
+				PublicNet struct {
 					IPv4 struct {
 						IP string `json:"ip"`
 					} `json:"ipv4"`
@@ -162,13 +162,13 @@ func (c *Client) DeleteServer(ctx context.Context, serverID int64) error {
 type ServerStatus string
 
 const (
-	ServerStatusRunning     ServerStatus = "running"
+	ServerStatusRunning      ServerStatus = "running"
 	ServerStatusInitializing ServerStatus = "initializing"
-	ServerStatusStarting    ServerStatus = "starting"
-	ServerStatusStopping    ServerStatus = "stopping"
-	ServerStatusOff         ServerStatus = "off"
-	ServerStatusDeleting    ServerStatus = "deleting"
-	ServerStatusUnknown     ServerStatus = "unknown"
+	ServerStatusStarting     ServerStatus = "starting"
+	ServerStatusStopping     ServerStatus = "stopping"
+	ServerStatusOff          ServerStatus = "off"
+	ServerStatusDeleting     ServerStatus = "deleting"
+	ServerStatusUnknown      ServerStatus = "unknown"
 )
 
 // GetServerStatus fetches the current status of a server by ID.

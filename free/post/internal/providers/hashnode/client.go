@@ -2,11 +2,14 @@
 //
 // Purpose: Publish blog posts to Hashnode via the public GraphQL API.
 // Inputs: api_key (Hashnode Developer API key), publication_host (your
-//         Hashnode publication hostname, e.g. blog.example.com), title,
-//         and content in Markdown.
+//
+//	Hashnode publication hostname, e.g. blog.example.com), title,
+//	and content in Markdown.
+//
 // Outputs: post ID and URL on success.
 // Constraints: Requires a Hashnode account with at least one publication.
-//              The API key must have WRITE scope. Tags are looked up by slug.
+//
+//	The API key must have WRITE scope. Tags are looked up by slug.
 package hashnode
 
 import (

@@ -1035,4 +1035,3 @@ func TestGetStats_TierQueryError(t *testing.T) {
 		t.Errorf("status = %d; want 500", w.Code)
 	}
 }
-

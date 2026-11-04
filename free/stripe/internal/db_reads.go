@@ -194,4 +194,3 @@ func (db *DB) CountCheckoutSessions(ctx context.Context) (int64, error) {
 func (db *DB) GetCheckoutSession(ctx context.Context, id string) (json.RawMessage, error) {
 	return db.getRow(ctx, "np_stripe_checkout_sessions", id)
 }
-

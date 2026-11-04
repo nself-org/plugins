@@ -292,5 +292,3 @@ func (s *SyncService) syncPullRequests(ctx context.Context, owner, repo string, 
 	}
 	result.Stats.PullRequests += len(prs)
 }
-
-

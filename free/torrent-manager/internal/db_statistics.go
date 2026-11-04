@@ -40,4 +40,3 @@ func (d *DB) GetStats() (*TorrentStats, error) {
 	}
 	return &s, nil
 }
-

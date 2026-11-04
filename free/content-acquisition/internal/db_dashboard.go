@@ -78,4 +78,3 @@ func (d *DB) GetDashboardSummary(accountID string) (*DashboardSummary, error) {
 
 	return &s, nil
 }
-

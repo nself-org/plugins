@@ -386,11 +386,11 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateUploadSession(w http.ResponseWriter, r *http.Request) {
 	account := sa(r)
 	var body struct {
-		BucketID      string  `json:"bucket_id"`
-		Key           string  `json:"key"`
-		ContentType   *string `json:"content_type"`
-		TotalSizeBytes *int64 `json:"total_size_bytes"`
-		UploadType    string  `json:"upload_type"`
+		BucketID       string  `json:"bucket_id"`
+		Key            string  `json:"key"`
+		ContentType    *string `json:"content_type"`
+		TotalSizeBytes *int64  `json:"total_size_bytes"`
+		UploadType     string  `json:"upload_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		errJSON(w, http.StatusBadRequest, "invalid JSON")

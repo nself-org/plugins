@@ -48,8 +48,8 @@ func (c *Client) AddSource(ctx context.Context, input AddSourceInput) error {
 				"connection_info": map[string]interface{}{
 					"database_url": input.DatabaseURL,
 					"pool_settings": map[string]interface{}{
-						"max_connections":    10,
-						"idle_timeout":       180,
+						"max_connections":     10,
+						"idle_timeout":        180,
 						"connection_lifetime": 600,
 					},
 				},

@@ -241,4 +241,3 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, ListResponse{Data: deployments, Total: total, Limit: limit, Offset: offset})
 }
-

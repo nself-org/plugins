@@ -7,7 +7,7 @@ import (
 
 // MockBroker is an in-memory broker for unit tests.
 type MockBroker struct {
-	mu       sync.Mutex
+	mu        sync.Mutex
 	Published []*Event
 	FailNext  bool // if true, Publish returns an error once
 }

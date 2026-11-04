@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
 )
 
 // Handlers holds shared dependencies for all HTTP handlers.
@@ -241,8 +240,8 @@ func (h *Handlers) HandlePublish(w http.ResponseWriter, r *http.Request) {
 
 	if publishErr != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]interface{}{
-			"error": publishErr.Error(),
-			"id":    postID,
+			"error":  publishErr.Error(),
+			"id":     postID,
 			"status": "failed",
 		})
 		return

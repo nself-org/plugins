@@ -4,25 +4,25 @@ import "time"
 
 // Verification represents an np_idme_verifications row.
 type Verification struct {
-	ID               string     `json:"id"`
-	SourceAccountID  string     `json:"source_account_id"`
-	UserID           string     `json:"user_id"`
-	IDmeUUID         *string    `json:"idme_uuid,omitempty"`
-	Email            string     `json:"email"`
-	Verified         bool       `json:"verified"`
-	VerificationLevel *string   `json:"verification_level,omitempty"`
-	FirstName        *string    `json:"first_name,omitempty"`
-	LastName         *string    `json:"last_name,omitempty"`
-	BirthDate        *time.Time `json:"birth_date,omitempty"`
-	Zip              *string    `json:"zip,omitempty"`
-	Phone            *string    `json:"phone,omitempty"`
-	AccessToken      *string    `json:"access_token,omitempty"`
-	RefreshToken     *string    `json:"refresh_token,omitempty"`
-	TokenExpiresAt   *time.Time `json:"token_expires_at,omitempty"`
-	VerifiedAt       *time.Time `json:"verified_at,omitempty"`
-	LastSyncedAt     time.Time  `json:"last_synced_at"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                string     `json:"id"`
+	SourceAccountID   string     `json:"source_account_id"`
+	UserID            string     `json:"user_id"`
+	IDmeUUID          *string    `json:"idme_uuid,omitempty"`
+	Email             string     `json:"email"`
+	Verified          bool       `json:"verified"`
+	VerificationLevel *string    `json:"verification_level,omitempty"`
+	FirstName         *string    `json:"first_name,omitempty"`
+	LastName          *string    `json:"last_name,omitempty"`
+	BirthDate         *time.Time `json:"birth_date,omitempty"`
+	Zip               *string    `json:"zip,omitempty"`
+	Phone             *string    `json:"phone,omitempty"`
+	AccessToken       *string    `json:"access_token,omitempty"`
+	RefreshToken      *string    `json:"refresh_token,omitempty"`
+	TokenExpiresAt    *time.Time `json:"token_expires_at,omitempty"`
+	VerifiedAt        *time.Time `json:"verified_at,omitempty"`
+	LastSyncedAt      time.Time  `json:"last_synced_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // Group represents an np_idme_groups row.

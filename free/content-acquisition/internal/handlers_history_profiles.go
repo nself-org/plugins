@@ -89,4 +89,3 @@ func handleGetPresets() http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, map[string]interface{}{"presets": QualityPresets})
 	}
 }
-

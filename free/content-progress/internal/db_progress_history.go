@@ -58,4 +58,3 @@ func (d *DB) GetUserHistory(userID string, limit, offset int) ([]ProgressHistory
 	}
 	return items, rows.Err()
 }
-

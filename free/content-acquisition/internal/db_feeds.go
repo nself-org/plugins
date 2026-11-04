@@ -160,4 +160,3 @@ func (d *DB) DeleteRSSFeed(id string) (bool, error) {
 	}
 	return tag.RowsAffected() > 0, nil
 }
-

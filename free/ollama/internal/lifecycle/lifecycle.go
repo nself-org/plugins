@@ -1,14 +1,17 @@
 // Package lifecycle implements the nSelf plugin lifecycle actions for Ollama.
 //
 // Purpose: Provide install, start, and stop operations for the Ollama plugin,
-//          extracted from cmd/main.go so the module has a proper non-cmd package
-//          and Go's build tool can output a binary without conflicting with the
-//          cmd/ directory.
+//
+//	extracted from cmd/main.go so the module has a proper non-cmd package
+//	and Go's build tool can output a binary without conflicting with the
+//	cmd/ directory.
 //
 // Inputs:  PLUGIN_ACTION env (install | start | stop)
-//          OLLAMA_MODEL      env (default: gemma-3-4b)
-//          OLLAMA_HOST       env (default: http://localhost:11434)
-//          OLLAMA_CONTAINER  env (default: nself-ollama)
+//
+//	OLLAMA_MODEL      env (default: gemma-3-4b)
+//	OLLAMA_HOST       env (default: http://localhost:11434)
+//	OLLAMA_CONTAINER  env (default: nself-ollama)
+//
 // Outputs: Error on failure; logs to stdout on success.
 // Constraints: Install/Stop require Docker daemon accessible with Ollama container.
 // SPORT: PLUGINS-OLLAMA-000

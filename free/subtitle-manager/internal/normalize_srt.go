@@ -68,6 +68,6 @@ func cleanSRTTags(line string) string {
 
 var (
 	reEventsSection = regexp.MustCompile(`(?i)\[Events\]\s*\n([\s\S]*?)(?:\n\[|$)`)
-	reASSTimestamp   = regexp.MustCompile(`(\d+):(\d{2}):(\d{2})\.(\d{2,3})`)
-	reASSTagBlock    = regexp.MustCompile(`\{\\[^}]*\}`)
+	reASSTimestamp  = regexp.MustCompile(`(\d+):(\d{2}):(\d{2})\.(\d{2,3})`)
+	reASSTagBlock   = regexp.MustCompile(`\{\\[^}]*\}`)
 )

@@ -20,13 +20,13 @@ type Server struct {
 // JetStream is enabled with the provided storeDir for persistent storage.
 func Start(clientPort int, storeDir string) (*Server, error) {
 	opts := &server.Options{
-		ServerName:   "nself-event-bus",
-		Port:         clientPort,
-		JetStream:    true,
-		StoreDir:     storeDir,
-		NoLog:        false,
-		NoSigs:       true,
-		MaxPayload:   server.MAX_PAYLOAD_SIZE,
+		ServerName: "nself-event-bus",
+		Port:       clientPort,
+		JetStream:  true,
+		StoreDir:   storeDir,
+		NoLog:      false,
+		NoSigs:     true,
+		MaxPayload: server.MAX_PAYLOAD_SIZE,
 	}
 
 	ns, err := server.NewServer(opts)

@@ -4,21 +4,21 @@ import "time"
 
 // MetricsSnapshot maps to np_admin_metrics_snapshots.
 type MetricsSnapshot struct {
-	ID                  string         `json:"id"`
-	SourceAccountID     string         `json:"source_account_id"`
-	MetricType          string         `json:"metric_type"`
-	CPUUsagePercent     *float64       `json:"cpu_usage_percent"`
-	MemoryUsedBytes     *int64         `json:"memory_used_bytes"`
-	MemoryTotalBytes    *int64         `json:"memory_total_bytes"`
-	DiskUsedBytes       *int64         `json:"disk_used_bytes"`
-	DiskTotalBytes      *int64         `json:"disk_total_bytes"`
-	ActiveConnections   *int32         `json:"active_connections"`
-	RequestCount        *int32         `json:"request_count"`
-	ErrorCount          *int32         `json:"error_count"`
-	AvgResponseTimeMS   *float64       `json:"avg_response_time_ms"`
-	ActiveSessions      *int32         `json:"active_sessions"`
-	Metadata            map[string]any `json:"metadata"`
-	CreatedAt           time.Time      `json:"created_at"`
+	ID                string         `json:"id"`
+	SourceAccountID   string         `json:"source_account_id"`
+	MetricType        string         `json:"metric_type"`
+	CPUUsagePercent   *float64       `json:"cpu_usage_percent"`
+	MemoryUsedBytes   *int64         `json:"memory_used_bytes"`
+	MemoryTotalBytes  *int64         `json:"memory_total_bytes"`
+	DiskUsedBytes     *int64         `json:"disk_used_bytes"`
+	DiskTotalBytes    *int64         `json:"disk_total_bytes"`
+	ActiveConnections *int32         `json:"active_connections"`
+	RequestCount      *int32         `json:"request_count"`
+	ErrorCount        *int32         `json:"error_count"`
+	AvgResponseTimeMS *float64       `json:"avg_response_time_ms"`
+	ActiveSessions    *int32         `json:"active_sessions"`
+	Metadata          map[string]any `json:"metadata"`
+	CreatedAt         time.Time      `json:"created_at"`
 }
 
 // DashboardConfig maps to np_admin_dashboard_config.
@@ -85,10 +85,10 @@ type SystemMetrics struct {
 }
 
 type CPUMetrics struct {
-	UsagePercent    float64 `json:"usage_percent"`
-	LoadAverage1m   float64 `json:"load_average_1m"`
-	LoadAverage5m   float64 `json:"load_average_5m"`
-	LoadAverage15m  float64 `json:"load_average_15m"`
+	UsagePercent   float64 `json:"usage_percent"`
+	LoadAverage1m  float64 `json:"load_average_1m"`
+	LoadAverage5m  float64 `json:"load_average_5m"`
+	LoadAverage15m float64 `json:"load_average_15m"`
 }
 
 type MemoryMetrics struct {
@@ -106,10 +106,10 @@ type DiskMetrics struct {
 }
 
 type NetworkMetrics struct {
-	ActiveConnections  int     `json:"active_connections"`
-	RequestsPerMinute  float64 `json:"requests_per_minute"`
-	AvgResponseTimeMS  float64 `json:"avg_response_time_ms"`
-	ErrorRatePercent   float64 `json:"error_rate_percent"`
+	ActiveConnections int     `json:"active_connections"`
+	RequestsPerMinute float64 `json:"requests_per_minute"`
+	AvgResponseTimeMS float64 `json:"avg_response_time_ms"`
+	ErrorRatePercent  float64 `json:"error_rate_percent"`
 }
 
 type ProcessMetrics struct {
@@ -121,16 +121,16 @@ type ProcessMetrics struct {
 
 // DashboardStats are aggregate stats.
 type DashboardStats struct {
-	SnapshotsTotal      int64    `json:"snapshots_total"`
-	SnapshotsToday      int64    `json:"snapshots_today"`
-	OldestSnapshot      *string  `json:"oldest_snapshot"`
-	NewestSnapshot      *string  `json:"newest_snapshot"`
-	ConfigEntries       int64    `json:"config_entries"`
-	AvgCPU24h           *float64 `json:"avg_cpu_24h"`
-	AvgMemory24h        *float64 `json:"avg_memory_24h"`
-	PeakConnections24h  *int64   `json:"peak_connections_24h"`
-	TotalRequests24h    *int64   `json:"total_requests_24h"`
-	TotalErrors24h      *int64   `json:"total_errors_24h"`
+	SnapshotsTotal     int64    `json:"snapshots_total"`
+	SnapshotsToday     int64    `json:"snapshots_today"`
+	OldestSnapshot     *string  `json:"oldest_snapshot"`
+	NewestSnapshot     *string  `json:"newest_snapshot"`
+	ConfigEntries      int64    `json:"config_entries"`
+	AvgCPU24h          *float64 `json:"avg_cpu_24h"`
+	AvgMemory24h       *float64 `json:"avg_memory_24h"`
+	PeakConnections24h *int64   `json:"peak_connections_24h"`
+	TotalRequests24h   *int64   `json:"total_requests_24h"`
+	TotalErrors24h     *int64   `json:"total_errors_24h"`
 }
 
 // ServiceHealth is a single service health entry.

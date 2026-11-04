@@ -44,4 +44,3 @@ func (d *DB) HasCredentials(ctx context.Context, providerID, encryptionKey strin
 	}
 	return count > 0, nil
 }
-

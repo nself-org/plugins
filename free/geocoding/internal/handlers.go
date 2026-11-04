@@ -864,20 +864,20 @@ func (h *Handlers) ListPlaces(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) CreatePlace(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Provider        string          `json:"provider"`
-		ProviderPlaceID string          `json:"provider_place_id"`
-		Name            string          `json:"name"`
-		Category        *string         `json:"category"`
-		Lat             *float64        `json:"lat"`
-		Lng             *float64        `json:"lng"`
-		FormattedAddress *string        `json:"formatted_address"`
-		Phone           *string         `json:"phone"`
-		Website         *string         `json:"website"`
-		Rating          *float64        `json:"rating"`
-		ReviewCount     *int            `json:"review_count"`
-		Hours           json.RawMessage `json:"hours"`
-		Photos          json.RawMessage `json:"photos"`
-		Metadata        json.RawMessage `json:"metadata"`
+		Provider         string          `json:"provider"`
+		ProviderPlaceID  string          `json:"provider_place_id"`
+		Name             string          `json:"name"`
+		Category         *string         `json:"category"`
+		Lat              *float64        `json:"lat"`
+		Lng              *float64        `json:"lng"`
+		FormattedAddress *string         `json:"formatted_address"`
+		Phone            *string         `json:"phone"`
+		Website          *string         `json:"website"`
+		Rating           *float64        `json:"rating"`
+		ReviewCount      *int            `json:"review_count"`
+		Hours            json.RawMessage `json:"hours"`
+		Photos           json.RawMessage `json:"photos"`
+		Metadata         json.RawMessage `json:"metadata"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})

@@ -709,9 +709,9 @@ func (h *Handlers) UpdateMatchQueue(w http.ResponseWriter, r *http.Request) {
 	sa := h.sa(r)
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Status      string  `json:"status"`
-		ReviewedBy  *string `json:"reviewed_by"`
-		BestMatchID *int    `json:"best_match_id"`
+		Status        string  `json:"status"`
+		ReviewedBy    *string `json:"reviewed_by"`
+		BestMatchID   *int    `json:"best_match_id"`
 		BestMatchType *string `json:"best_match_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

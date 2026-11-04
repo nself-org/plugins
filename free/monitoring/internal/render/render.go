@@ -1,8 +1,10 @@
 // Package render provides config-rendering helpers for the monitoring plugin.
 //
 // Purpose: Copy monitoring config templates from a source directory tree to an
-//          output directory. Designed for use in init containers that prepare
-//          configs before Prometheus/Grafana/Loki compose services start.
+//
+//	output directory. Designed for use in init containers that prepare
+//	configs before Prometheus/Grafana/Loki compose services start.
+//
 // Inputs:  src dir (config templates), out dir (render destination).
 // Outputs: Copied files mirroring the src tree structure under out.
 // Constraints: No network calls. All errors are wrapped with context.

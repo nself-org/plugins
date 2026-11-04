@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func GetDueJobIDs(pool *pgxpool.Pool) ([]string, error) {

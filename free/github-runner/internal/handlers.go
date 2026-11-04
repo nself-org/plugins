@@ -1,8 +1,6 @@
 package internal
 
-import (
-
-)
+import ()
 
 const (
 	defaultRunnerDir = ".nself/runners/github-runner"

@@ -2,11 +2,11 @@ package internal
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5/pgxpool"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"strconv"
 	"time"
-	"github.com/jackc/pgx/v5/pgxpool"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleListInvoices(pool *pgxpool.Pool) http.HandlerFunc {

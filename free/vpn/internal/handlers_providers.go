@@ -1,12 +1,12 @@
 package internal
 
 import (
-	"github.com/go-chi/chi/v5"
 	"context"
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleAPIHealth(db *DB) http.HandlerFunc {
@@ -74,12 +74,12 @@ func handleListProviders(db *DB) http.HandlerFunc {
 		}
 
 		type providerItem struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			CLIAvailable    bool   `json:"cli_available"`
-			PortForwarding  bool   `json:"port_forwarding"`
-			P2PServers      int    `json:"p2p_servers"`
-			TotalServers    int    `json:"total_servers"`
+			ID             string `json:"id"`
+			Name           string `json:"name"`
+			CLIAvailable   bool   `json:"cli_available"`
+			PortForwarding bool   `json:"port_forwarding"`
+			P2PServers     int    `json:"p2p_servers"`
+			TotalServers   int    `json:"total_servers"`
 		}
 
 		items := make([]providerItem, len(providers))
@@ -202,4 +202,3 @@ func handleStoreCredentials(db *DB) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 // GET /api/servers
 // ---------------------------------------------------------------------------
-

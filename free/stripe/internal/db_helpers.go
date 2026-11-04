@@ -111,4 +111,3 @@ func nullTime(nt NullTime) interface{} {
 	}
 	return nt.Time
 }
-

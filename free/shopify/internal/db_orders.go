@@ -163,4 +163,3 @@ func (db *DB) DeleteOrderByShopifyID(ctx context.Context, shopifyID int64) error
 	_, err = db.Pool.Exec(ctx, `DELETE FROM np_shopify_orders WHERE shopify_id = $1 AND source_account_id = $2`, shopifyID, db.SourceAccountID)
 	return err
 }
-

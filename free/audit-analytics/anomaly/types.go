@@ -3,8 +3,8 @@ package anomaly
 
 // Type constants for anomaly_type values stored in np_audit_anomalies.
 const (
-	TypeBulkDelete      = "bulk_delete"
-	TypeNewIP           = "new_ip"
+	TypeBulkDelete       = "bulk_delete"
+	TypeNewIP            = "new_ip"
 	TypeImpossibleTravel = "impossible_travel"
 	TypeAfterHoursAdmin  = "after_hours_admin"
 	TypeFreqSpike        = "freq_spike"
@@ -20,10 +20,10 @@ const (
 
 // PrivilegedActions is the set of actions that route to the review queue.
 var PrivilegedActions = map[string]bool{
-	"role_grant":    true,
+	"role_grant":     true,
 	"plugin_install": true,
-	"schema_alter":  true,
-	"gdpr_delete":   true,
+	"schema_alter":   true,
+	"gdpr_delete":    true,
 }
 
 // Anomaly is an in-memory representation of a detected anomaly before DB persistence.
@@ -39,7 +39,8 @@ type Anomaly struct {
 
 // severityForZScore converts a z-score to a named severity bucket.
 // Thresholds (conservative defaults; configurable via NSELF_AUDIT_ANOMALY_ZSCORE env):
-//   3.0–4.9 → medium, 5.0–7.9 → high, 8.0+ → critical.
+//
+//	3.0–4.9 → medium, 5.0–7.9 → high, 8.0+ → critical.
 func severityForZScore(z float64) string {
 	switch {
 	case z >= 8.0:

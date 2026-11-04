@@ -264,4 +264,3 @@ type StripeInvoiceItem struct {
 	CreatedAt          NullTime        `json:"created_at"`
 	SyncedAt           NullTime        `json:"synced_at"`
 }
-

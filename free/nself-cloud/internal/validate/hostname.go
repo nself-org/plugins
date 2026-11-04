@@ -13,21 +13,21 @@ var rfc1123Label = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-
 
 // reserved hostnames that must never be bound to a tenant domain.
 var reservedHostnames = map[string]struct{}{
-	"localhost":      {},
-	"internal":       {},
-	"local":          {},
-	"invalid":        {},
-	"example":        {},
-	"test":           {},
-	"home":           {},
-	"broadcasthost":  {},
-	"ip6-localhost":  {},
-	"ip6-loopback":   {},
-	"ip6-localnet":   {},
+	"localhost":       {},
+	"internal":        {},
+	"local":           {},
+	"invalid":         {},
+	"example":         {},
+	"test":            {},
+	"home":            {},
+	"broadcasthost":   {},
+	"ip6-localhost":   {},
+	"ip6-loopback":    {},
+	"ip6-localnet":    {},
 	"ip6-mcastprefix": {},
-	"ip6-allnodes":   {},
-	"ip6-allrouters": {},
-	"ip6-allhosts":   {},
+	"ip6-allnodes":    {},
+	"ip6-allrouters":  {},
+	"ip6-allhosts":    {},
 }
 
 // ValidateHostname validates hostname according to RFC 1123.

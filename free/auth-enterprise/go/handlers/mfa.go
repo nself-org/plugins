@@ -3,15 +3,16 @@
 // HTTP handlers for MFA enrollment, challenge, policy, and recovery endpoints.
 //
 // Endpoint map:
-//   GET  /auth/mfa/status               — enrollment status for the current user
-//   POST /auth/mfa/totp/setup           — begin TOTP enrollment
-//   POST /auth/mfa/totp/verify          — confirm enrollment with a live code
-//   POST /auth/mfa/totp/challenge       — verify TOTP code during login
-//   POST /auth/mfa/recovery             — consume a recovery code
-//   GET  /auth/mfa/recovery/codes       — list masked recovery codes
-//   POST /auth/mfa/recovery/regenerate  — replace all recovery codes
-//   GET  /auth/mfa/policy               — get tenant MFA policy
-//   PUT  /auth/mfa/policy               — set tenant MFA policy (mfa:admin scope)
+//
+//	GET  /auth/mfa/status               — enrollment status for the current user
+//	POST /auth/mfa/totp/setup           — begin TOTP enrollment
+//	POST /auth/mfa/totp/verify          — confirm enrollment with a live code
+//	POST /auth/mfa/totp/challenge       — verify TOTP code during login
+//	POST /auth/mfa/recovery             — consume a recovery code
+//	GET  /auth/mfa/recovery/codes       — list masked recovery codes
+//	POST /auth/mfa/recovery/regenerate  — replace all recovery codes
+//	GET  /auth/mfa/policy               — get tenant MFA policy
+//	PUT  /auth/mfa/policy               — set tenant MFA policy (mfa:admin scope)
 //
 // WebAuthn endpoints are in the existing plugins-pro/paid/auth plugin and are
 // not duplicated here. The auth-enterprise plugin extends that plugin with
@@ -61,8 +62,8 @@ func (h *MFAHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id":                userID,
-		"totp_enrolled":          count > 0,
+		"user_id":                  userID,
+		"totp_enrolled":            count > 0,
 		"recovery_codes_remaining": count,
 	})
 }
@@ -105,7 +106,7 @@ func (h *MFAHandlers) TOTPVerify(w http.ResponseWriter, r *http.Request) {
 
 	if h.throttle.IsLocked(userID) {
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{
-			"error": "too_many_attempts",
+			"error":   "too_many_attempts",
 			"message": "too many failed attempts — try again later",
 		})
 		return

@@ -16,7 +16,7 @@ type BAARecord struct {
 	SourceAccountID   string     `json:"source_account_id"`
 	TenantID          *string    `json:"tenant_id,omitempty"`
 	SignedBy          string     `json:"signed_by"`
-	SignerEmail        *string   `json:"signer_email,omitempty"`
+	SignerEmail       *string    `json:"signer_email,omitempty"`
 	SignedAt          *time.Time `json:"signed_at,omitempty"`
 	EffectiveDate     *string    `json:"effective_date,omitempty"`
 	ExpiryDate        *string    `json:"expiry_date,omitempty"`

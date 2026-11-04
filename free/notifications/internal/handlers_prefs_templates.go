@@ -3,12 +3,12 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"time"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
+	"time"
 )
 
 func handleUpdatePreferences(pool *pgxpool.Pool) http.HandlerFunc {

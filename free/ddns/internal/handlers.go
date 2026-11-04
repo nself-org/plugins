@@ -498,12 +498,12 @@ func performUpdate(ctx context.Context, db *DB, account string, c DDNSConfig) (U
 	if err != nil {
 		msg := err.Error()
 		return UpdateResult{
-				ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-				OldIP: strOrEmpty(c.CurrentIP), NewIP: "", Status: "failed", Message: msg,
-			}, UpdateLog{
-				SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-				OldIP: c.CurrentIP, NewIP: "", Status: "failed", Error: &msg,
-			}
+			ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+			OldIP: strOrEmpty(c.CurrentIP), NewIP: "", Status: "failed", Message: msg,
+		}, UpdateLog{
+			SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+			OldIP: c.CurrentIP, NewIP: "", Status: "failed", Error: &msg,
+		}
 	}
 	return performUpdateWithIP(ctx, db, account, c, ip)
 }
@@ -521,13 +521,13 @@ func performUpdateWithIP(ctx context.Context, db *DB, account string, c DDNSConf
 		)
 		msg := "IP unchanged"
 		return UpdateResult{
-				ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-				OldIP: oldIP, NewIP: ip, Status: "skipped", Message: msg,
-			}, UpdateLog{
-				SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-				OldIP: c.CurrentIP, NewIP: ip, Status: "skipped",
-				ResponseMessage: &msg, DurationMS: int(time.Since(start).Milliseconds()),
-			}
+			ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+			OldIP: oldIP, NewIP: ip, Status: "skipped", Message: msg,
+		}, UpdateLog{
+			SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+			OldIP: c.CurrentIP, NewIP: ip, Status: "skipped",
+			ResponseMessage: &msg, DurationMS: int(time.Since(start).Milliseconds()),
+		}
 	}
 
 	// Attempt DNS update via Cloudflare if credentials present
@@ -536,12 +536,12 @@ func performUpdateWithIP(ctx context.Context, db *DB, account string, c DDNSConf
 			msg := err.Error()
 			dur := int(time.Since(start).Milliseconds())
 			return UpdateResult{
-					ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-					OldIP: oldIP, NewIP: ip, Status: "failed", Message: msg,
-				}, UpdateLog{
-					SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-					OldIP: c.CurrentIP, NewIP: ip, Status: "failed", Error: &msg, DurationMS: dur,
-				}
+				ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+				OldIP: oldIP, NewIP: ip, Status: "failed", Message: msg,
+			}, UpdateLog{
+				SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+				OldIP: c.CurrentIP, NewIP: ip, Status: "failed", Error: &msg, DurationMS: dur,
+			}
 		}
 	}
 
@@ -555,13 +555,13 @@ func performUpdateWithIP(ctx context.Context, db *DB, account string, c DDNSConf
 	msg := "DNS record updated"
 	dur := int(time.Since(start).Milliseconds())
 	return UpdateResult{
-			ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-			OldIP: oldIP, NewIP: ip, Status: "success", Message: msg,
-		}, UpdateLog{
-			SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
-			OldIP: c.CurrentIP, NewIP: ip, Status: "success",
-			ResponseCode: &code, ResponseMessage: &msg, DurationMS: dur,
-		}
+		ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+		OldIP: oldIP, NewIP: ip, Status: "success", Message: msg,
+	}, UpdateLog{
+		SourceAccountID: account, ConfigID: c.ID, Provider: c.Provider, Domain: c.Domain,
+		OldIP: c.CurrentIP, NewIP: ip, Status: "success",
+		ResponseCode: &code, ResponseMessage: &msg, DurationMS: dur,
+	}
 }
 
 // insertUpdateLog persists an UpdateLog row.

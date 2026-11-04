@@ -22,9 +22,9 @@ func TestValidateE164_valid(t *testing.T) {
 
 func TestValidateE164_invalid(t *testing.T) {
 	cases := []string{
-		"14155552671",      // missing +
-		"+1",              // too short
-		"+0123456789",     // leading 0 in country code
+		"14155552671", // missing +
+		"+1",          // too short
+		"+0123456789", // leading 0 in country code
 		"not-a-number",
 		"",
 	}

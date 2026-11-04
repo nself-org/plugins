@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"os"
 
-	sdklogger  "github.com/nself-org/cli/sdk/go/logger"
-	sdkplugin  "github.com/nself-org/cli/sdk/go/plugin"
-	sdkserver  "github.com/nself-org/cli/sdk/go/server"
+	sdklogger "github.com/nself-org/cli/sdk/go/logger"
+	sdkplugin "github.com/nself-org/cli/sdk/go/plugin"
+	sdkserver "github.com/nself-org/cli/sdk/go/server"
 )
 
 const (

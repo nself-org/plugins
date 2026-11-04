@@ -78,4 +78,3 @@ func (d *DB) GetProvider(ctx context.Context, id string) (*Provider, error) {
 	}
 	return &p, nil
 }
-

@@ -82,19 +82,19 @@ type GoldenMemory struct {
 // Outputs: read by gate.go for tier-clearance checks; returned by GET /eval/runs/{id}.
 // Constraints: PassRate and SuiteScore are [0,1]; Passed = SuiteScore >= suite threshold.
 type EvalRun struct {
-	ID              string        `json:"id" db:"id"`
-	SuiteID         string        `json:"suite_id" db:"suite_id"`
-	TriggeredBy     string        `json:"triggered_by" db:"triggered_by"` // ci | manual | pre-tier-promotion
-	CommitSHA       string        `json:"commit_sha,omitempty" db:"commit_sha"`
-	Branch          string        `json:"branch,omitempty" db:"branch"`
-	PassRate        float64       `json:"pass_rate" db:"pass_rate"`
-	SuiteScore      float64       `json:"suite_score" db:"suite_score"`
-	Passed          bool          `json:"passed" db:"passed"`
-	Results         []TaskResult  `json:"tasks" db:"results"`
-	DurationMS      int           `json:"duration_ms,omitempty" db:"duration_ms"`
-	ModelJudge      string        `json:"model_judge,omitempty" db:"model_judge"`
-	CreatedAt       time.Time     `json:"created_at" db:"created_at"`
-	SourceAccountID string        `json:"source_account_id" db:"source_account_id"`
+	ID              string       `json:"id" db:"id"`
+	SuiteID         string       `json:"suite_id" db:"suite_id"`
+	TriggeredBy     string       `json:"triggered_by" db:"triggered_by"` // ci | manual | pre-tier-promotion
+	CommitSHA       string       `json:"commit_sha,omitempty" db:"commit_sha"`
+	Branch          string       `json:"branch,omitempty" db:"branch"`
+	PassRate        float64      `json:"pass_rate" db:"pass_rate"`
+	SuiteScore      float64      `json:"suite_score" db:"suite_score"`
+	Passed          bool         `json:"passed" db:"passed"`
+	Results         []TaskResult `json:"tasks" db:"results"`
+	DurationMS      int          `json:"duration_ms,omitempty" db:"duration_ms"`
+	ModelJudge      string       `json:"model_judge,omitempty" db:"model_judge"`
+	CreatedAt       time.Time    `json:"created_at" db:"created_at"`
+	SourceAccountID string       `json:"source_account_id" db:"source_account_id"`
 }
 
 // TaskResult holds the per-task scoring output within an EvalRun.

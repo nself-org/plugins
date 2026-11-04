@@ -67,15 +67,15 @@ type nominatimResult struct {
 	DisplayName string  `json:"display_name"`
 	Importance  float64 `json:"importance"`
 	Address     struct {
-		HouseNumber  string `json:"house_number"`
-		Road         string `json:"road"`
-		City         string `json:"city"`
-		Town         string `json:"town"`
-		Village      string `json:"village"`
-		State        string `json:"state"`
-		Postcode     string `json:"postcode"`
-		Country      string `json:"country"`
-		CountryCode  string `json:"country_code"`
+		HouseNumber string `json:"house_number"`
+		Road        string `json:"road"`
+		City        string `json:"city"`
+		Town        string `json:"town"`
+		Village     string `json:"village"`
+		State       string `json:"state"`
+		Postcode    string `json:"postcode"`
+		Country     string `json:"country"`
+		CountryCode string `json:"country_code"`
 	} `json:"address"`
 }
 
@@ -196,10 +196,10 @@ func (m *Mapbox) Name() string { return "mapbox" }
 
 // mapboxFeature is the relevant subset of Mapbox GeoJSON features.
 type mapboxFeature struct {
-	ID          string    `json:"id"`
-	PlaceName   string    `json:"place_name"`
-	Relevance   float64   `json:"relevance"`
-	Geometry    struct {
+	ID        string  `json:"id"`
+	PlaceName string  `json:"place_name"`
+	Relevance float64 `json:"relevance"`
+	Geometry  struct {
 		Coordinates [2]float64 `json:"coordinates"` // [lng, lat]
 	} `json:"geometry"`
 	Context []struct {

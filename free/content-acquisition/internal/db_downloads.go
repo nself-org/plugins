@@ -254,4 +254,3 @@ func (d *DB) RemoveFromDownloadQueue(downloadID string) error {
 		`DELETE FROM np_contentacquisition_download_queue WHERE download_id = $1`, downloadID)
 	return err
 }
-

@@ -4,37 +4,37 @@ import "time"
 
 // DSAR represents a Data Subject Access Request.
 type DSAR struct {
-	ID                       string     `json:"id"`
-	SourceAccountID          string     `json:"source_account_id"`
-	RequestType              string     `json:"request_type"`
-	RequestNumber            string     `json:"request_number"`
-	UserID                   *string    `json:"user_id"`
-	RequesterEmail           string     `json:"requester_email"`
-	RequesterName            *string    `json:"requester_name"`
-	VerificationToken        *string    `json:"verification_token,omitempty"`
-	VerificationSentAt       *time.Time `json:"verification_sent_at"`
-	VerificationCompletedAt  *time.Time `json:"verification_completed_at"`
-	VerifiedBy               *string    `json:"verified_by"`
-	Description              *string    `json:"description"`
-	DataCategories           []string   `json:"data_categories"`
-	SpecificDataRequested    *string    `json:"specific_data_requested"`
-	Status                   string     `json:"status"`
-	AssignedTo               *string    `json:"assigned_to"`
-	StartedAt                *time.Time `json:"started_at"`
-	CompletedAt              *time.Time `json:"completed_at"`
-	Deadline                 time.Time  `json:"due_date"` // field alias matches task spec
-	DataPackageURL           *string    `json:"data_package_url"`
-	DataPackageSizeBytes     *int64     `json:"data_package_size_bytes"`
-	DataPackageGeneratedAt   *time.Time `json:"data_package_generated_at"`
-	ResolutionNotes          *string    `json:"resolution_notes"`
-	RejectionReason          *string    `json:"rejection_reason"`
-	Regulation               string     `json:"regulation"`
-	Jurisdiction             *string    `json:"jurisdiction"`
-	LegalBasis               *string    `json:"legal_basis"`
-	IPAddress                *string    `json:"ip_address"`
-	UserAgent                *string    `json:"user_agent"`
-	CreatedAt                time.Time  `json:"created_at"`
-	UpdatedAt                time.Time  `json:"updated_at"`
+	ID                      string     `json:"id"`
+	SourceAccountID         string     `json:"source_account_id"`
+	RequestType             string     `json:"request_type"`
+	RequestNumber           string     `json:"request_number"`
+	UserID                  *string    `json:"user_id"`
+	RequesterEmail          string     `json:"requester_email"`
+	RequesterName           *string    `json:"requester_name"`
+	VerificationToken       *string    `json:"verification_token,omitempty"`
+	VerificationSentAt      *time.Time `json:"verification_sent_at"`
+	VerificationCompletedAt *time.Time `json:"verification_completed_at"`
+	VerifiedBy              *string    `json:"verified_by"`
+	Description             *string    `json:"description"`
+	DataCategories          []string   `json:"data_categories"`
+	SpecificDataRequested   *string    `json:"specific_data_requested"`
+	Status                  string     `json:"status"`
+	AssignedTo              *string    `json:"assigned_to"`
+	StartedAt               *time.Time `json:"started_at"`
+	CompletedAt             *time.Time `json:"completed_at"`
+	Deadline                time.Time  `json:"due_date"` // field alias matches task spec
+	DataPackageURL          *string    `json:"data_package_url"`
+	DataPackageSizeBytes    *int64     `json:"data_package_size_bytes"`
+	DataPackageGeneratedAt  *time.Time `json:"data_package_generated_at"`
+	ResolutionNotes         *string    `json:"resolution_notes"`
+	RejectionReason         *string    `json:"rejection_reason"`
+	Regulation              string     `json:"regulation"`
+	Jurisdiction            *string    `json:"jurisdiction"`
+	LegalBasis              *string    `json:"legal_basis"`
+	IPAddress               *string    `json:"ip_address"`
+	UserAgent               *string    `json:"user_agent"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
 // CreateDSARRequest is the body for POST /api/v1/dsars.
@@ -125,16 +125,16 @@ type PrivacyPolicy struct {
 
 // CreatePrivacyPolicyRequest is the body for POST /api/v1/privacy-policies.
 type CreatePrivacyPolicyRequest struct {
-	Version              string     `json:"version"`
-	VersionNumber        int        `json:"version_number"`
-	Title                string     `json:"title"`
-	Content              string     `json:"content"`
-	Summary              *string    `json:"summary"`
-	ChangesSummary       *string    `json:"changes_summary"`
-	RequiresReacceptance bool       `json:"requires_reacceptance"`
-	EffectiveFrom        time.Time  `json:"effective_from"`
-	Language             *string    `json:"language"`
-	Jurisdiction         *string    `json:"jurisdiction"`
+	Version              string    `json:"version"`
+	VersionNumber        int       `json:"version_number"`
+	Title                string    `json:"title"`
+	Content              string    `json:"content"`
+	Summary              *string   `json:"summary"`
+	ChangesSummary       *string   `json:"changes_summary"`
+	RequiresReacceptance bool      `json:"requires_reacceptance"`
+	EffectiveFrom        time.Time `json:"effective_from"`
+	Language             *string   `json:"language"`
+	Jurisdiction         *string   `json:"jurisdiction"`
 }
 
 // DataExport represents a user data export request.

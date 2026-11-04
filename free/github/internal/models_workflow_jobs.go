@@ -50,24 +50,24 @@ type CheckRun struct {
 
 // Deployment represents a GitHub deployment record (np_github_deployments).
 type Deployment struct {
-	ID                   int64            `json:"id"`
-	SourceAccountID      string           `json:"source_account_id"`
-	NodeID               *string          `json:"node_id"`
-	RepoID               *int64           `json:"repo_id"`
-	SHA                  *string          `json:"sha"`
-	Ref                  *string          `json:"ref"`
-	Task                 *string          `json:"task"`
-	Environment          *string          `json:"environment"`
-	Description          *string          `json:"description"`
-	CreatorLogin         *string          `json:"creator_login"`
-	Statuses             *json.RawMessage `json:"statuses"`
-	CurrentStatus        *string          `json:"current_status"`
-	ProductionEnvironment bool            `json:"production_environment"`
-	TransientEnvironment  bool            `json:"transient_environment"`
-	Payload              *json.RawMessage `json:"payload"`
-	CreatedAt            *time.Time       `json:"created_at"`
-	UpdatedAt            *time.Time       `json:"updated_at"`
-	SyncedAt             *time.Time       `json:"synced_at"`
+	ID                    int64            `json:"id"`
+	SourceAccountID       string           `json:"source_account_id"`
+	NodeID                *string          `json:"node_id"`
+	RepoID                *int64           `json:"repo_id"`
+	SHA                   *string          `json:"sha"`
+	Ref                   *string          `json:"ref"`
+	Task                  *string          `json:"task"`
+	Environment           *string          `json:"environment"`
+	Description           *string          `json:"description"`
+	CreatorLogin          *string          `json:"creator_login"`
+	Statuses              *json.RawMessage `json:"statuses"`
+	CurrentStatus         *string          `json:"current_status"`
+	ProductionEnvironment bool             `json:"production_environment"`
+	TransientEnvironment  bool             `json:"transient_environment"`
+	Payload               *json.RawMessage `json:"payload"`
+	CreatedAt             *time.Time       `json:"created_at"`
+	UpdatedAt             *time.Time       `json:"updated_at"`
+	SyncedAt              *time.Time       `json:"synced_at"`
 }
 
 // Team represents a GitHub team record (np_github_teams).

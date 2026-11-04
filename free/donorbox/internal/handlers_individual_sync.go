@@ -158,4 +158,3 @@ func syncTickets(ctx context.Context, db *DB, client *DonorboxClient) (int, erro
 	}
 	return db.UpsertTickets(ctx, records)
 }
-

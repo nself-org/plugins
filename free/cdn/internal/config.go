@@ -22,8 +22,8 @@ type Config struct {
 	AkamaiHost         string
 
 	// Signing
-	SigningKey    string
-	SignedURLTTL  int // seconds, default 3600
+	SigningKey   string
+	SignedURLTTL int // seconds, default 3600
 
 	// Purge
 	PurgeBatchSize int
@@ -76,8 +76,8 @@ func LoadConfig() Config {
 		AkamaiAccessToken:  os.Getenv("CDN_AKAMAI_ACCESS_TOKEN"),
 		AkamaiClientSecret: os.Getenv("CDN_AKAMAI_CLIENT_SECRET"),
 		AkamaiHost:         os.Getenv("CDN_AKAMAI_HOST"),
-		SigningKey:          os.Getenv("CDN_SIGNING_KEY"),
-		SignedURLTTL:        signedURLTTL,
+		SigningKey:         os.Getenv("CDN_SIGNING_KEY"),
+		SignedURLTTL:       signedURLTTL,
 		PurgeBatchSize:     purgeBatchSize,
 	}
 }

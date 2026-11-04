@@ -9,14 +9,14 @@ import (
 
 // Config holds runtime configuration for the functions-v8 plugin.
 type Config struct {
-	DatabaseURL       string
-	Port              int
-	MaxDurationMS     int
-	PoolSize          int
-	MaxMemoryMB       int
-	LogRetentionDays  int
-	DenoBinaryPath    string
-	InternalSecret    string
+	DatabaseURL      string
+	Port             int
+	MaxDurationMS    int
+	PoolSize         int
+	MaxMemoryMB      int
+	LogRetentionDays int
+	DenoBinaryPath   string
+	InternalSecret   string
 }
 
 // Load reads configuration from environment variables applying defaults.

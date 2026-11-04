@@ -41,35 +41,35 @@ type OSSearchResponse struct {
 
 // OSSearchResult is a single search result from OpenSubtitles.
 type OSSearchResult struct {
-	ID         string              `json:"id"`
-	Type       string              `json:"type"`
-	Attributes OSSearchAttributes  `json:"attributes"`
+	ID         string             `json:"id"`
+	Type       string             `json:"type"`
+	Attributes OSSearchAttributes `json:"attributes"`
 }
 
 // OSSearchAttributes holds the attributes of a search result.
 type OSSearchAttributes struct {
-	SubtitleID       string              `json:"subtitle_id"`
-	Language         string              `json:"language"`
-	DownloadCount    int                 `json:"download_count"`
-	NewDownloadCount int                 `json:"new_download_count"`
-	HearingImpaired  bool               `json:"hearing_impaired"`
-	HD               bool               `json:"hd"`
-	Format           string              `json:"format"`
-	FPS              float64             `json:"fps"`
-	Votes            int                 `json:"votes"`
-	Points           int                 `json:"points"`
-	Ratings          float64             `json:"ratings"`
-	FromTrusted      bool               `json:"from_trusted"`
-	ForeignPartsOnly bool               `json:"foreign_parts_only"`
-	AITranslated     bool               `json:"ai_translated"`
+	SubtitleID        string            `json:"subtitle_id"`
+	Language          string            `json:"language"`
+	DownloadCount     int               `json:"download_count"`
+	NewDownloadCount  int               `json:"new_download_count"`
+	HearingImpaired   bool              `json:"hearing_impaired"`
+	HD                bool              `json:"hd"`
+	Format            string            `json:"format"`
+	FPS               float64           `json:"fps"`
+	Votes             int               `json:"votes"`
+	Points            int               `json:"points"`
+	Ratings           float64           `json:"ratings"`
+	FromTrusted       bool              `json:"from_trusted"`
+	ForeignPartsOnly  bool              `json:"foreign_parts_only"`
+	AITranslated      bool              `json:"ai_translated"`
 	MachineTranslated bool              `json:"machine_translated"`
-	UploadDate       string              `json:"upload_date"`
-	Release          string              `json:"release"`
-	Comments         string              `json:"comments"`
-	URL              string              `json:"url"`
-	FeatureDetails   *OSFeatureDetails   `json:"feature_details,omitempty"`
-	Uploader         *OSUploader         `json:"uploader,omitempty"`
-	Files            []OSFile            `json:"files"`
+	UploadDate        string            `json:"upload_date"`
+	Release           string            `json:"release"`
+	Comments          string            `json:"comments"`
+	URL               string            `json:"url"`
+	FeatureDetails    *OSFeatureDetails `json:"feature_details,omitempty"`
+	Uploader          *OSUploader       `json:"uploader,omitempty"`
+	Files             []OSFile          `json:"files"`
 }
 
 // OSFeatureDetails holds media details from the search result.

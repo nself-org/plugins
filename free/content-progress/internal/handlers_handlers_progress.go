@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"net/http"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
 )
 
 // =========================================================================
@@ -144,4 +144,3 @@ func handleRecentlyWatched(db *DB) http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, map[string]interface{}{"data": items})
 	}
 }
-

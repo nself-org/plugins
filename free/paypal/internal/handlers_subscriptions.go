@@ -2,11 +2,11 @@ package internal
 
 import (
 	"context"
-	"net/http"
-	"time"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
+	"time"
 )
 
 func handleListSubscriptions(pool *pgxpool.Pool) http.HandlerFunc {

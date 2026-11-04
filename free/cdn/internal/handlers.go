@@ -584,12 +584,12 @@ func HandleCreateSignedURL(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAcct := sa(r)
 		var body struct {
-			ZoneID      string  `json:"zone_id"`
-			Path        string  `json:"path"`
-			ExpiresIn   *int    `json:"expires_in"`
-			Method      string  `json:"method"`
+			ZoneID        string  `json:"zone_id"`
+			Path          string  `json:"path"`
+			ExpiresIn     *int    `json:"expires_in"`
+			Method        string  `json:"method"`
 			IPRestriction *string `json:"ip_restriction"`
-			MaxAccess   *int    `json:"max_access"`
+			MaxAccess     *int    `json:"max_access"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			errJSON(w, http.StatusBadRequest, "invalid JSON body")

@@ -14,7 +14,7 @@ func TestStripControlSequences(t *testing.T) {
 	}{
 		{"\x1b[31mHello\x1b[0m", "Hello"},
 		{"plain text", "plain text"},
-		{"\x1b[2J\x1b[H", ""},        // clear screen + home
+		{"\x1b[2J\x1b[H", ""},              // clear screen + home
 		{"Hello\x1b[AWorld", "HelloWorld"}, // cursor up stripped
 	}
 	for _, c := range cases {

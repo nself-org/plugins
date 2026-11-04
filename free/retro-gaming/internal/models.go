@@ -37,38 +37,38 @@ type ROM struct {
 }
 
 type SaveState struct {
-	ID                    string     `json:"id"`
-	UserID                string     `json:"user_id"`
-	RomID                 string     `json:"rom_id"`
-	SourceAccountID       string     `json:"source_account_id"`
-	Slot                  int        `json:"slot"`
-	SaveStateFilePath     string     `json:"save_state_file_path"`
+	ID                     string    `json:"id"`
+	UserID                 string    `json:"user_id"`
+	RomID                  string    `json:"rom_id"`
+	SourceAccountID        string    `json:"source_account_id"`
+	Slot                   int       `json:"slot"`
+	SaveStateFilePath      string    `json:"save_state_file_path"`
 	SaveStateFileSizeBytes *int64    `json:"save_state_file_size_bytes,omitempty"`
-	ScreenshotURL         *string    `json:"screenshot_url,omitempty"`
-	ScreenshotLocalPath   *string    `json:"screenshot_local_path,omitempty"`
-	EmulatorCore          string     `json:"emulator_core"`
-	EmulatorVersion       *string    `json:"emulator_version,omitempty"`
-	Description           *string    `json:"description,omitempty"`
-	PlayTimeSeconds       int        `json:"play_time_seconds"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+	ScreenshotURL          *string   `json:"screenshot_url,omitempty"`
+	ScreenshotLocalPath    *string   `json:"screenshot_local_path,omitempty"`
+	EmulatorCore           string    `json:"emulator_core"`
+	EmulatorVersion        *string   `json:"emulator_version,omitempty"`
+	Description            *string   `json:"description,omitempty"`
+	PlayTimeSeconds        int       `json:"play_time_seconds"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type PlaySession struct {
-	ID               string     `json:"id"`
-	UserID           string     `json:"user_id"`
-	RomID            string     `json:"rom_id"`
-	SourceAccountID  string     `json:"source_account_id"`
-	Platform         string     `json:"platform"`
-	DeviceID         *string    `json:"device_id,omitempty"`
-	EmulatorCore     string     `json:"emulator_core"`
-	StartedAt        time.Time  `json:"started_at"`
-	EndedAt          *time.Time `json:"ended_at,omitempty"`
-	DurationSeconds  *int       `json:"duration_seconds,omitempty"`
-	SaveStateID      *string    `json:"save_state_id,omitempty"`
-	AutoSaveCreated  bool       `json:"auto_save_created"`
-	ControllerType   *string    `json:"controller_type,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"user_id"`
+	RomID           string     `json:"rom_id"`
+	SourceAccountID string     `json:"source_account_id"`
+	Platform        string     `json:"platform"`
+	DeviceID        *string    `json:"device_id,omitempty"`
+	EmulatorCore    string     `json:"emulator_core"`
+	StartedAt       time.Time  `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at,omitempty"`
+	DurationSeconds *int       `json:"duration_seconds,omitempty"`
+	SaveStateID     *string    `json:"save_state_id,omitempty"`
+	AutoSaveCreated bool       `json:"auto_save_created"`
+	ControllerType  *string    `json:"controller_type,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type EmulatorCore struct {
@@ -94,28 +94,28 @@ type EmulatorCore struct {
 }
 
 type ControllerConfig struct {
-	ID                 string    `json:"id"`
-	SourceAccountID    string    `json:"source_account_id"`
-	UserID             string    `json:"user_id"`
-	ConfigName         string    `json:"config_name"`
-	Platform           *string   `json:"platform,omitempty"`
-	ControllerType     string    `json:"controller_type"`
-	ButtonMapping      string    `json:"button_mapping"`
-	TouchLayout        *string   `json:"touch_layout,omitempty"`
-	AnalogSensitivity  float64   `json:"analog_sensitivity"`
-	VibrationEnabled   bool      `json:"vibration_enabled"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	SourceAccountID   string    `json:"source_account_id"`
+	UserID            string    `json:"user_id"`
+	ConfigName        string    `json:"config_name"`
+	Platform          *string   `json:"platform,omitempty"`
+	ControllerType    string    `json:"controller_type"`
+	ButtonMapping     string    `json:"button_mapping"`
+	TouchLayout       *string   `json:"touch_layout,omitempty"`
+	AnalogSensitivity float64   `json:"analog_sensitivity"`
+	VibrationEnabled  bool      `json:"vibration_enabled"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type CoreInstallation struct {
-	ID             string     `json:"id"`
-	UserID         string     `json:"user_id"`
-	SourceAccountID string    `json:"source_account_id"`
-	DeviceID       string     `json:"device_id"`
-	DevicePlatform string     `json:"device_platform"`
-	CoreName       string     `json:"core_name"`
-	CoreVersion    string     `json:"core_version"`
-	InstalledAt    time.Time  `json:"installed_at"`
-	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"user_id"`
+	SourceAccountID string     `json:"source_account_id"`
+	DeviceID        string     `json:"device_id"`
+	DevicePlatform  string     `json:"device_platform"`
+	CoreName        string     `json:"core_name"`
+	CoreVersion     string     `json:"core_version"`
+	InstalledAt     time.Time  `json:"installed_at"`
+	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
 }

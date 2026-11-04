@@ -1,8 +1,9 @@
 // family-gedcom plugin entrypoint — GEDCOM 5.5/7.0 to JSON converter.
 //
 // Purpose: Parse a GEDCOM file and convert individuals and families to the
-//          family plugin's expected JSON schema. Outputs JSON to stdout.
-//          Designed as a stateless import tool — no DB interaction.
+//
+//	family plugin's expected JSON schema. Outputs JSON to stdout.
+//	Designed as a stateless import tool — no DB interaction.
 //
 // Inputs:  GEDCOM_FILE env — path to GEDCOM file to parse.
 // Outputs: JSON array of parsed individuals to stdout; exit 0 on success.

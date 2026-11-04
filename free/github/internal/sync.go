@@ -153,4 +153,3 @@ func (s *SyncService) SyncResource(ctx context.Context, resource string) *SyncRe
 	result.Duration = time.Since(start).Milliseconds()
 	return result
 }
-

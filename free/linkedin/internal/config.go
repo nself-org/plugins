@@ -8,12 +8,12 @@ import (
 
 // Config holds runtime configuration for nself-linkedin.
 type Config struct {
-	DatabaseURL      string
-	Port             int
-	ClientID         string
-	ClientSecret     string
-	RedirectURI      string
-	InternalSecret   string
+	DatabaseURL    string
+	Port           int
+	ClientID       string
+	ClientSecret   string
+	RedirectURI    string
+	InternalSecret string
 }
 
 // LoadConfig reads configuration from environment variables.

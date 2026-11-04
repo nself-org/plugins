@@ -15,11 +15,11 @@ import (
 
 // GateStats holds aggregated check statistics for one or all gates.
 type GateStats struct {
-	GateID        *string   `json:"gate_id,omitempty"`
-	TotalChecks   int       `json:"total_checks"`
-	PassedChecks  int       `json:"passed_checks"`
-	FailedChecks  int       `json:"failed_checks"`
-	PassRate      float64   `json:"pass_rate"`
+	GateID        *string    `json:"gate_id,omitempty"`
+	TotalChecks   int        `json:"total_checks"`
+	PassedChecks  int        `json:"passed_checks"`
+	FailedChecks  int        `json:"failed_checks"`
+	PassRate      float64    `json:"pass_rate"`
 	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
 }
 

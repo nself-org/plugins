@@ -67,9 +67,9 @@ type fcmMessage struct {
 // We forward the caller's payload as the "notification" block if it contains
 // a valid {"notification": {...}} shape, or as "data" otherwise.
 type fcmMessageBody struct {
-	Token        string                 `json:"token"`
-	Notification *fcmNotification       `json:"notification,omitempty"`
-	Data         map[string]string      `json:"data,omitempty"`
+	Token        string            `json:"token"`
+	Notification *fcmNotification  `json:"notification,omitempty"`
+	Data         map[string]string `json:"data,omitempty"`
 }
 
 type fcmNotification struct {

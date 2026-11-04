@@ -189,8 +189,8 @@ func VerificationCallback(db *DB, cfg Config) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"success":          true,
-			"verification_id":  v.ID,
+			"success":           true,
+			"verification_id":   v.ID,
 			"source_account_id": sourceAccountID,
 		})
 	}

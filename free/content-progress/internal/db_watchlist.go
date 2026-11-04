@@ -1,9 +1,9 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"context"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"strings"
 	"time"
 )
@@ -144,4 +144,3 @@ func (d *DB) RemoveFromWatchlist(userID, contentType, contentID string) (bool, e
 	}
 	return tag.RowsAffected() > 0, nil
 }
-

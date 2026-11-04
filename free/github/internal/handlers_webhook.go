@@ -50,4 +50,3 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]bool{"received": true})
 }
-

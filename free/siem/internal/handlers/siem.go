@@ -52,11 +52,11 @@ func (h *Handler) listDestinations(w http.ResponseWriter, r *http.Request) {
 	var results []map[string]any
 	for rows.Next() {
 		var (
-			id, name, dtype, endpoint, schema string
+			id, name, dtype, endpoint, schema  string
 			batchSize, flushInterval, errCount int
-			enabled                             bool
-			lastShipped                         *time.Time
-			createdAt                           time.Time
+			enabled                            bool
+			lastShipped                        *time.Time
+			createdAt                          time.Time
 		)
 		if err := rows.Scan(&id, &name, &dtype, &endpoint, &batchSize,
 			&flushInterval, &schema, &enabled, &lastShipped, &errCount, &createdAt); err != nil {
@@ -84,13 +84,13 @@ func (h *Handler) listDestinations(w http.ResponseWriter, r *http.Request) {
 }
 
 type createDestinationRequest struct {
-	Name            string `json:"name"`
-	Type            string `json:"type"`
-	EndpointURL     string `json:"endpoint_url"`
-	APIKeyRef       string `json:"api_key_ref,omitempty"`
-	BatchSize       int    `json:"batch_size,omitempty"`
-	FlushIntervalS  int    `json:"flush_interval_s,omitempty"`
-	Schema          string `json:"schema,omitempty"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	EndpointURL    string `json:"endpoint_url"`
+	APIKeyRef      string `json:"api_key_ref,omitempty"`
+	BatchSize      int    `json:"batch_size,omitempty"`
+	FlushIntervalS int    `json:"flush_interval_s,omitempty"`
+	Schema         string `json:"schema,omitempty"`
 }
 
 // createDestination adds a new SIEM destination.
@@ -195,8 +195,8 @@ func (h *Handler) shipLog(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var (
 			logID, status, errDetail string
-			batchSize                 int
-			shippedAt                 time.Time
+			batchSize                int
+			shippedAt                time.Time
 		)
 		if err := rows.Scan(&logID, &batchSize, &shippedAt, &status, &errDetail); err != nil {
 			httpError(w, "scan failed", http.StatusInternalServerError)
@@ -221,9 +221,9 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	var destCount int
 	_ = h.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM np_siem_destinations WHERE enabled = true`).Scan(&destCount)
 	writeJSON(w, map[string]any{
-		"status":           "ok",
-		"enabled_dests":    destCount,
-		"agent":            "running",
+		"status":        "ok",
+		"enabled_dests": destCount,
+		"agent":         "running",
 	})
 }
 

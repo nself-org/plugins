@@ -233,4 +233,3 @@ func Migrate(pool *pgxpool.Pool) error {
 	`)
 	return err
 }
-

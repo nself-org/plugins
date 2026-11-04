@@ -7,14 +7,14 @@ import (
 const DefaultPort = "3010"
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	ClientID        string
-	ClientSecret    string
-	RedirectURI     string
-	Scopes          string
-	Sandbox         bool
-	WebhookSecret   string
+	Port          string
+	DatabaseURL   string
+	ClientID      string
+	ClientSecret  string
+	RedirectURI   string
+	Scopes        string
+	Sandbox       bool
+	WebhookSecret string
 }
 
 func LoadConfig() Config {

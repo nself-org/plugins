@@ -3,11 +3,11 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"strconv"
 	"time"
-	"github.com/go-chi/chi/v5"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleGetDashboard(db *DB) http.HandlerFunc {

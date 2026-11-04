@@ -114,4 +114,3 @@ func (d *DB) RotateEncryptionKey(contentID, newKeyMaterial, newKeyIV, newKeyURI 
 
 	return &k, nil
 }
-

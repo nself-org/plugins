@@ -11,7 +11,8 @@ import (
 // Inputs:    Process environment (E2EE_* vars, DATABASE_URL).
 // Outputs:   *Config consumed by NewPool + NewHandlers.
 // Constraints: DATABASE_URL is required; the server NEVER reads or stores any
-//   private key material, so there is intentionally no encryption-key env var.
+//
+//	private key material, so there is intentionally no encryption-key env var.
 type Config struct {
 	Port        string
 	Host        string

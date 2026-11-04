@@ -4,20 +4,20 @@ import "time"
 
 // Zone represents a CDN zone record.
 type Zone struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	Provider        string     `json:"provider"`
-	ZoneID          string     `json:"zone_id"`
-	Name            string     `json:"name"`
-	Domain          string     `json:"domain"`
-	OriginURL       *string    `json:"origin_url"`
-	SSLEnabled      bool       `json:"ssl_enabled"`
-	CacheTTL        int        `json:"cache_ttl"`
-	Status          string     `json:"status"`
-	Config          []byte     `json:"config"`
-	Metadata        []byte     `json:"metadata"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	Provider        string    `json:"provider"`
+	ZoneID          string    `json:"zone_id"`
+	Name            string    `json:"name"`
+	Domain          string    `json:"domain"`
+	OriginURL       *string   `json:"origin_url"`
+	SSLEnabled      bool      `json:"ssl_enabled"`
+	CacheTTL        int       `json:"cache_ttl"`
+	Status          string    `json:"status"`
+	Config          []byte    `json:"config"`
+	Metadata        []byte    `json:"metadata"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // PurgeRequest represents a cache purge request record.
@@ -61,28 +61,28 @@ type Analytics struct {
 
 // SignedURL represents a signed URL record.
 type SignedURL struct {
-	ID              string     `json:"id"`
-	SourceAccountID string     `json:"source_account_id"`
-	ZoneID          string     `json:"zone_id"`
-	OriginalURL     string     `json:"original_url"`
-	SignedURLValue  string     `json:"signed_url"`
-	ExpiresAt       time.Time  `json:"expires_at"`
-	IPRestriction   *string    `json:"ip_restriction"`
-	AccessCount     int        `json:"access_count"`
-	MaxAccess       *int       `json:"max_access"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	ZoneID          string    `json:"zone_id"`
+	OriginalURL     string    `json:"original_url"`
+	SignedURLValue  string    `json:"signed_url"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	IPRestriction   *string   `json:"ip_restriction"`
+	AccessCount     int       `json:"access_count"`
+	MaxAccess       *int      `json:"max_access"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // PluginStats holds aggregate statistics for the CDN plugin.
 type PluginStats struct {
-	TotalZones           int64            `json:"total_zones"`
-	ActiveZones          int64            `json:"active_zones"`
-	TotalPurgeRequests   int64            `json:"total_purge_requests"`
-	PendingPurges        int64            `json:"pending_purges"`
-	TotalSignedURLs      int64            `json:"total_signed_urls"`
-	ActiveSignedURLs     int64            `json:"active_signed_urls"`
-	AnalyticsDaysTracked int64            `json:"analytics_days_tracked"`
-	TotalRequestsTracked int64            `json:"total_requests_tracked"`
-	TotalBandwidthTracked int64           `json:"total_bandwidth_tracked"`
-	ByProvider           map[string]int64 `json:"by_provider"`
+	TotalZones            int64            `json:"total_zones"`
+	ActiveZones           int64            `json:"active_zones"`
+	TotalPurgeRequests    int64            `json:"total_purge_requests"`
+	PendingPurges         int64            `json:"pending_purges"`
+	TotalSignedURLs       int64            `json:"total_signed_urls"`
+	ActiveSignedURLs      int64            `json:"active_signed_urls"`
+	AnalyticsDaysTracked  int64            `json:"analytics_days_tracked"`
+	TotalRequestsTracked  int64            `json:"total_requests_tracked"`
+	TotalBandwidthTracked int64            `json:"total_bandwidth_tracked"`
+	ByProvider            map[string]int64 `json:"by_provider"`
 }
