@@ -27,7 +27,8 @@ func TestGoModuleDirs(t *testing.T) {
 		{"testdata ignored", []string{"a/testdata/go.mod", "testdata/go.mod", "Cargo.toml"}, nil, []string{"rust"}},
 		{"dot dir ignored", []string{".github/x/go.mod", "Cargo.toml"}, nil, []string{"rust"}},
 		{"depth 3 ignored", []string{"a/b/c/go.mod", "Cargo.toml"}, nil, []string{"rust"}},
-		{"depth 1", []string{"svc/go.mod"}, []string{"svc"}, []string{"go"}},
+		{"depth 1", []string{"svc/go.mod", "Cargo.toml"}, []string{"svc"}, []string{"go", "rust"}},
+		{"nested without root Cargo.toml stays out", []string{"package.json", "free/a/go.mod", "sdk/go.mod"}, nil, []string{"node"}},
 		{"root wins over nested", []string{"go.mod", "paid/a/go.mod"}, []string{"."}, []string{"go"}},
 		{"empty repo", nil, nil, nil},
 	}
