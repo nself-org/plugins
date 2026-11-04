@@ -364,14 +364,7 @@
   "tables": [
     "np_change_log",
     "np_access_reviews",
-    "np_vendor_registry",
-    "compliance_dsars",
-    "compliance_dsar_activities",
-    "compliance_consents",
-    "compliance_consent_history",
-    "compliance_privacy_policies",
-    "compliance_data_exports",
-    "compliance_webhook_events"
+    "np_vendor_registry"
   ],
   "tags": [
     "compliance",
