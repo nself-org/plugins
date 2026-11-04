@@ -56,10 +56,19 @@ for patch in "${patches[@]}"; do
 	cp "$patch" "$tmp/m$((i % jobs))/test/security/testdata/regressions/"
 	i=$((i + 1))
 done
+# The baseline (the unpatched copy must be green) is identical in every copy, so it runs ONCE, alone, before the
+# parallel copies start; each copy then skips it. Run per copy under load, all baselines hit `go test -timeout 120s`
+# together (run 41817924922, D-1541). The 120 s limit is unchanged; every patch is still applied and must be killed.
+echo "security-suite: baseline of the planted-regression copy" >&2
+if ! MUTATE_BASELINE=only bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m0" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/base.txt" 2>&1; then
+	cat "$tmp/base.txt" >&2
+	echo "security-suite: the baseline of the regression copy failed" >&2
+	exit 1
+fi
 for ((g = 0; g < jobs; g++)); do
 	(
 		rc=0
-		bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1 || rc=$?
+		MUTATE_BASELINE=skip bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1 || rc=$?
 		echo "$rc" >"$tmp/mut$g.rc"
 	) &
 done

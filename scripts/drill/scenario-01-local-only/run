@@ -129,7 +129,7 @@ else
 	p1b=$(cut_packets)
 	if [ "${p1:-0}" -gt "${p0:-0}" ] && { [ "$CUT_OS" != Linux ] || [ "${p1b:-0}" -gt "${p1:-0}" ]; }; then
 		ev_pass egress-cut "probes (an address and, on Linux, a name) failed and were counted ($p0 -> $p1 -> $p1b packets); $CUT_NOTE; $(cut_info)"
-		p1=$p1b
+		p1=$(cut_job_packets) h1=$(cut_host_packets)
 	else
 		ev_fail egress-cut "a probe failed but the rules counted nothing ($p0 -> $p1 -> $p1b): $(cut_info)"
 		finish
@@ -260,11 +260,14 @@ done
 
 # 7. Nothing tried to leave the machine after the probe.
 if [ -z "$nocut" ]; then
-	p2=$(cut_packets)
+	# Only packets the job emitted count (its group, and its containers forwarded off a bridge). The docker and containerd
+	# daemons' own output is the runner host's background (D-1541: two DNS packets, dropped, nothing escaped): reported.
+	p2=$(cut_job_packets)
+	h2=$(cut_host_packets)
 	if [ "${p2:-x}" = "${p1:-y}" ]; then
-		ev_pass no-egress-after-cut "0 packets counted after the probes ($p1 -> $p2); $CUT_NOTE; $(cut_info)"
+		ev_pass no-egress-after-cut "0 job packets counted after the probes ($p1 -> $p2); host background (docker/containerd daemons, dropped, not asserted) $((h2 - ${h1:-0})) since the probes; $CUT_NOTE; $(cut_info)"
 	else
-		ev_fail no-egress-after-cut "the rule counted ${p2:-?} packets, $p1 at the probe: $(cut_info) daemon drops by destination: $(cut_daemon_drops)"
+		ev_fail no-egress-after-cut "the job's rules counted ${p2:-?} packets, $p1 at the probe: $(cut_info) daemon drops by destination: $(cut_daemon_drops)"
 	fi
 	cut_remove
 fi
