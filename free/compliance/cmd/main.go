@@ -96,14 +96,6 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.InitSchema(context.Background()); err != nil {
-		log.Fatalf("init schema: %v", err)
-	}
-
-	if err := db.InitSOC2Schema(context.Background()); err != nil {
-		log.Fatalf("init soc2 schema: %v", err)
-	}
-
 	r := newRouter(db)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
