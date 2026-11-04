@@ -154,6 +154,18 @@ A demand declined for a reason that can pass is not marked. That covers a capped
 
 The poll reads a project by its configured id, else by the id a signed delivery pinned, else by its path. It reads nothing when no GitLab project is configured.
 
+## Hosted run liveness
+
+A hosted run has no agent sending heartbeats. The coordinator keeps its lease alive by asking the provider about the run instead.
+
+- At start, the coordinator registers a lease profile for every hosted provider. The profile sets how often the run is checked and how long the lease lives between checks.
+- A poll loop checks each live hosted lease once per profile interval. A queued or running run renews the lease, so a job that waits ten minutes for a hosted machine is not dispatched again.
+- A run the provider no longer knows is marked lost one lease lifetime later, and an idempotent job is retried.
+- A finished run is reported by the process that dispatched it, which also collects the evidence. The poll loop does not close a lease that process still holds.
+- A failed check is logged and tried again on the next tick. The loop stops with the coordinator.
+
+The poll loop only watches leases the scheduler already placed. It does not place work, and it does not change any spend rule. A paid placement still needs a spend policy.
+
 ## Hosted capacity
 
 ### Included capacity and cost class

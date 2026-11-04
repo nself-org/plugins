@@ -17,7 +17,8 @@ package runtime
 //          run is never unreachable; a run whose handle cannot be kept is cancelled. Every failed Run
 //          forgets its handle (cancelling the run when its state is unknown), so the retry of a lost
 //          attempt dispatches a fresh run; a handle of an older epoch is cancelled and replaced, one of
-//          a newer epoch fences the carrier out (E708). Dormant unless compat.V15().
+//          a newer epoch fences the carrier out (E708). While Run carries an attempt, the lease profile
+//          does not finish it (carry.go): the result is this carrier's to report. Dormant unless compat.V15().
 
 import (
 	"context"
@@ -65,6 +66,7 @@ type Driver struct {
 	facts FactsSource
 	sleep func(context.Context, time.Duration) error
 	now   func() time.Time
+	carry carrySet // the attempts a Run of this process is carrying (carry.go)
 }
 
 var defaultDriver = &Driver{book: NewMemBook(), facts: defaultFacts, sleep: sleepCtx, now: time.Now}
@@ -145,6 +147,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 	if !compat.V15() {
 		return refused("E708", "hosted dispatch needs v1.5")
 	}
+	defer d.carry.hold(l.AttemptID)()
 	d.mu.RLock()
 	book, facts, sleep, now := d.book, d.facts, d.sleep, d.now
 	d.mu.RUnlock()
