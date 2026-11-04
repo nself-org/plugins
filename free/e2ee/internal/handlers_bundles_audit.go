@@ -4,10 +4,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"github.com/go-chi/chi/v5"
-	"net/http"
 	pgx "github.com/jackc/pgx/v5"
+	"net/http"
 )
-
 
 // ============================================================================
 // Prekey bundle (atomic consumption)

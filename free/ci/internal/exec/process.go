@@ -1,5 +1,13 @@
 package exec
 
+// Purpose: start a process job step on the host and wait for it: workdir confinement, the env wrapper
+// fold, the job-shim chain with its workspace hand-off (StepShim, D-1230), the gated start and the
+// process group's termination on cancel.
+// Inputs:  the JobSpec, the attempt's workspace and the step's environment.
+// Outputs: the exit status, the signal that ended the step, and an error for a step that could not run.
+// Constraints: a step never starts unmarked (gated start); a shim step that cannot be handed over never
+//          starts, and its outputs are taken back only after it passed.
+
 import (
 	"context"
 	"io"
@@ -35,6 +43,26 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
 	s.Command, env = foldEnvPrefix(s.Command, env) // an env wrapper is applied here, not by another exec
+	if s.Shim != nil {
+		// the payload reaches the job user only through the chain's stdin; the agent never execs it
+		runDir, stepEnv, finish, err := s.Shim.stage(ctx, s.AttemptID, workspace, resolvedRoot, workdir, env)
+		if err != nil {
+			return -1, "", err
+		}
+		if env, s.Stdin, err = s.Shim.launch(workdir, runDir, stepEnv, s.Stdin); err != nil {
+			return -1, "", err
+		}
+		code, sig, err := e.startStep(ctx, s, workdir, env)
+		if ferr := finish(err == nil && code == 0 && ctx.Err() == nil); ferr != nil && err == nil {
+			err = ferr
+		}
+		return code, sig, err
+	}
+	return e.startStep(ctx, s, workdir, env)
+}
+
+// startStep starts the step's command (gated when GatedStart is set) and waits for it.
+func (e *Executor) startStep(ctx context.Context, s JobSpec, workdir string, env []string) (int, string, error) {
 	if !e.GatedStart {
 		return e.runCommandSig(ctx, s.Stdin, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
 			return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)

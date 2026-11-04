@@ -176,4 +176,3 @@ func handleDeleteKey(db *DB) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
-

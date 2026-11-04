@@ -47,31 +47,31 @@ type Donor struct {
 
 // Donation represents a row in np_donorbox_donations.
 type Donation struct {
-	ID                 int              `json:"id"`
-	SourceAccountID    string           `json:"source_account_id"`
-	CampaignID         *int             `json:"campaign_id"`
-	CampaignName       *string          `json:"campaign_name"`
-	DonorID            *int             `json:"donor_id"`
-	DonorEmail         *string          `json:"donor_email"`
-	DonorName          *string          `json:"donor_name"`
-	Amount             float64          `json:"amount"`
-	ConvertedAmount    *float64         `json:"converted_amount"`
-	ConvertedNetAmount *float64         `json:"converted_net_amount"`
-	AmountRefunded     float64          `json:"amount_refunded"`
-	Currency           string           `json:"currency"`
-	DonationType       *string          `json:"donation_type"`
-	DonationDate       *time.Time       `json:"donation_date"`
-	ProcessingFee      *float64         `json:"processing_fee"`
-	Status             *string          `json:"status"`
-	Recurring          bool             `json:"recurring"`
-	Comment            *string          `json:"comment"`
-	Designation        *string          `json:"designation"`
-	StripeChargeID     *string          `json:"stripe_charge_id"`
-	PaypalTxnID        *string          `json:"paypal_transaction_id"`
-	Questions          json.RawMessage  `json:"questions"`
-	CreatedAt          *time.Time       `json:"created_at"`
-	UpdatedAt          *time.Time       `json:"updated_at"`
-	SyncedAt           *time.Time       `json:"synced_at"`
+	ID                 int             `json:"id"`
+	SourceAccountID    string          `json:"source_account_id"`
+	CampaignID         *int            `json:"campaign_id"`
+	CampaignName       *string         `json:"campaign_name"`
+	DonorID            *int            `json:"donor_id"`
+	DonorEmail         *string         `json:"donor_email"`
+	DonorName          *string         `json:"donor_name"`
+	Amount             float64         `json:"amount"`
+	ConvertedAmount    *float64        `json:"converted_amount"`
+	ConvertedNetAmount *float64        `json:"converted_net_amount"`
+	AmountRefunded     float64         `json:"amount_refunded"`
+	Currency           string          `json:"currency"`
+	DonationType       *string         `json:"donation_type"`
+	DonationDate       *time.Time      `json:"donation_date"`
+	ProcessingFee      *float64        `json:"processing_fee"`
+	Status             *string         `json:"status"`
+	Recurring          bool            `json:"recurring"`
+	Comment            *string         `json:"comment"`
+	Designation        *string         `json:"designation"`
+	StripeChargeID     *string         `json:"stripe_charge_id"`
+	PaypalTxnID        *string         `json:"paypal_transaction_id"`
+	Questions          json.RawMessage `json:"questions"`
+	CreatedAt          *time.Time      `json:"created_at"`
+	UpdatedAt          *time.Time      `json:"updated_at"`
+	SyncedAt           *time.Time      `json:"synced_at"`
 }
 
 // Plan represents a row in np_donorbox_plans.

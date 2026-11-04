@@ -97,4 +97,3 @@ func handleStats(db *DB) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, stats)
 	}
 }
-

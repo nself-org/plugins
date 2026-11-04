@@ -30,7 +30,7 @@ func New() (*Client, error) {
 		return nil, fmt.Errorf("stripe: STRIPE_PLATFORM_SECRET_KEY not set")
 	}
 	return &Client{
-		secretKey: key,
+		secretKey:  key,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
@@ -38,7 +38,7 @@ func New() (*Client, error) {
 // NewWithKey creates a Client with an explicit secret key (useful for tests).
 func NewWithKey(key string) *Client {
 	return &Client{
-		secretKey: key,
+		secretKey:  key,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }

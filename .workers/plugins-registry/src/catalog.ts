@@ -2,9 +2,10 @@
  * catalog.ts: GET /catalog.json (P7-PLUG-08).
  *
  * Fetches the generated catalog, keeps its compact serialisation and sha256
- * together in KV, and serves it with a strong ETag and 304 handling.
+ * together (Cache API, plus the KV copy POST /api/sync writes), and serves it
+ * with a strong ETag and 304 handling.
  *
- * Imports: registry.ts (KV helpers, GitHub decode), http.ts (response helpers).
+ * Imports: registry.ts (GitHub decode), synced-store.ts (KV copy), http.ts.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
   isFresh,
 } from "./registry.ts";
 import { edgeGetWrapped, edgePutWrapped } from "./edge-cache.ts";
+import { kvReadLagSeconds, readSyncedIntoEdge, sha256Hex, writeSynced } from "./synced-store.ts";
 import type { Env, GitHubContentsResponse } from "./registry.ts";
 import { corsHeaders, jsonResponse } from "./http.ts";
 
@@ -45,13 +47,6 @@ export interface CatalogResult {
 /** A STALE copy is retried against GitHub after this many seconds, not on every request. */
 const STALE_RETRY_SECONDS = 60;
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 /**
  * True for a plausible catalog: an object with a schema_version (number or string) and a
  * non-empty plugins collection. An empty or unversioned body is an upstream
@@ -75,7 +70,7 @@ export async function buildCatalogBody(data: unknown): Promise<CatalogBody> {
 }
 
 /**
- * Loads the catalog: fresh KV copy first, then GitHub (Contents API with the
+ * Loads the catalog: fresh Cache API copy first, then the synced KV copy, then GitHub (Contents API with the
  * token, else the raw URL; the repo is public). A body that is not a catalog
  * is never cached or served. When the upstream fails and an expired KV copy
  * exists it is served as STALE rather than failing. Returns null when there
@@ -96,6 +91,12 @@ export async function fetchCatalog(
   const ageSeconds = cached ? Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000)) : 0;
   if (!bypass && cached && usable && isFresh(cached, ttl)) {
     return { catalog: cached.data, cache: "HIT", ageSeconds };
+  }
+  if (!bypass) {
+    const synced = await readSyncedIntoEdge<CatalogBody>(env, ctx, KV_CATALOG);
+    if (synced && typeof synced.body === "string" && typeof synced.etag === "string") {
+      return { catalog: synced, cache: "HIT", ageSeconds: kvReadLagSeconds(env) };
+    }
   }
 
   // Contents API first (token); any failure there, including a decode error or an
@@ -137,6 +138,8 @@ export async function fetchCatalog(
   if (looksLikeCatalog(data)) {
     const catalog = await buildCatalogBody(data);
     ctx.waitUntil(edgePutWrapped(KV_CATALOG, catalog));
+    // Only POST /api/sync writes KV; the etag is already the sha256 of the body.
+    if (bypass) await writeSynced(env, KV_CATALOG, catalog, catalog.etag);
     return { catalog, cache: "MISS", ageSeconds: 0 };
   }
 
@@ -170,8 +173,8 @@ export function etagMatches(ifNoneMatch: string | null, etag: string): boolean {
 // Compact JSON with a strong ETag (the sha256 hex of the exact body, quoted).
 // A request whose If-None-Match lists that tag (or *) gets 304 with no body.
 // The ETag changes exactly when the catalog bytes change. KV key catalog:json
-// is refreshed by POST /api/sync (a bypassing refetch; the old copy survives
-// a failed refetch and is then served STALE).
+// is written by POST /api/sync when the bytes changed (a failed refetch keeps
+// the old copies; an expired Cache API copy is then served STALE).
 // ---------------------------------------------------------------------------
 
 export async function handleCatalog(

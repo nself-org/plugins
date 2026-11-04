@@ -119,17 +119,25 @@ Set via `wrangler secret put`:
 
 ## KV Namespace
 
-The Worker keeps revocations, durable ratings/install data and sync statistics in
-Workers KV. Public response envelopes and per-IP GET/POST rate counters use
-`caches.default`; public reads do not put or delete KV, including statistics.
-`/stats` retains historical counters and records the last authenticated sync.
+The Worker keeps revocations, durable ratings/install data and the synced
+registry copies in Workers KV. Public reads never put or delete KV.
 
-Cache API entries are local to each data center and may be evicted. Rate limits
-are best effort within each data center, with the existing GET and POST minute
-thresholds. Envelope timestamps control freshness (default five minutes), while
-catalog entries remain available for stale fallback for up to a day, subject to
-eviction. Sync invalidates local edge keys; other data centers refresh on TTL.
-Catalog sync preserves the old copy if upstream is unavailable.
+Read order for `registry:free`, `registry:pro` and `catalog:json` (D-1543):
+Cache API (fresh for `CACHE_TTL`), then the KV copy written by `POST /api/sync`
+(12 h expiry), then GitHub. A GitHub fetch fills the Cache API only. The sync
+writes a key only when its sha256 changed, so a repeat sync of identical content
+writes nothing, and concurrent syncs in one isolate share one run. A Cache API
+fill from KV is back-dated 60 s (KV read lag), so a sync is live everywhere
+within `CACHE_TTL`. `/stats` keeps the frozen `registryHits`/`registryFetches`
+totals the retired index.js stored; `lastSync` is the newest sync that changed
+a KV copy.
+
+Rate limits (60 GETs, 5 rating POSTs per IP per minute) use the
+`MARKETPLACE_GET_LIMITER` / `MARKETPLACE_POST_LIMITER` rate limit bindings when
+bound, else a per-data-center Cache API counter. Cache API entries are local to
+each data center and may be evicted; catalog entries remain available for stale
+fallback for up to a day. Sync invalidates local edge keys; other data centers
+refresh on TTL. Catalog sync preserves the old copy if upstream is unavailable.
 
 The owner must deploy the fixed worker. Before and after deployment, compare
 Cloudflare GraphQL `kvOperationsAdaptiveGroups` reads/writes/deletes for the

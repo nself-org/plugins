@@ -63,12 +63,12 @@ func (e *Extractor) FromRequest(r *http.Request) (UserInfo, error) {
 // Parse validates a raw JWT string and returns the extracted UserInfo.
 //
 // V05-F3: enforces two security requirements beyond signature validity:
-//   1. The `aud` claim MUST contain ExpectedAudience ("nself-vault"). Tokens
-//      issued for other services (nself-sync, hasura, custom plugins) are
-//      rejected even when signed with the same secret. This prevents
-//      cross-service token reuse.
-//   2. The `exp` claim MUST be present AND in the future. Tokens without an
-//      expiration are rejected — never accept eternal tokens against the vault.
+//  1. The `aud` claim MUST contain ExpectedAudience ("nself-vault"). Tokens
+//     issued for other services (nself-sync, hasura, custom plugins) are
+//     rejected even when signed with the same secret. This prevents
+//     cross-service token reuse.
+//  2. The `exp` claim MUST be present AND in the future. Tokens without an
+//     expiration are rejected — never accept eternal tokens against the vault.
 func (e *Extractor) Parse(raw string) (UserInfo, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (interface{}, error) {

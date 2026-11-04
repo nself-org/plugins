@@ -54,7 +54,7 @@ func TestBillableStorage(t *testing.T) {
 		mtdGB   float64
 		wantQty int
 	}{
-		{10, 0, 0},    // 50GB free, 10 used today, still free
+		{10, 0, 0},     // 50GB free, 10 used today, still free
 		{10, 50, 1000}, // mtd = 50, no free left, 10GB × 100 = 1000
 		{5, 48, 300},   // 2GB free remain, 3GB billable × 100 = 300
 	}
@@ -77,7 +77,7 @@ func TestBillableEgress(t *testing.T) {
 		mtdGB   float64
 		wantQty int
 	}{
-		{20, 0, 0},     // 100GB free, well within
+		{20, 0, 0},      // 100GB free, well within
 		{20, 100, 2000}, // mtd = 100, 20GB billable × 100
 		{15, 90, 500},   // 10GB free remain, 5GB billable × 100 = 500
 	}

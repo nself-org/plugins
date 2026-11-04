@@ -112,25 +112,25 @@ func (h *Handlers) CreateROM(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sa := h.sa(r)
 	var body struct {
-		RomFilePath      string   `json:"rom_file_path"`
-		RomFileSizeBytes *int64   `json:"rom_file_size_bytes"`
-		RomFileHash      *string  `json:"rom_file_hash"`
-		GameTitle        string   `json:"game_title"`
-		Platform         string   `json:"platform"`
-		Region           *string  `json:"region"`
-		ReleaseYear      *int     `json:"release_year"`
-		Genre            *string  `json:"genre"`
-		Publisher        *string  `json:"publisher"`
-		Developer        *string  `json:"developer"`
-		IgdbID           *int     `json:"igdb_id"`
-		MobyGamesID      *int     `json:"moby_games_id"`
-		BoxArtURL        *string  `json:"box_art_url"`
-		BoxArtLocalPath  *string  `json:"box_art_local_path"`
-		Description      *string  `json:"description"`
+		RomFilePath       string  `json:"rom_file_path"`
+		RomFileSizeBytes  *int64  `json:"rom_file_size_bytes"`
+		RomFileHash       *string `json:"rom_file_hash"`
+		GameTitle         string  `json:"game_title"`
+		Platform          string  `json:"platform"`
+		Region            *string `json:"region"`
+		ReleaseYear       *int    `json:"release_year"`
+		Genre             *string `json:"genre"`
+		Publisher         *string `json:"publisher"`
+		Developer         *string `json:"developer"`
+		IgdbID            *int    `json:"igdb_id"`
+		MobyGamesID       *int    `json:"moby_games_id"`
+		BoxArtURL         *string `json:"box_art_url"`
+		BoxArtLocalPath   *string `json:"box_art_local_path"`
+		Description       *string `json:"description"`
 		DescriptionSource *string `json:"description_source"`
-		RecommendedCore  *string  `json:"recommended_core"`
-		ScanSource       *string  `json:"scan_source"`
-		AddedByUserID    *string  `json:"added_by_user_id"`
+		RecommendedCore   *string `json:"recommended_core"`
+		ScanSource        *string `json:"scan_source"`
+		AddedByUserID     *string `json:"added_by_user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -209,18 +209,18 @@ func (h *Handlers) UpdateROM(w http.ResponseWriter, r *http.Request) {
 	sa := h.sa(r)
 	id := chi.URLParam(r, "id")
 	var body struct {
-		GameTitle        *string  `json:"game_title"`
-		Platform         *string  `json:"platform"`
-		Region           *string  `json:"region"`
-		ReleaseYear      *int     `json:"release_year"`
-		Genre            *string  `json:"genre"`
-		Publisher        *string  `json:"publisher"`
-		Developer        *string  `json:"developer"`
-		BoxArtURL        *string  `json:"box_art_url"`
-		Description      *string  `json:"description"`
-		RecommendedCore  *string  `json:"recommended_core"`
-		UserRating       *float64 `json:"user_rating"`
-		Favorite         *bool    `json:"favorite"`
+		GameTitle       *string  `json:"game_title"`
+		Platform        *string  `json:"platform"`
+		Region          *string  `json:"region"`
+		ReleaseYear     *int     `json:"release_year"`
+		Genre           *string  `json:"genre"`
+		Publisher       *string  `json:"publisher"`
+		Developer       *string  `json:"developer"`
+		BoxArtURL       *string  `json:"box_art_url"`
+		Description     *string  `json:"description"`
+		RecommendedCore *string  `json:"recommended_core"`
+		UserRating      *float64 `json:"user_rating"`
+		Favorite        *bool    `json:"favorite"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -319,17 +319,17 @@ func (h *Handlers) CreateSaveState(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sa := h.sa(r)
 	var body struct {
-		UserID                string  `json:"user_id"`
-		RomID                 string  `json:"rom_id"`
-		Slot                  int     `json:"slot"`
-		SaveStateFilePath     string  `json:"save_state_file_path"`
-		SaveStateFileSizeBytes *int64 `json:"save_state_file_size_bytes"`
-		ScreenshotURL         *string `json:"screenshot_url"`
-		ScreenshotLocalPath   *string `json:"screenshot_local_path"`
-		EmulatorCore          string  `json:"emulator_core"`
-		EmulatorVersion       *string `json:"emulator_version"`
-		Description           *string `json:"description"`
-		PlayTimeSeconds       *int    `json:"play_time_seconds"`
+		UserID                 string  `json:"user_id"`
+		RomID                  string  `json:"rom_id"`
+		Slot                   int     `json:"slot"`
+		SaveStateFilePath      string  `json:"save_state_file_path"`
+		SaveStateFileSizeBytes *int64  `json:"save_state_file_size_bytes"`
+		ScreenshotURL          *string `json:"screenshot_url"`
+		ScreenshotLocalPath    *string `json:"screenshot_local_path"`
+		EmulatorCore           string  `json:"emulator_core"`
+		EmulatorVersion        *string `json:"emulator_version"`
+		Description            *string `json:"description"`
+		PlayTimeSeconds        *int    `json:"play_time_seconds"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -708,11 +708,11 @@ func (h *Handlers) UpdateEmulatorCore(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 	var body struct {
-		DisplayName         *string `json:"display_name"`
-		CoreWasmPath        *string `json:"core_wasm_path"`
-		Version             *string `json:"version"`
-		IsRecommended       *bool   `json:"is_recommended"`
-		Priority            *int    `json:"priority"`
+		DisplayName   *string `json:"display_name"`
+		CoreWasmPath  *string `json:"core_wasm_path"`
+		Version       *string `json:"version"`
+		IsRecommended *bool   `json:"is_recommended"`
+		Priority      *int    `json:"priority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})

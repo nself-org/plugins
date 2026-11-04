@@ -40,26 +40,26 @@ type APIDonor struct {
 
 // APIDonation is the JSON shape returned by the Donorbox API for donations.
 type APIDonation struct {
-	ID                int                    `json:"id"`
-	Campaign          APIDonationCampaign    `json:"campaign"`
-	Donor             APIDonationDonor       `json:"donor"`
-	Amount            string                 `json:"amount"`
-	ConvertedAmount   string                 `json:"converted_amount"`
-	ConvertedNetAmt   string                 `json:"converted_net_amount"`
-	Recurring         bool                   `json:"recurring"`
-	AmountRefunded    string                 `json:"amount_refunded"`
-	Currency          string                 `json:"currency"`
-	DonationType      string                 `json:"donation_type"`
-	DonationDate      string                 `json:"donation_date"`
-	ProcessingFee     string                 `json:"processing_fee"`
-	Status            string                 `json:"status"`
-	Comment           string                 `json:"comment"`
-	Designation       string                 `json:"designation"`
-	StripeChargeID    *string                `json:"stripe_charge_id"`
-	PaypalTxnID       *string                `json:"paypal_transaction_id"`
-	Questions         []map[string]string    `json:"questions"`
-	CreatedAt         string                 `json:"created_at"`
-	UpdatedAt         string                 `json:"updated_at"`
+	ID              int                 `json:"id"`
+	Campaign        APIDonationCampaign `json:"campaign"`
+	Donor           APIDonationDonor    `json:"donor"`
+	Amount          string              `json:"amount"`
+	ConvertedAmount string              `json:"converted_amount"`
+	ConvertedNetAmt string              `json:"converted_net_amount"`
+	Recurring       bool                `json:"recurring"`
+	AmountRefunded  string              `json:"amount_refunded"`
+	Currency        string              `json:"currency"`
+	DonationType    string              `json:"donation_type"`
+	DonationDate    string              `json:"donation_date"`
+	ProcessingFee   string              `json:"processing_fee"`
+	Status          string              `json:"status"`
+	Comment         string              `json:"comment"`
+	Designation     string              `json:"designation"`
+	StripeChargeID  *string             `json:"stripe_charge_id"`
+	PaypalTxnID     *string             `json:"paypal_transaction_id"`
+	Questions       []map[string]string `json:"questions"`
+	CreatedAt       string              `json:"created_at"`
+	UpdatedAt       string              `json:"updated_at"`
 }
 
 // APIDonationCampaign is the nested campaign object in an API donation.
@@ -79,18 +79,18 @@ type APIDonationDonor struct {
 
 // APIPlan is the JSON shape returned by the Donorbox API for recurring plans.
 type APIPlan struct {
-	ID               int              `json:"id"`
-	Campaign         APIPlanCampaign  `json:"campaign"`
-	Donor            APIPlanDonor     `json:"donor"`
-	Type             string           `json:"type"`
-	Amount           string           `json:"amount"`
-	Currency         string           `json:"currency"`
-	Status           string           `json:"status"`
-	StartedAt        string           `json:"started_at"`
-	LastDonationDate string           `json:"last_donation_date"`
-	NextDonationDate string           `json:"next_donation_date"`
-	CreatedAt        string           `json:"created_at"`
-	UpdatedAt        string           `json:"updated_at"`
+	ID               int             `json:"id"`
+	Campaign         APIPlanCampaign `json:"campaign"`
+	Donor            APIPlanDonor    `json:"donor"`
+	Type             string          `json:"type"`
+	Amount           string          `json:"amount"`
+	Currency         string          `json:"currency"`
+	Status           string          `json:"status"`
+	StartedAt        string          `json:"started_at"`
+	LastDonationDate string          `json:"last_donation_date"`
+	NextDonationDate string          `json:"next_donation_date"`
+	CreatedAt        string          `json:"created_at"`
+	UpdatedAt        string          `json:"updated_at"`
 }
 
 // APIPlanCampaign is the nested campaign object in an API plan.
@@ -130,16 +130,16 @@ type APIEvent struct {
 
 // APITicket is the JSON shape returned by the Donorbox API for tickets.
 type APITicket struct {
-	ID         int              `json:"id"`
-	Event      APITicketEvent   `json:"event"`
-	Donor      APITicketDonor   `json:"donor"`
-	TicketType string           `json:"ticket_type"`
-	Quantity   int              `json:"quantity"`
-	Amount     string           `json:"amount"`
-	Currency   string           `json:"currency"`
-	Status     string           `json:"status"`
-	CreatedAt  string           `json:"created_at"`
-	UpdatedAt  string           `json:"updated_at"`
+	ID         int            `json:"id"`
+	Event      APITicketEvent `json:"event"`
+	Donor      APITicketDonor `json:"donor"`
+	TicketType string         `json:"ticket_type"`
+	Quantity   int            `json:"quantity"`
+	Amount     string         `json:"amount"`
+	Currency   string         `json:"currency"`
+	Status     string         `json:"status"`
+	CreatedAt  string         `json:"created_at"`
+	UpdatedAt  string         `json:"updated_at"`
 }
 
 // APITicketEvent is the nested event object in an API ticket.

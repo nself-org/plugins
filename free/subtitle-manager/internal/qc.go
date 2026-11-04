@@ -132,4 +132,3 @@ func (q *SubtitleQC) ValidateSubtitle(subtitlePath string, videoDurationMs *int6
 	log.Printf("subtitle-manager: QC complete status=%s cues=%d issues=%d", status, len(cues), len(issues))
 	return result, nil
 }
-

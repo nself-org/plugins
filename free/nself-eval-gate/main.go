@@ -93,7 +93,7 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		mig := bootMigrationsHealth(w) // writes 503 on a status error, before the body below
+		mig := bootMigrationsHealth(w)                                                                            // writes 503 on a status error, before the body below
 		json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "nself-eval-gate", "migrations": mig}) //nolint:errcheck
 	})
 

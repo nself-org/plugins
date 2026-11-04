@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
 	pgx "github.com/jackc/pgx/v5"
+	"time"
 )
 
 // ============================================================================
@@ -63,4 +63,3 @@ func (d *DB) GetDefaultClient() (*TorrentClient, error) {
 	}
 	return &c, nil
 }
-

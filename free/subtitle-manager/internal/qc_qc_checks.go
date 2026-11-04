@@ -276,5 +276,3 @@ func parseTimeParts(h, m, s, ms string) int64 {
 	millis, _ := strconv.ParseInt(ms, 10, 64)
 	return hours*3600000 + mins*60000 + secs*1000 + millis
 }
-
-

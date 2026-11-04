@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
 	pgx "github.com/jackc/pgx/v5"
+	"time"
 )
 
 // ============================================================================
@@ -92,4 +92,3 @@ func (d *DB) GetDownloadSeedingPolicy(downloadID string) (*DownloadSeedingPolicy
 	}
 	return &p, nil
 }
-

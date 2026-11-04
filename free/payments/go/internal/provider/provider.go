@@ -10,11 +10,11 @@ import (
 type SubscriptionStatus string
 
 const (
-	StatusActive    SubscriptionStatus = "active"
-	StatusPastDue   SubscriptionStatus = "past_due"
-	StatusCanceled  SubscriptionStatus = "canceled"
-	StatusPaused    SubscriptionStatus = "paused"
-	StatusTrialing  SubscriptionStatus = "trialing"
+	StatusActive   SubscriptionStatus = "active"
+	StatusPastDue  SubscriptionStatus = "past_due"
+	StatusCanceled SubscriptionStatus = "canceled"
+	StatusPaused   SubscriptionStatus = "paused"
+	StatusTrialing SubscriptionStatus = "trialing"
 )
 
 // Subscription is the canonical subscription record across all providers.
@@ -73,7 +73,7 @@ type UsageRecord struct {
 type Plan struct {
 	ID       string
 	Name     string
-	Price    int64  // in cents
+	Price    int64 // in cents
 	Currency string
 	Interval string // month|year
 }

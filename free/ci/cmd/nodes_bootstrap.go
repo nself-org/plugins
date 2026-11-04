@@ -5,8 +5,9 @@ package main
 // user for the job shim only, the agent under /opt/nself-ci-agent). The work is in
 // internal/nodes/bootstrap; this file registers the flags, the "system" installer and a guard hook.
 // Inputs:  `--system` (selects the installer), `--slots N` (job users, default 2), `--agent-binary`.
-// Outputs: a node with the system layout installed. `nodes add` still records it as NOT uid-separated:
-//          the agent does not run jobs through the shim yet (debt row), so no secret or signing right follows.
+// Outputs: a node with the system layout installed. `nodes add` records it uid-separated only when the
+//          installer's probe proved the job shim chain and the node key's EACCES from a job user (D-1230);
+//          a failed probe records it NOT uid-separated with the probe's reason, so no secret or signing right follows.
 // Constraints: the ssh user must be root or have passwordless sudo (E669 no_root); `--system` without
 //          the installer having run (no --agent-binary, or another --installer) fails the add before the
 //          node is registered; a macOS node without a registered family gets the brew commands printed;
@@ -124,9 +125,15 @@ func systemInstall(ctx context.Context, d *lifecycle.Deps, r lifecycle.InstallRe
 	if err = linkAgent(ctx, run, r.Dir); err != nil {
 		return err
 	}
-	// The users, rules and directories exist, but nothing runs jobs through the shim yet and a push-mode
-	// agent still runs as the ssh user, so the node stays recorded as not uid-separated (review M2).
-	_, _ = fmt.Fprintln(d.Stderr, "system layout installed; the node is recorded as not uid-separated until the agent runs jobs through the job shim")
+	// The layout alone proves nothing: the node is recorded uid-separated only when the job chain and the
+	// node key's EACCES were both proven on the node (nodes_separation_probe.go, D-1230).
+	proof := probeSeparation(ctx, run, r.Platform.OS)
+	d.Separation = shimSeparation{inner: d.Separation, result: proof}
+	if proof.OK {
+		_, _ = fmt.Fprintln(d.Stderr, "system layout installed; job shim chain and node key EACCES proven: the node is recorded uid-separated")
+	} else {
+		_, _ = fmt.Fprintf(d.Stderr, "system layout installed; separation not proven (%s): the node is recorded as not uid-separated\n", proof.Reason)
+	}
 	installed.Store(r.NodeID, true)
 	return nil
 }

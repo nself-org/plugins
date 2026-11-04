@@ -115,11 +115,11 @@ func (s *Synchronizer) isFfsubsyncAvailable() bool {
 // ---------------------------------------------------------------------------
 
 var (
-	reConfidence       = regexp.MustCompile(`(?i)confidence[:\s]+([0-9.]+)`)
-	reAlassOffset      = regexp.MustCompile(`(?i)offset[:\s]+([+-]?[0-9.]+)\s*(?:ms)?`)
-	reAlassFramerate   = regexp.MustCompile(`(?i)(?:framerate|fps.*adjust|rescal)`)
-	reFfsubsyncConf    = regexp.MustCompile(`(?i)(?:sync\s*(?:quality|score|confidence))[:\s]+([0-9.]+)`)
-	reFfsubsyncRatio   = regexp.MustCompile(`(?i)framerate\s*ratio[:\s]+([0-9.]+)`)
-	reFfsubsyncOffMs   = regexp.MustCompile(`(?i)offset[:\s]+([+-]?[0-9.]+)\s*ms`)
-	reFfsubsyncOffSec  = regexp.MustCompile(`(?i)offset\s*(?:seconds)?[:\s]+([+-]?[0-9.]+)`)
+	reConfidence      = regexp.MustCompile(`(?i)confidence[:\s]+([0-9.]+)`)
+	reAlassOffset     = regexp.MustCompile(`(?i)offset[:\s]+([+-]?[0-9.]+)\s*(?:ms)?`)
+	reAlassFramerate  = regexp.MustCompile(`(?i)(?:framerate|fps.*adjust|rescal)`)
+	reFfsubsyncConf   = regexp.MustCompile(`(?i)(?:sync\s*(?:quality|score|confidence))[:\s]+([0-9.]+)`)
+	reFfsubsyncRatio  = regexp.MustCompile(`(?i)framerate\s*ratio[:\s]+([0-9.]+)`)
+	reFfsubsyncOffMs  = regexp.MustCompile(`(?i)offset[:\s]+([+-]?[0-9.]+)\s*ms`)
+	reFfsubsyncOffSec = regexp.MustCompile(`(?i)offset\s*(?:seconds)?[:\s]+([+-]?[0-9.]+)`)
 )

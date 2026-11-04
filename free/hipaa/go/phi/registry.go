@@ -15,16 +15,16 @@ import (
 
 // PHIColumn represents a registered PHI-containing column.
 type PHIColumn struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	TenantID         *string   `json:"tenant_id,omitempty"`
-	TableName        string    `json:"table_name"`
-	ColumnName       string    `json:"column_name"`
-	PHICategory      string    `json:"phi_category"`
-	DeIDMethod       string    `json:"de_id_method"`
-	CreatedBy        *string   `json:"created_by,omitempty"`
-	AuditNote        *string   `json:"audit_note,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	TenantID        *string   `json:"tenant_id,omitempty"`
+	TableName       string    `json:"table_name"`
+	ColumnName      string    `json:"column_name"`
+	PHICategory     string    `json:"phi_category"`
+	DeIDMethod      string    `json:"de_id_method"`
+	CreatedBy       *string   `json:"created_by,omitempty"`
+	AuditNote       *string   `json:"audit_note,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // RegisterPHIColumnRequest is the request body for POST /hipaa/phi-columns.

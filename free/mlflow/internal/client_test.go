@@ -76,8 +76,8 @@ func TestGetExperiment_HappyPath(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"experiment": map[string]interface{}{
-				"experiment_id": "42",
-				"name":          "test-experiment",
+				"experiment_id":   "42",
+				"name":            "test-experiment",
 				"lifecycle_stage": "active",
 			},
 		})

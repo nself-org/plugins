@@ -10,10 +10,10 @@ import (
 
 // Config holds runtime configuration for nself-post.
 type Config struct {
-	DatabaseURL      string
-	Port             int
-	InternalSecret   string
-	EncryptionKey    string
+	DatabaseURL    string
+	Port           int
+	InternalSecret string
+	EncryptionKey  string
 }
 
 // LoadConfig reads configuration from environment variables.

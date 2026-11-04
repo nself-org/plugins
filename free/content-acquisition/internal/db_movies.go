@@ -164,4 +164,3 @@ func (d *DB) DeleteMovieMonitoring(id string) (bool, error) {
 	}
 	return tag.RowsAffected() > 0, nil
 }
-

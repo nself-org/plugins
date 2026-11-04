@@ -21,11 +21,11 @@ var watchdogClient = httpclient.New(httpclient.Options{Timeout: 30 * time.Second
 
 // Handlers holds the pool and watchdog state.
 type Handlers struct {
-	pool   *pgxpool.Pool
-	cfg    Config
-	mu     sync.Mutex
-	wdStop chan struct{}
-	wdLast *time.Time
+	pool    *pgxpool.Pool
+	cfg     Config
+	mu      sync.Mutex
+	wdStop  chan struct{}
+	wdLast  *time.Time
 	wdStart *time.Time
 }
 

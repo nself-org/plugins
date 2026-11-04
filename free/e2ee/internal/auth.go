@@ -31,9 +31,9 @@ type principalCtxKey struct{}
 
 // Principal is the authenticated caller derived from gateway-forwarded headers.
 type Principal struct {
-	UserID         string // X-Hasura-User-Id (verified JWT subject)
-	SourceAccount  string // multi-app isolation key (Convention A)
-	Role           string // X-Hasura-Role
+	UserID        string // X-Hasura-User-Id (verified JWT subject)
+	SourceAccount string // multi-app isolation key (Convention A)
+	Role          string // X-Hasura-Role
 }
 
 // hasuraUserIDHeaders are the headers Hasura forwards for the verified subject.

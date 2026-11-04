@@ -10,7 +10,10 @@
 #   credential fails at once with a message instead of waiting for a password.
 # Inputs:  CUT_WORK (a scratch directory for the watchdog's stop file); commands to run inside the cut go to cut_exec.
 # Outputs: cut_preflight / cut_apply / cut_remove / cut_exec / cut_selftest / cut_probe_ip / cut_probe_dns / cut_packets /
-#          cut_info / CUT_NOTE (what the counters do and do not cover).
+#          cut_job_packets / cut_host_packets / cut_count_chains / cut_info / CUT_NOTE (what the counters do and do not cover).
+#          cut_packets is the total; cut_job_packets counts only what the job's own group (and the containers it started,
+#          forwarded off a docker bridge) emitted; cut_host_packets counts the docker and containerd daemons' output, which
+#          is the runner host's background traffic (a daemon DNS lookup, D-1541) and is reported, not asserted on.
 # Constraints: the rule matches the drill's own group id (CUT_GID, unique per run), not the machine: a hosted runner's agent
 #   keeps reporting the job's log while the drill cannot reach the network. The table (Linux) and anchor (macOS) names carry
 #   the run's pid, so two runs never touch each other's rules; the system's firewall is left as it was. cut_exec drops
@@ -177,6 +180,33 @@ cut_packets() {
 	case "$CUT_OS" in
 	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>/dev/null | sed -n 's/.*counter packets \([0-9][0-9]*\).*/\1/p' | awk '{n += $1} END {print n + 0}' ;;
 	Darwin) sudo -n pfctl -a "$CUT_PF_ANCHOR" -s rules -v 2>/dev/null | sed -n 's/.*Packets: \([0-9][0-9]*\).*/\1/p' | awk '{n += $1} END {print n + 0}' ;;
+	esac
+}
+
+# cut_count_chains CHAIN...: read an `nft list table` listing on stdin, print the sum of the `counter packets N` values
+# in the named chains (0 when none). Pure text in, number out, so the fixture test can feed planted listings.
+cut_count_chains() {
+	awk -v want=" $* " '
+		/^[[:space:]]*chain [^ ]+ \{/ { cur = " " $2 " "; next }
+		/counter packets [0-9]+/ && index(want, cur) { match($0, /counter packets [0-9]+/); n += substr($0, RSTART + 16, RLENGTH - 16) }
+		END { print n + 0 }'
+}
+
+# cut_job_packets: packets dropped for the job itself: its group's output chain and forwarding off a docker bridge (the
+# containers its runs started). Linux reads those two chains and leaves out the daemons' chain; macOS rules are all
+# group-scoped, so it is the total.
+cut_job_packets() {
+	case "$CUT_OS" in
+	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>/dev/null | cut_count_chains out bridge_out ;;
+	*) cut_packets ;;
+	esac
+}
+
+# cut_host_packets: packets dropped from docker.service / containerd.service (host background, not the job). 0 on macOS.
+cut_host_packets() {
+	case "$CUT_OS" in
+	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>/dev/null | cut_count_chains docker_daemon ;;
+	*) echo 0 ;;
 	esac
 }
 

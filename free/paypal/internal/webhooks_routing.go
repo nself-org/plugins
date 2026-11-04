@@ -2,8 +2,8 @@ package internal
 
 import (
 	"context"
-	"log"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"log"
 )
 
 // Size-cap exception: webhook router/dispatcher — 53L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.

@@ -72,9 +72,9 @@ func (c *Client) ListLeagues(ctx context.Context, sport provider.Sport) ([]provi
 	sportName := sportToTSDB(sport)
 	var resp struct {
 		Leagues []struct {
-			IDLeague    string `json:"idLeague"`
-			StrLeague   string `json:"strLeague"`
-			StrCountry  string `json:"strCountry"`
+			IDLeague   string `json:"idLeague"`
+			StrLeague  string `json:"strLeague"`
+			StrCountry string `json:"strCountry"`
 		} `json:"leagues"`
 	}
 	if err := c.get(ctx, fmt.Sprintf("/search_all_leagues.php?s=%s", sportName), &resp); err != nil {
@@ -124,12 +124,12 @@ func (c *Client) ListEvents(ctx context.Context, leagueID string, from, to time.
 func (c *Client) LiveScore(ctx context.Context, eventID string) (*provider.Event, error) {
 	var resp struct {
 		Event []struct {
-			IDEvent     string `json:"idEvent"`
-			IDLeague    string `json:"idLeague"`
-			IDHomeTeam  string `json:"idHomeTeam"`
-			IDAwayTeam  string `json:"idAwayTeam"`
-			DateEvent   string `json:"dateEvent"`
-			StrTime     string `json:"strTime"`
+			IDEvent      string `json:"idEvent"`
+			IDLeague     string `json:"idLeague"`
+			IDHomeTeam   string `json:"idHomeTeam"`
+			IDAwayTeam   string `json:"idAwayTeam"`
+			DateEvent    string `json:"dateEvent"`
+			StrTime      string `json:"strTime"`
 			IntHomeScore string `json:"intHomeScore"`
 			IntAwayScore string `json:"intAwayScore"`
 			StrStatus    string `json:"strStatus"`

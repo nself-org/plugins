@@ -2,9 +2,9 @@ package internal
 
 import (
 	"context"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // --- Health probes -----------------------------------------------------------
@@ -50,4 +50,3 @@ func handleStatus(db *DB) http.HandlerFunc {
 		})
 	}
 }
-

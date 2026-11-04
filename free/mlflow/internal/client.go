@@ -63,13 +63,13 @@ func (c *MLflowClient) get(ctx context.Context, path string, params url.Values, 
 
 // ExperimentInfo mirrors the MLflow experiment object returned by the REST API.
 type ExperimentInfo struct {
-	ExperimentID   string            `json:"experiment_id"`
-	Name           string            `json:"name"`
+	ExperimentID     string          `json:"experiment_id"`
+	Name             string          `json:"name"`
 	ArtifactLocation string          `json:"artifact_location"`
-	LifecycleStage string            `json:"lifecycle_stage"`
-	LastUpdateTime int64             `json:"last_update_time"`
-	CreationTime   int64             `json:"creation_time"`
-	Tags           []ExperimentTag   `json:"tags"`
+	LifecycleStage   string          `json:"lifecycle_stage"`
+	LastUpdateTime   int64           `json:"last_update_time"`
+	CreationTime     int64           `json:"creation_time"`
+	Tags             []ExperimentTag `json:"tags"`
 }
 
 // ExperimentTag is a key-value tag on an experiment.
@@ -194,25 +194,25 @@ func (c *MLflowClient) GetRun(ctx context.Context, runID string) (Run, error) {
 
 // RegisteredModel mirrors the MLflow registered model object.
 type RegisteredModel struct {
-	Name              string              `json:"name"`
-	CreationTimestamp int64               `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64            `json:"last_updated_timestamp"`
-	Description       string              `json:"description"`
-	LatestVersions    []ModelVersion      `json:"latest_versions"`
-	Tags              []RegisteredModelTag `json:"tags"`
+	Name                 string               `json:"name"`
+	CreationTimestamp    int64                `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64                `json:"last_updated_timestamp"`
+	Description          string               `json:"description"`
+	LatestVersions       []ModelVersion       `json:"latest_versions"`
+	Tags                 []RegisteredModelTag `json:"tags"`
 }
 
 // ModelVersion is a version entry within a registered model.
 type ModelVersion struct {
-	Name             string `json:"name"`
-	Version          string `json:"version"`
-	CreationTimestamp int64 `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64 `json:"last_updated_timestamp"`
-	CurrentStage     string `json:"current_stage"`
-	Description      string `json:"description"`
-	Source           string `json:"source"`
-	RunID            string `json:"run_id"`
-	Status           string `json:"status"`
+	Name                 string `json:"name"`
+	Version              string `json:"version"`
+	CreationTimestamp    int64  `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64  `json:"last_updated_timestamp"`
+	CurrentStage         string `json:"current_stage"`
+	Description          string `json:"description"`
+	Source               string `json:"source"`
+	RunID                string `json:"run_id"`
+	Status               string `json:"status"`
 }
 
 // RegisteredModelTag is a key-value tag on a registered model.

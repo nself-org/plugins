@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"encoding/json"
-	"time"
 	pgx "github.com/jackc/pgx/v5"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -72,4 +72,3 @@ func (d *DB) UpdateConnectionStatus(ctx context.Context, id, status string, disc
 		status, disconnectedAt, durationSec, id, d.sourceAccountID)
 	return err
 }
-

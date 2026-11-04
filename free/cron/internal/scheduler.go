@@ -19,9 +19,9 @@ import (
 
 // App holds shared state for the cron scheduler and HTTP handlers.
 type App struct {
-	Pool    *pgxpool.Pool
-	Config  *sdk.Config
-	Client  *http.Client
+	Pool   *pgxpool.Pool
+	Config *sdk.Config
+	Client *http.Client
 	// LockMgr handles advisory-lock-based cron job overlap detection (T05).
 	// Initialized in NewApp. Never nil after construction.
 	LockMgr *LockManager

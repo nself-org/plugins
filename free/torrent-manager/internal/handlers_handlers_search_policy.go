@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"io"
 	"log"
 	"net/http"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // ============================================================================
@@ -258,4 +258,3 @@ func (h *handler) checkVPN() bool {
 
 	return status.Connected
 }
-

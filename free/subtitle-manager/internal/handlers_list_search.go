@@ -3,8 +3,8 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
 )
 
 func handleListSubtitles(db *DB) http.HandlerFunc {
@@ -153,4 +153,3 @@ func handleSearchHash(osClient *OpenSubtitlesClient) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 // POST /v1/download
 // ---------------------------------------------------------------------------
-

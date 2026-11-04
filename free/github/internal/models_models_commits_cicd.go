@@ -120,29 +120,29 @@ type Workflow struct {
 
 // WorkflowRun represents a GitHub workflow run record (np_github_workflow_runs).
 type WorkflowRun struct {
-	ID                    int64      `json:"id"`
-	SourceAccountID       string     `json:"source_account_id"`
-	NodeID                *string    `json:"node_id"`
-	RepoID                *int64     `json:"repo_id"`
-	WorkflowID            *int64     `json:"workflow_id"`
-	WorkflowName          *string    `json:"workflow_name"`
-	Name                  *string    `json:"name"`
-	HeadBranch            *string    `json:"head_branch"`
-	HeadSHA               *string    `json:"head_sha"`
-	RunNumber             *int       `json:"run_number"`
-	RunAttempt            *int       `json:"run_attempt"`
-	Event                 *string    `json:"event"`
-	Status                *string    `json:"status"`
-	Conclusion            *string    `json:"conclusion"`
-	ActorLogin            *string    `json:"actor_login"`
-	TriggeringActorLogin  *string    `json:"triggering_actor_login"`
-	HTMLURL               *string    `json:"html_url"`
-	JobsURL               *string    `json:"jobs_url"`
-	LogsURL               *string    `json:"logs_url"`
-	RunStartedAt          *time.Time `json:"run_started_at"`
-	CreatedAt             *time.Time `json:"created_at"`
-	UpdatedAt             *time.Time `json:"updated_at"`
-	SyncedAt              *time.Time `json:"synced_at"`
+	ID                   int64      `json:"id"`
+	SourceAccountID      string     `json:"source_account_id"`
+	NodeID               *string    `json:"node_id"`
+	RepoID               *int64     `json:"repo_id"`
+	WorkflowID           *int64     `json:"workflow_id"`
+	WorkflowName         *string    `json:"workflow_name"`
+	Name                 *string    `json:"name"`
+	HeadBranch           *string    `json:"head_branch"`
+	HeadSHA              *string    `json:"head_sha"`
+	RunNumber            *int       `json:"run_number"`
+	RunAttempt           *int       `json:"run_attempt"`
+	Event                *string    `json:"event"`
+	Status               *string    `json:"status"`
+	Conclusion           *string    `json:"conclusion"`
+	ActorLogin           *string    `json:"actor_login"`
+	TriggeringActorLogin *string    `json:"triggering_actor_login"`
+	HTMLURL              *string    `json:"html_url"`
+	JobsURL              *string    `json:"jobs_url"`
+	LogsURL              *string    `json:"logs_url"`
+	RunStartedAt         *time.Time `json:"run_started_at"`
+	CreatedAt            *time.Time `json:"created_at"`
+	UpdatedAt            *time.Time `json:"updated_at"`
+	SyncedAt             *time.Time `json:"synced_at"`
 }
 
 // WorkflowJob represents a GitHub workflow job record (np_github_workflow_jobs).
@@ -165,7 +165,7 @@ type WorkflowJob struct {
 	RunnerGroupName *string          `json:"runner_group_name"`
 	JobLabels       *json.RawMessage `json:"labels"`
 	Steps           *json.RawMessage `json:"steps"`
-StartedAt       *time.Time       `json:"started_at"`
+	StartedAt       *time.Time       `json:"started_at"`
 	CompletedAt     *time.Time       `json:"completed_at"`
 	SyncedAt        *time.Time       `json:"synced_at"`
 }

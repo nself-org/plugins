@@ -2,10 +2,13 @@
 //
 // Purpose: Publish articles to Dev.to via the Forem Articles API.
 // Inputs: api_key (Dev.to API key from Settings > Account), article title,
-//         body_markdown content, optional tags (up to 4), optional series.
+//
+//	body_markdown content, optional tags (up to 4), optional series.
+//
 // Outputs: article ID and URL on success.
 // Constraints: Tags must be lowercase slugs. Published articles are live
-//              immediately; pass published=false to create as draft.
+//
+//	immediately; pass published=false to create as draft.
 package devto
 
 import (
@@ -38,11 +41,11 @@ func NewClient(apiKey string) *Client {
 
 // PostArgs carries the article content to publish.
 type PostArgs struct {
-	Title    string
-	Content  string   // Markdown body
-	Tags     []string // up to 4 lowercase slugs
-	Series   string   // optional series name
-	Published bool    // true to publish immediately
+	Title     string
+	Content   string   // Markdown body
+	Tags      []string // up to 4 lowercase slugs
+	Series    string   // optional series name
+	Published bool     // true to publish immediately
 }
 
 // PostResult is the outcome of a successful Dev.to article creation.

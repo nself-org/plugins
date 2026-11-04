@@ -12,9 +12,9 @@ import (
 // Redpanda does not support JetStream durable consumers; at-least-once delivery
 // is achieved via a committed consumer-group offset.
 type RedpandaBroker struct {
-	brokers  []string
-	writers  map[string]*kafka.Writer
-	readers  []*kafka.Reader
+	brokers []string
+	writers map[string]*kafka.Writer
+	readers []*kafka.Reader
 }
 
 // NewRedpandaBroker creates a Redpanda adapter.

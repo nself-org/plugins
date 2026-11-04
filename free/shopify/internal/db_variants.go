@@ -63,4 +63,3 @@ func (db *DB) CountVariants(ctx context.Context) (int, error) {
 	err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM np_shopify_variants WHERE source_account_id = $1`, db.SourceAccountID).Scan(&count)
 	return count, err
 }
-

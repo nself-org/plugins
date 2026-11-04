@@ -161,4 +161,3 @@ func (d *DB) GetPluginStats() (*PluginStats, error) {
 		LastActivity:     lastActivity,
 	}, nil
 }
-

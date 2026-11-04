@@ -146,4 +146,3 @@ func parseVTTCues(content string) []SubtitleCue {
 	}
 	return cues
 }
-

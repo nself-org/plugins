@@ -118,7 +118,7 @@ func ReWrap(kr *KeyRing, env *Envelope) (*Envelope, error) {
 
 // Marshal serialises an Envelope to bytes for DB storage:
 //
-//   [1 byte frame=1] [4 bytes KEKVersion BE] [24 bytes nonce] [N bytes ciphertext+tag]
+//	[1 byte frame=1] [4 bytes KEKVersion BE] [24 bytes nonce] [N bytes ciphertext+tag]
 //
 // The frame byte allows future format upgrades without breaking on-disk data.
 func (e *Envelope) Marshal() ([]byte, error) {

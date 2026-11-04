@@ -214,10 +214,10 @@ type WebhookEvent struct {
 
 // SyncResult holds the outcome of a sync operation.
 type SyncResult struct {
-	Success  bool              `json:"success"`
-	Synced   map[string]int    `json:"synced"`
-	Errors   []string          `json:"errors"`
-	Duration string            `json:"duration"`
+	Success  bool           `json:"success"`
+	Synced   map[string]int `json:"synced"`
+	Errors   []string       `json:"errors"`
+	Duration string         `json:"duration"`
 }
 
 // SyncStats holds per-table record counts.

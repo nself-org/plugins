@@ -562,8 +562,8 @@ func newTestAdapterWithBase(ts *httptest.Server) *Adapter {
 	// client already trusts the server's TLS cert; we additionally need to
 	// rewrite the host. We achieve this via a custom RoundTripper.
 	a.client.Transport = &rewriteHostTransport{
-		base:    ts.Client().Transport,
-		target:  ts.URL,
+		base:   ts.Client().Transport,
+		target: ts.URL,
 	}
 	return a
 }

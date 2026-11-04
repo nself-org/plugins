@@ -141,4 +141,3 @@ func (d *DB) RevokeContentTokens(contentID, reason string) (int64, error) {
 	}
 	return tag.RowsAffected(), nil
 }
-

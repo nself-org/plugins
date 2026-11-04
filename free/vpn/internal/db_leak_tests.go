@@ -48,4 +48,3 @@ func (d *DB) InsertLeakTest(ctx context.Context, connectionID, testType string, 
 		connectionID, testType, passed, expected, actual, detailsJSON, d.sourceAccountID)
 	return err
 }
-

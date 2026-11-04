@@ -3,10 +3,10 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"regexp"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleListServers(db *DB) http.HandlerFunc {
@@ -164,14 +164,14 @@ func handleConnect(db *DB) http.HandlerFunc {
 		}
 
 		resp := ConnectResponse{
-			ConnectionID: conn.ID,
-			Provider:     conn.ProviderID,
-			Server:       ptrStr(conn.ServerID),
-			VPNIP:        ptrStr(conn.VPNIP),
-			Interface:    ptrStr(conn.InterfaceName),
-			DNSServers:   conn.DNSServers,
+			ConnectionID:  conn.ID,
+			Provider:      conn.ProviderID,
+			Server:        ptrStr(conn.ServerID),
+			VPNIP:         ptrStr(conn.VPNIP),
+			Interface:     ptrStr(conn.InterfaceName),
+			DNSServers:    conn.DNSServers,
 			PortForwarded: conn.PortForwarded,
-			ConnectedAt:  conn.ConnectedAt,
+			ConnectedAt:   conn.ConnectedAt,
 		}
 
 		sdk.Respond(w, http.StatusOK, resp)

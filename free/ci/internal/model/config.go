@@ -4,17 +4,17 @@ package model
 
 // PipelineConfig is the authored ci.pipeline-config/v1 document.
 type PipelineConfig struct {
-	Version       int                    `json:"version"`
+	Version     int                    `json:"version"`
 	Coordinator any                    `json:"coordinator,omitempty"`
-	Support   []string               `json:"support,omitempty"`
-	Detect    *DetectConfig          `json:"detect,omitempty"`
-	Presets   []Preset               `json:"presets,omitempty"`
-	Services  map[string]Service     `json:"services,omitempty"`
-	Checks    map[string]CheckDef    `json:"checks,omitempty"`
-	Jobs      map[string]Job         `json:"jobs,omitempty"`
-	Pipelines map[string]PipelineDef `json:"pipelines,omitempty"`
-	Policy    map[string]any         `json:"policy,omitempty"`
-	Cache     *CacheConfig           `json:"cache,omitempty"`
+	Support     []string               `json:"support,omitempty"`
+	Detect      *DetectConfig          `json:"detect,omitempty"`
+	Presets     []Preset               `json:"presets,omitempty"`
+	Services    map[string]Service     `json:"services,omitempty"`
+	Checks      map[string]CheckDef    `json:"checks,omitempty"`
+	Jobs        map[string]Job         `json:"jobs,omitempty"`
+	Pipelines   map[string]PipelineDef `json:"pipelines,omitempty"`
+	Policy      map[string]any         `json:"policy,omitempty"`
+	Cache       *CacheConfig           `json:"cache,omitempty"`
 }
 
 // DetectConfig controls ecosystem detection.

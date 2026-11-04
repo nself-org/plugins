@@ -19,42 +19,42 @@ func TestExactScorerNormalization(t *testing.T) {
 		partial  bool
 	}{
 		{
-			name: "identical strings",
+			name:   "identical strings",
 			output: "hello world", expected: "hello world",
 			wantPass: true,
 		},
 		{
-			name: "case normalization",
+			name:   "case normalization",
 			output: "Hello World", expected: "hello world",
 			wantPass: true,
 		},
 		{
-			name: "whitespace collapse",
+			name:   "whitespace collapse",
 			output: "hello   world", expected: "hello world",
 			wantPass: true,
 		},
 		{
-			name: "tab normalization",
+			name:   "tab normalization",
 			output: "hello\tworld", expected: "hello world",
 			wantPass: true,
 		},
 		{
-			name: "leading/trailing trim",
+			name:   "leading/trailing trim",
 			output: "  hello world  ", expected: "hello world",
 			wantPass: true,
 		},
 		{
-			name: "unicode normalization — accented",
+			name:   "unicode normalization — accented",
 			output: "café", expected: "café",
 			wantPass: true,
 		},
 		{
-			name: "mismatch",
+			name:   "mismatch",
 			output: "hello earth", expected: "hello world",
 			wantPass: false,
 		},
 		{
-			name: "empty both",
+			name:   "empty both",
 			output: "", expected: "",
 			wantPass: true, // 1.0 >= default 0 threshold
 		},

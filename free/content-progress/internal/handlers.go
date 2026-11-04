@@ -50,4 +50,3 @@ func RegisterRoutes(r chi.Router, db *DB, cfg Config) {
 		r.Get("/events", handleListWebhookEvents(db))
 	})
 }
-

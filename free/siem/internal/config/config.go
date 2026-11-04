@@ -8,16 +8,16 @@ import (
 
 // Config holds all SIEM plugin runtime configuration.
 type Config struct {
-	DatabaseURL     string
-	Port            string
-	Host            string // SIEM_HOST — listen address; 127.0.0.1 unless the container sets 0.0.0.0
-	Enabled         bool   // NSELF_SIEM — enable external SIEM shipping
-	HighFreq        bool   // NSELF_SIEM_HF — < 5s flush (Enterprise)
-	DefaultSchema   string // ocsf|ecs|raw
-	BatchSize       int
-	FlushIntervalS  int
-	LokiURL         string
-	LogLevel        string
+	DatabaseURL    string
+	Port           string
+	Host           string // SIEM_HOST — listen address; 127.0.0.1 unless the container sets 0.0.0.0
+	Enabled        bool   // NSELF_SIEM — enable external SIEM shipping
+	HighFreq       bool   // NSELF_SIEM_HF — < 5s flush (Enterprise)
+	DefaultSchema  string // ocsf|ecs|raw
+	BatchSize      int
+	FlushIntervalS int
+	LokiURL        string
+	LogLevel       string
 }
 
 // Load reads configuration from environment with defaults.

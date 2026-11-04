@@ -330,9 +330,9 @@ func collectSystemMetrics() *SystemMetrics {
 			UsagePercent: usedPct,
 		},
 		Disk: DiskMetrics{
-			UsedBytes:    diskUsed,
-			TotalBytes:   diskTotal,
-			FreeBytes:    diskFree,
+			UsedBytes:  diskUsed,
+			TotalBytes: diskTotal,
+			FreeBytes:  diskFree,
 			UsagePercent: func() float64 {
 				if diskTotal == 0 {
 					return 0

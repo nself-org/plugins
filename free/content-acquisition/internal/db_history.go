@@ -44,4 +44,3 @@ func (d *DB) ListAcquisitionHistory(accountID string, days int) ([]AcquisitionHi
 	}
 	return items, rows.Err()
 }
-

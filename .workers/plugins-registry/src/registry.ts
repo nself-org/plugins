@@ -1,6 +1,9 @@
-/** Registry loaders: cache locally, fetch upstream on misses; no edge cache mutations. */
-import { edgeGetWrapped, edgePutWrapped } from "./edge-cache.ts";
-import { normaliseToArray, cacheTtl, isFresh, decodeGitHubContent } from "./registry-types.ts";
+/**
+ * Registry loaders: Cache API, then the KV copy POST /api/sync wrote, then GitHub
+ * (see synced-store.ts). Only the sync (bypass = true) writes KV.
+ */
+import { loadSynced } from "./synced-store.ts";
+import { normaliseToArray, decodeGitHubContent } from "./registry-types.ts";
 import type { Env, PluginEntry, RegistryWireFormat, GitHubContentsResponse } from "./registry-types.ts";
 export * from "./registry-types.ts";
 export * from "./bundles-data.ts";
@@ -20,15 +23,11 @@ export async function fetchFreeRegistry(
   ctx: ExecutionContext,
   bypass = false,
 ): Promise<PluginEntry[]> {
-  const ttl = cacheTtl(env);
+  const data = await loadSynced(env, ctx, KV_FREE, bypass, () => freeFromGitHub(env));
+  return data === null ? [] : normaliseToArray(data, "free");
+}
 
-  if (!bypass) {
-    const cached = await edgeGetWrapped<RegistryWireFormat>(KV_FREE);
-    if (cached && isFresh(cached, ttl)) {
-      return normaliseToArray(cached.data, "free");
-    }
-  }
-
+async function freeFromGitHub(env: Env): Promise<RegistryWireFormat> {
   let data: RegistryWireFormat | null = null;
 
   if (env.GH_ACCESS_TOKEN) {
@@ -62,9 +61,7 @@ export async function fetchFreeRegistry(
     }
     data = (await resp.json()) as RegistryWireFormat;
   }
-
-  ctx.waitUntil(edgePutWrapped(KV_FREE, data));
-  return normaliseToArray(data, "free");
+  return data;
 }
 
 export async function fetchProRegistry(
@@ -72,16 +69,12 @@ export async function fetchProRegistry(
   ctx: ExecutionContext,
   bypass = false,
 ): Promise<PluginEntry[] | null> {
-  const ttl = cacheTtl(env);
+  // Cache first (as the retired index.js did): a copy synced by /api/sync serves without a token.
+  const data = await loadSynced(env, ctx, KV_PRO, bypass, () => proFromGitHub(env));
+  return data === null ? null : normaliseToArray(data, "pro");
+}
 
-  // Cache first (as the retired index.js did): a edge copy synced by /api/sync serves without a token.
-  if (!bypass) {
-    const cached = await edgeGetWrapped<RegistryWireFormat>(KV_PRO);
-    if (cached && isFresh(cached, ttl)) {
-      return normaliseToArray(cached.data, "pro");
-    }
-  }
-
+async function proFromGitHub(env: Env): Promise<RegistryWireFormat | null> {
   if (!env.GH_ACCESS_TOKEN) {
     return null;
   }
@@ -108,9 +101,7 @@ export async function fetchProRegistry(
     console.error("Failed to decode pro registry content:", (e as Error).message);
     return null;
   }
-
-  ctx.waitUntil(edgePutWrapped(KV_PRO, data));
-  return normaliseToArray(data, "pro");
+  return data;
 }
 
 export async function fetchAllPlugins(

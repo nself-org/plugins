@@ -1,8 +1,31 @@
+/**
+ * Marketplace rate limits: 60 GETs and 5 rating POSTs per IP per minute.
+ * D-1543: the Workers rate limit binding decides when it is bound; without it
+ * (local dev, tests, before the binding is deployed) a per-colo Cache API
+ * counter does. Neither touches KV.
+ */
 import { edgeGet, edgePut } from "./edge-cache.ts";
 import type { MarketplaceEnv } from "./marketplace-types.ts";
+import type { RateLimitBinding } from "./registry-types.ts";
 
 const KV_GET_RL_PREFIX = "rl:get:";
 const DEFAULT_GET_RATE_LIMIT = 60;
+
+/** Binding verdict, or null when the binding is absent or failed (use the fallback). */
+async function bindingVerdict(
+  binding: RateLimitBinding | undefined,
+  key: string,
+): Promise<{ limited: boolean; retryAfter: number } | null> {
+  if (!binding) return null;
+  try {
+    const { success } = await binding.limit({ key });
+    return success
+      ? { limited: false, retryAfter: 0 }
+      : { limited: true, retryAfter: Math.max(1, 60 - new Date().getSeconds()) };
+  } catch {
+    return null;
+  }
+}
 
 // Cache API counters are best-effort and local to each Cloudflare data center.
 // Read/increment/write is non-atomic across concurrent requests and isolates.
@@ -41,6 +64,8 @@ async function isGetRateLimited(
   env: MarketplaceEnv,
   ip: string,
 ): Promise<{ limited: boolean; retryAfter: number }> {
+  const bound = await bindingVerdict(env.MARKETPLACE_GET_LIMITER, ip);
+  if (bound) return bound;
   const maxRequests = parseInt(env.MARKETPLACE_GET_RATE_LIMIT ?? String(DEFAULT_GET_RATE_LIMIT), 10);
   const window = currentMinuteWindow();
   const key = getIpRateLimitKey(ip, window);
@@ -79,6 +104,8 @@ function currentMinuteWindow(): string {
  * Uses an edge-cache counter with 90s TTL (covers current + next minute window).
  */
 export async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited: boolean; retryAfter: number }> {
+  const bound = await bindingVerdict(env.MARKETPLACE_POST_LIMITER, ip);
+  if (bound) return bound;
   const window = currentMinuteWindow();
   const key = ipRateLimitKey(ip, window);
 

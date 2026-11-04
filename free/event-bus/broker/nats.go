@@ -17,9 +17,9 @@ const (
 
 // NATSBroker is a JetStream-backed Broker adapter.
 type NATSBroker struct {
-	nc        *nats.Conn
-	js        jetstream.JetStream
-	stream    jetstream.Stream
+	nc          *nats.Conn
+	js          jetstream.JetStream
+	stream      jetstream.Stream
 	retentionMS int64
 	maxBytes    int64
 }
@@ -48,13 +48,13 @@ func newNATSBroker(nc *nats.Conn, retentionMS, maxBytes int64) (*NATSBroker, err
 	defer cancel()
 
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       natsStreamName,
-		Subjects:   []string{"nself.>"},
-		MaxAge:     time.Duration(retentionMS) * time.Millisecond,
-		MaxBytes:   maxBytes,
-		Storage:    jetstream.FileStorage,
-		Retention:  jetstream.LimitsPolicy,
-		Replicas:   1,
+		Name:      natsStreamName,
+		Subjects:  []string{"nself.>"},
+		MaxAge:    time.Duration(retentionMS) * time.Millisecond,
+		MaxBytes:  maxBytes,
+		Storage:   jetstream.FileStorage,
+		Retention: jetstream.LimitsPolicy,
+		Replicas:  1,
 	})
 	if err != nil {
 		nc.Close()

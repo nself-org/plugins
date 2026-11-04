@@ -29,34 +29,34 @@ type CreateInput struct {
 
 // StatusReport is the per-project status summary returned by ProjectStatus.
 type StatusReport struct {
-	Project        Project   `json:"project"`
-	ConnectionCount int      `json:"connection_count"`
-	SchemaBytes    int64     `json:"schema_bytes_approx"`
-	LastActiveAt   time.Time `json:"last_active_at"`
-	Healthy        bool      `json:"healthy"`
+	Project         Project   `json:"project"`
+	ConnectionCount int       `json:"connection_count"`
+	SchemaBytes     int64     `json:"schema_bytes_approx"`
+	LastActiveAt    time.Time `json:"last_active_at"`
+	Healthy         bool      `json:"healthy"`
 }
 
 // ControllerStatus is the summary returned by ControllerStatus (all projects).
 type ControllerStatus struct {
-	Projects     []StatusReport `json:"projects"`
-	TotalActive  int            `json:"total_active"`
-	MaxProjects  int            `json:"max_projects"`
-	UtilizationPct float64     `json:"utilization_pct"`
+	Projects       []StatusReport `json:"projects"`
+	TotalActive    int            `json:"total_active"`
+	MaxProjects    int            `json:"max_projects"`
+	UtilizationPct float64        `json:"utilization_pct"`
 }
 
 // AuditEventType enumerates known event types for project_audit_log.
 type AuditEventType = string
 
 const (
-	EventProjectCreate         AuditEventType = "project_create"
-	EventProjectDelete         AuditEventType = "project_delete"
-	EventProjectMigrate        AuditEventType = "project_migrate"
-	EventProjectSuspend        AuditEventType = "project_suspend"
-	EventProjectResume         AuditEventType = "project_resume"
-	EventRotateCredentials     AuditEventType = "project_rotate_credentials"
-	EventSourceRegister        AuditEventType = "source_register"
-	EventSourceDeregister      AuditEventType = "source_deregister"
-	EventNginxReload           AuditEventType = "nginx_reload"
+	EventProjectCreate     AuditEventType = "project_create"
+	EventProjectDelete     AuditEventType = "project_delete"
+	EventProjectMigrate    AuditEventType = "project_migrate"
+	EventProjectSuspend    AuditEventType = "project_suspend"
+	EventProjectResume     AuditEventType = "project_resume"
+	EventRotateCredentials AuditEventType = "project_rotate_credentials"
+	EventSourceRegister    AuditEventType = "source_register"
+	EventSourceDeregister  AuditEventType = "source_deregister"
+	EventNginxReload       AuditEventType = "nginx_reload"
 )
 
 // Initiator prefix constants used in audit log initiated_by field.

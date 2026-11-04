@@ -21,4 +21,3 @@ func coalesceStr(val, fallback string) string {
 	}
 	return val
 }
-

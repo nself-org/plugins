@@ -151,4 +151,3 @@ func (db *DB) UpsertTickets(ctx context.Context, records []Ticket) (int, error) 
 	}
 	return count, nil
 }
-

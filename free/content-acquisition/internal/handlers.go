@@ -85,4 +85,3 @@ func RegisterRoutes(r chi.Router, db *DB) {
 		r.Post("/rss/test", handleRSSTest())
 	})
 }
-

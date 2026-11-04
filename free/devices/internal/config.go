@@ -25,7 +25,7 @@ type Config struct {
 func LoadConfig() Config {
 	return Config{
 		Port:                    envInt("PORT", 3603),
-		Host:                   envStr("HOST", "0.0.0.0"),
+		Host:                    envStr("HOST", "0.0.0.0"),
 		DatabaseURL:             envStr("DATABASE_URL", ""),
 		EnrollmentTokenTTL:      envInt("DEV_ENROLLMENT_TOKEN_TTL", 3600),
 		ChallengeTTL:            envInt("DEV_CHALLENGE_TTL", 300),

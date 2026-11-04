@@ -78,7 +78,7 @@ func ExchangeCode(ctx context.Context, clientID, clientSecret, redirectURI, code
 
 // profileResponse is the minimal shape returned by /v2/me.
 type profileResponse struct {
-	ID        string `json:"id"`
+	ID                 string `json:"id"`
 	LocalizedFirstName string `json:"localizedFirstName"`
 	LocalizedLastName  string `json:"localizedLastName"`
 }
@@ -160,10 +160,10 @@ func fetchEmail(ctx context.Context, accessToken string) *string {
 
 // ugcPostBody is the LinkedIn UGC Share API request body.
 type ugcPostBody struct {
-	Author          string          `json:"author"`
-	LifecycleState  string          `json:"lifecycleState"`
-	SpecificContent ugcSpecific     `json:"specificContent"`
-	Visibility      ugcVisibility   `json:"visibility"`
+	Author          string        `json:"author"`
+	LifecycleState  string        `json:"lifecycleState"`
+	SpecificContent ugcSpecific   `json:"specificContent"`
+	Visibility      ugcVisibility `json:"visibility"`
 }
 
 type ugcSpecific struct {
@@ -171,9 +171,9 @@ type ugcSpecific struct {
 }
 
 type ugcShareContent struct {
-	ShareCommentary  ugcText      `json:"shareCommentary"`
+	ShareCommentary    ugcText    `json:"shareCommentary"`
 	ShareMediaCategory string     `json:"shareMediaCategory"`
-	Media            []ugcMedia   `json:"media,omitempty"`
+	Media              []ugcMedia `json:"media,omitempty"`
 }
 
 type ugcText struct {

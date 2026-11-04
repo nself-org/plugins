@@ -551,9 +551,9 @@ func (h *Handlers) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{
-		"share_id":  s.ID,
+		"share_id":    s.ID,
 		"share_token": token,
-		"share_url": "/api/v1/shared/" + token,
+		"share_url":   "/api/v1/shared/" + token,
 	})
 }
 

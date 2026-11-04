@@ -747,19 +747,19 @@ func (h *Handlers) LiveScores(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type liveEvent struct {
-		ID          string     `json:"id"`
-		ExternalID  string     `json:"external_id"`
-		Provider    string     `json:"provider"`
-		LeagueID    *string    `json:"league_id"`
-		HomeTeamID  *string    `json:"home_team_id"`
-		AwayTeamID  *string    `json:"away_team_id"`
-		Status      string     `json:"status"`
-		ScheduledAt time.Time  `json:"scheduled_at"`
-		HomeScore   *int       `json:"home_score"`
-		AwayScore   *int       `json:"away_score"`
-		Period      *string    `json:"period"`
-		Clock       *string    `json:"clock"`
-		IsFinal     bool       `json:"is_final"`
+		ID          string    `json:"id"`
+		ExternalID  string    `json:"external_id"`
+		Provider    string    `json:"provider"`
+		LeagueID    *string   `json:"league_id"`
+		HomeTeamID  *string   `json:"home_team_id"`
+		AwayTeamID  *string   `json:"away_team_id"`
+		Status      string    `json:"status"`
+		ScheduledAt time.Time `json:"scheduled_at"`
+		HomeScore   *int      `json:"home_score"`
+		AwayScore   *int      `json:"away_score"`
+		Period      *string   `json:"period"`
+		Clock       *string   `json:"clock"`
+		IsFinal     bool      `json:"is_final"`
 	}
 	var results []liveEvent
 	for rows.Next() {
@@ -821,23 +821,23 @@ func (h *Handlers) EPG(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type epgEntry struct {
-		ID               string     `json:"id"`
-		ExternalID       string     `json:"external_id"`
-		Provider         string     `json:"provider"`
-		Status           string     `json:"status"`
-		Start            time.Time  `json:"start"`
-		HomeScore        *int       `json:"home_score"`
-		AwayScore        *int       `json:"away_score"`
-		IsFinal          bool       `json:"is_final"`
-		BroadcastNetwork *string    `json:"broadcast_network"`
-		BroadcastChannel *string    `json:"broadcast_channel"`
-		Venue            *string    `json:"venue"`
-		Season           *string    `json:"season"`
-		HomeTeam         *string    `json:"home_team"`
-		AwayTeam         *string    `json:"away_team"`
-		League           *string    `json:"league"`
-		Sport            *string    `json:"sport"`
-		Title            string     `json:"title"`
+		ID               string    `json:"id"`
+		ExternalID       string    `json:"external_id"`
+		Provider         string    `json:"provider"`
+		Status           string    `json:"status"`
+		Start            time.Time `json:"start"`
+		HomeScore        *int      `json:"home_score"`
+		AwayScore        *int      `json:"away_score"`
+		IsFinal          bool      `json:"is_final"`
+		BroadcastNetwork *string   `json:"broadcast_network"`
+		BroadcastChannel *string   `json:"broadcast_channel"`
+		Venue            *string   `json:"venue"`
+		Season           *string   `json:"season"`
+		HomeTeam         *string   `json:"home_team"`
+		AwayTeam         *string   `json:"away_team"`
+		League           *string   `json:"league"`
+		Sport            *string   `json:"sport"`
+		Title            string    `json:"title"`
 	}
 
 	var entries []epgEntry

@@ -6,29 +6,29 @@ import "time"
 
 // Event represents a row in analytics_events.
 type Event struct {
-	ID              string          `json:"id"`
-	SourceAccountID string          `json:"source_account_id"`
-	EventName       string          `json:"event_name"`
-	EventCategory   *string         `json:"event_category"`
-	UserID          *string         `json:"user_id"`
-	SessionID       *string         `json:"session_id"`
-	Properties      JSONMap         `json:"properties"`
-	Context         JSONMap         `json:"context"`
-	SourcePlugin    *string         `json:"source_plugin"`
-	Timestamp       time.Time       `json:"timestamp"`
-	CreatedAt       time.Time       `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	EventName       string    `json:"event_name"`
+	EventCategory   *string   `json:"event_category"`
+	UserID          *string   `json:"user_id"`
+	SessionID       *string   `json:"session_id"`
+	Properties      JSONMap   `json:"properties"`
+	Context         JSONMap   `json:"context"`
+	SourcePlugin    *string   `json:"source_plugin"`
+	Timestamp       time.Time `json:"timestamp"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // TrackEventRequest is the body for POST /api/v1/events.
 type TrackEventRequest struct {
-	EventName     string          `json:"event_name"`
-	EventCategory string          `json:"event_category,omitempty"`
-	UserID        string          `json:"user_id,omitempty"`
-	SessionID     string          `json:"session_id,omitempty"`
-	Properties    JSONMap         `json:"properties,omitempty"`
-	Context       JSONMap         `json:"context,omitempty"`
-	SourcePlugin  string          `json:"source_plugin,omitempty"`
-	Timestamp     string          `json:"timestamp,omitempty"`
+	EventName     string  `json:"event_name"`
+	EventCategory string  `json:"event_category,omitempty"`
+	UserID        string  `json:"user_id,omitempty"`
+	SessionID     string  `json:"session_id,omitempty"`
+	Properties    JSONMap `json:"properties,omitempty"`
+	Context       JSONMap `json:"context,omitempty"`
+	SourcePlugin  string  `json:"source_plugin,omitempty"`
+	Timestamp     string  `json:"timestamp,omitempty"`
 }
 
 // TrackEventBatchRequest is the body for POST /api/v1/events/batch.
@@ -50,17 +50,17 @@ type Counter struct {
 
 // IncrementCounterRequest is the body for POST /api/v1/counters/increment.
 type IncrementCounterRequest struct {
-	CounterName string  `json:"counter_name"`
-	Dimension   string  `json:"dimension,omitempty"`
-	Amount      int64   `json:"amount,omitempty"`
+	CounterName string `json:"counter_name"`
+	Dimension   string `json:"dimension,omitempty"`
+	Amount      int64  `json:"amount,omitempty"`
 }
 
 // ─── Funnels ──────────────────────────────────────────────────────────────────
 
 // FunnelStep is a single step definition inside a funnel's steps JSON.
 type FunnelStep struct {
-	Name      string  `json:"name"`
-	EventName string  `json:"event_name"`
+	Name      string `json:"name"`
+	EventName string `json:"event_name"`
 }
 
 // Funnel represents a row in analytics_funnels.
@@ -97,13 +97,13 @@ type FunnelStepResult struct {
 
 // FunnelAnalysis is the response for GET /api/v1/funnels/{id}/analyze.
 type FunnelAnalysis struct {
-	FunnelID               string             `json:"funnel_id"`
-	FunnelName             string             `json:"funnel_name"`
-	Steps                  []FunnelStepResult `json:"steps"`
-	TotalEntered           int64              `json:"total_entered"`
-	TotalCompleted         int64              `json:"total_completed"`
-	OverallConversionRate  float64            `json:"overall_conversion_rate"`
-	AnalysisTimestamp      time.Time          `json:"analysis_timestamp"`
+	FunnelID              string             `json:"funnel_id"`
+	FunnelName            string             `json:"funnel_name"`
+	Steps                 []FunnelStepResult `json:"steps"`
+	TotalEntered          int64              `json:"total_entered"`
+	TotalCompleted        int64              `json:"total_completed"`
+	OverallConversionRate float64            `json:"overall_conversion_rate"`
+	AnalysisTimestamp     time.Time          `json:"analysis_timestamp"`
 }
 
 // ─── Quotas ───────────────────────────────────────────────────────────────────
@@ -126,14 +126,14 @@ type Quota struct {
 
 // CreateQuotaRequest is the body for POST /api/v1/quotas.
 type CreateQuotaRequest struct {
-	Name           string  `json:"name"`
-	Scope          string  `json:"scope,omitempty"`
-	ScopeID        string  `json:"scope_id,omitempty"`
-	CounterName    string  `json:"counter_name"`
-	MaxValue       int64   `json:"max_value"`
-	Period         string  `json:"period"`
-	ActionOnExceed string  `json:"action_on_exceed,omitempty"`
-	Enabled        *bool   `json:"enabled,omitempty"`
+	Name           string `json:"name"`
+	Scope          string `json:"scope,omitempty"`
+	ScopeID        string `json:"scope_id,omitempty"`
+	CounterName    string `json:"counter_name"`
+	MaxValue       int64  `json:"max_value"`
+	Period         string `json:"period"`
+	ActionOnExceed string `json:"action_on_exceed,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
 }
 
 // QuotaViolation represents a row in analytics_quota_violations.

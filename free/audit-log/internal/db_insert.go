@@ -2,8 +2,8 @@ package internal
 
 import (
 	"context"
-	"time"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func InsertEvent(ctx context.Context, pool *pgxpool.Pool, e *AuditEvent) error {

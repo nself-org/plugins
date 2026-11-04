@@ -1,14 +1,19 @@
 // Package twitter implements a Twitter/X v2 API publishing client.
 //
 // Purpose: Publish text tweets via the Twitter v2 API using OAuth2 Bearer token
-//          or OAuth1 user context.
+//
+//	or OAuth1 user context.
+//
 // Inputs: endpoint (unused, always api.twitter.com), bearer_token or
-//         oauth_consumer_key + oauth_consumer_secret + oauth_access_token +
-//         oauth_access_secret for user context posting.
+//
+//	oauth_consumer_key + oauth_consumer_secret + oauth_access_token +
+//	oauth_access_secret for user context posting.
+//
 // Outputs: tweet ID and URL on success.
 // Constraints: Text is truncated to 280 chars. Images not supported in this
-//              adapter (media upload requires a separate API call). Rate limit
-//              is 50 posts/24h on the Basic tier.
+//
+//	adapter (media upload requires a separate API call). Rate limit
+//	is 50 posts/24h on the Basic tier.
 package twitter
 
 import (

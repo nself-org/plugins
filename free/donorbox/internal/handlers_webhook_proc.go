@@ -30,4 +30,3 @@ func processDonationWebhook(ctx context.Context, db *DB, payload map[string]inte
 	log.Printf("[nself-donorbox] donation created via webhook: id=%d amount=%s", donation.ID, donation.Amount)
 	return nil
 }
-

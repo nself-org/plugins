@@ -37,39 +37,39 @@ type GeoCache struct {
 
 // Geofence represents a row in geo_geofences.
 type Geofence struct {
-	ID               string          `json:"id"`
-	SourceAccountID  string          `json:"source_account_id"`
-	Name             string          `json:"name"`
-	Description      *string         `json:"description"`
-	FenceType        string          `json:"fence_type"`
-	CenterLat        float64         `json:"center_lat"`
-	CenterLng        float64         `json:"center_lng"`
-	RadiusMeters     *float64        `json:"radius_meters"`
-	Polygon          json.RawMessage `json:"polygon"`
-	Active           bool            `json:"active"`
-	NotifyOnEnter    bool            `json:"notify_on_enter"`
-	NotifyOnExit     bool            `json:"notify_on_exit"`
-	NotifyURL        *string         `json:"notify_url"`
-	Metadata         json.RawMessage `json:"metadata"`
-	CreatedBy        *string         `json:"created_by"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	DeletedAt        *time.Time      `json:"deleted_at,omitempty"`
+	ID              string          `json:"id"`
+	SourceAccountID string          `json:"source_account_id"`
+	Name            string          `json:"name"`
+	Description     *string         `json:"description"`
+	FenceType       string          `json:"fence_type"`
+	CenterLat       float64         `json:"center_lat"`
+	CenterLng       float64         `json:"center_lng"`
+	RadiusMeters    *float64        `json:"radius_meters"`
+	Polygon         json.RawMessage `json:"polygon"`
+	Active          bool            `json:"active"`
+	NotifyOnEnter   bool            `json:"notify_on_enter"`
+	NotifyOnExit    bool            `json:"notify_on_exit"`
+	NotifyURL       *string         `json:"notify_url"`
+	Metadata        json.RawMessage `json:"metadata"`
+	CreatedBy       *string         `json:"created_by"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	DeletedAt       *time.Time      `json:"deleted_at,omitempty"`
 }
 
 // GeofenceEvent represents a row in geo_geofence_events.
 type GeofenceEvent struct {
-	ID               string     `json:"id"`
-	SourceAccountID  string     `json:"source_account_id"`
-	GeofenceID       string     `json:"geofence_id"`
-	EventType        string     `json:"event_type"`
-	EntityID         string     `json:"entity_id"`
-	EntityType       string     `json:"entity_type"`
-	Lat              float64    `json:"lat"`
-	Lng              float64    `json:"lng"`
-	Notified         bool       `json:"notified"`
-	NotifiedAt       *time.Time `json:"notified_at"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID              string     `json:"id"`
+	SourceAccountID string     `json:"source_account_id"`
+	GeofenceID      string     `json:"geofence_id"`
+	EventType       string     `json:"event_type"`
+	EntityID        string     `json:"entity_id"`
+	EntityType      string     `json:"entity_type"`
+	Lat             float64    `json:"lat"`
+	Lng             float64    `json:"lng"`
+	Notified        bool       `json:"notified"`
+	NotifiedAt      *time.Time `json:"notified_at"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 // Place represents a row in geo_places.
@@ -96,15 +96,15 @@ type Place struct {
 
 // APIQuota represents a row in geo_api_quotas.
 type APIQuota struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	QuotaType        string    `json:"quota_type"`
-	PeriodStart      time.Time `json:"period_start"`
-	APICalls         int       `json:"api_calls"`
-	GeocodeCalls     int       `json:"geocode_calls"`
-	CacheHits        int       `json:"cache_hits"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	QuotaType       string    `json:"quota_type"`
+	PeriodStart     time.Time `json:"period_start"`
+	APICalls        int       `json:"api_calls"`
+	GeocodeCalls    int       `json:"geocode_calls"`
+	CacheHits       int       `json:"cache_hits"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // PluginStats is the response for GET /api/v1/stats.
@@ -119,8 +119,8 @@ type PluginStats struct {
 
 // GeofenceEvalResult is one entry in the check-geofence response.
 type GeofenceEvalResult struct {
-	GeofenceID    string  `json:"geofence_id"`
-	GeofenceName  string  `json:"geofence_name"`
-	Inside        bool    `json:"inside"`
+	GeofenceID     string  `json:"geofence_id"`
+	GeofenceName   string  `json:"geofence_name"`
+	Inside         bool    `json:"inside"`
 	DistanceMeters float64 `json:"distance_meters"`
 }

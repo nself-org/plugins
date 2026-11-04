@@ -162,4 +162,3 @@ func (db *DB) QueryWebhookEvents(ctx context.Context, limit int) ([]WebhookEvent
 	}
 	return results, rows.Err()
 }
-

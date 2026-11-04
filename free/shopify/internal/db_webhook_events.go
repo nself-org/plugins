@@ -55,4 +55,3 @@ func (db *DB) ListWebhookEvents(ctx context.Context, topic string, limit int) ([
 	}
 	return results, rows.Err()
 }
-

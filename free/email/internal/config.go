@@ -17,10 +17,10 @@ import (
 
 // Config holds plugin-email runtime configuration.
 type Config struct {
-	DBUrl           string
-	Port            int
-	ElasticAPIKey   string
-	ElasticFrom     string
+	DBUrl         string
+	Port          int
+	ElasticAPIKey string
+	ElasticFrom   string
 }
 
 // LoadConfig reads configuration from environment variables.

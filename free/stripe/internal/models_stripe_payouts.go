@@ -133,26 +133,26 @@ type StripeWebhookEvent struct {
 
 // SyncStats holds aggregate counts for the /api/stats endpoint.
 type SyncStats struct {
-	Customers           int64    `json:"customers"`
-	Products            int64    `json:"products"`
-	Prices              int64    `json:"prices"`
-	Coupons             int64    `json:"coupons"`
-	PromotionCodes      int64    `json:"promotionCodes"`
-	Subscriptions       int64    `json:"subscriptions"`
-	SubscriptionItems   int64    `json:"subscriptionItems"`
-	Invoices            int64    `json:"invoices"`
-	InvoiceItems        int64    `json:"invoiceItems"`
-	Charges             int64    `json:"charges"`
-	Refunds             int64    `json:"refunds"`
-	Disputes            int64    `json:"disputes"`
-	PaymentIntents      int64    `json:"paymentIntents"`
-	SetupIntents        int64    `json:"setupIntents"`
-	PaymentMethods      int64    `json:"paymentMethods"`
-	BalanceTransactions int64    `json:"balanceTransactions"`
-	CheckoutSessions    int64    `json:"checkoutSessions"`
-	TaxIDs              int64    `json:"taxIds"`
-	TaxRates            int64    `json:"taxRates"`
-	LastSyncedAt        *string  `json:"lastSyncedAt"`
+	Customers           int64   `json:"customers"`
+	Products            int64   `json:"products"`
+	Prices              int64   `json:"prices"`
+	Coupons             int64   `json:"coupons"`
+	PromotionCodes      int64   `json:"promotionCodes"`
+	Subscriptions       int64   `json:"subscriptions"`
+	SubscriptionItems   int64   `json:"subscriptionItems"`
+	Invoices            int64   `json:"invoices"`
+	InvoiceItems        int64   `json:"invoiceItems"`
+	Charges             int64   `json:"charges"`
+	Refunds             int64   `json:"refunds"`
+	Disputes            int64   `json:"disputes"`
+	PaymentIntents      int64   `json:"paymentIntents"`
+	SetupIntents        int64   `json:"setupIntents"`
+	PaymentMethods      int64   `json:"paymentMethods"`
+	BalanceTransactions int64   `json:"balanceTransactions"`
+	CheckoutSessions    int64   `json:"checkoutSessions"`
+	TaxIDs              int64   `json:"taxIds"`
+	TaxRates            int64   `json:"taxRates"`
+	LastSyncedAt        *string `json:"lastSyncedAt"`
 }
 
 // ListResponse is the standard paginated response envelope.

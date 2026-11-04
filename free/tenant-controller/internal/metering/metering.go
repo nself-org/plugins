@@ -82,10 +82,10 @@ func (s *Service) CollectHourly(ctx context.Context) error {
 		}
 
 		rows := []struct {
-			dim       string
-			vcpu      *float64
-			storage   *float64
-			egress    *float64
+			dim     string
+			vcpu    *float64
+			storage *float64
+			egress  *float64
 		}{
 			{dim: DimVCPU, vcpu: &vcpu},
 			{dim: DimStorage, storage: &storageGB},

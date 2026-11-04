@@ -1,8 +1,8 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 )
 
 // =========================================================================
@@ -29,4 +29,3 @@ func scanPositions(rows pgx.Rows) ([]ProgressPosition, error) {
 	}
 	return positions, rows.Err()
 }
-

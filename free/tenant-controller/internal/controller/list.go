@@ -121,11 +121,11 @@ func ProjectStatus(ctx context.Context, pool *pgxpool.Pool, slug string) (*Statu
 	`, proj.SchemaName).Scan(&schemaBytes)
 
 	return &StatusReport{
-		Project:        *proj,
+		Project:         *proj,
 		ConnectionCount: connCount,
-		SchemaBytes:    schemaBytes,
-		LastActiveAt:   queryLastActiveAt(ctx, pool, proj.RoleName),
-		Healthy:        proj.Status == "active",
+		SchemaBytes:     schemaBytes,
+		LastActiveAt:    queryLastActiveAt(ctx, pool, proj.RoleName),
+		Healthy:         proj.Status == "active",
 	}, nil
 }
 

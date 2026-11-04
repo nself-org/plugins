@@ -17,8 +17,8 @@ import (
 
 // Worker runs periodic sync jobs.
 type Worker struct {
-	pool     *pgxpool.Pool
-	prov     provider.Provider
+	pool      *pgxpool.Pool
+	prov      provider.Provider
 	accountID string
 
 	// liveInterval controls how often live scores are refreshed.

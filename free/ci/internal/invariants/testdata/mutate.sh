@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# mutate.sh: apply each planted-regression patch to a copy of a Go module and require the tests to fail on it.
+# Usage: mutate.sh module patch-dir regex go-test-args...   (exit 0: baseline green and every patch KILLED)
+# Env MUTATE_BASELINE: run (default: green baseline first, then every patch), only (the baseline alone, then exit 0, no
+#   patch applied), skip (patches only, for copies whose identical baseline ran once elsewhere). D-1541: parallel copies
+#   each ran the baseline and, under load, all hit the 120 s test timeout together; the drill now runs `only` once, alone,
+#   then `skip` in the parallel copies. The 120 s limit is unchanged and a surviving patch still fails the run.
 set -euo pipefail
 if [ "$#" -lt 4 ]; then echo 'usage: mutate.sh module patch-dir regex go-test-args...' >&2; exit 2; fi
 module=$(cd "$1" && pwd)
@@ -20,11 +26,16 @@ copy_module() {
     if [ -d "$module/../$sibling" ] && [ ! -e "$scratch/$sibling" ]; then ln -s "$(cd "$module/../$sibling" && pwd)" "$scratch/$sibling"; fi
   done
 }
+baseline=${MUTATE_BASELINE:-run}
+case "$baseline" in run | only | skip) ;; *) echo "MUTATE_BASELINE must be run, only or skip" >&2; exit 2 ;; esac
 copy_module
-if (cd "$scratch/module" && CGO_ENABLED=0 go test -mod=vendor -count=1 -timeout 120s -v -run "$regex" "$@") >"$scratch/baseline.out" 2>&1; then
-  if ! grep -q -- '^--- PASS:' "$scratch/baseline.out"; then echo 'baseline empty'; exit 1; fi
-else
-  echo 'baseline red'; cat "$scratch/baseline.out"; exit 1
+if [ "$baseline" != skip ]; then
+  if (cd "$scratch/module" && CGO_ENABLED=0 go test -mod=vendor -count=1 -timeout 120s -v -run "$regex" "$@") >"$scratch/baseline.out" 2>&1; then
+    if ! grep -q -- '^--- PASS:' "$scratch/baseline.out"; then echo 'baseline empty'; exit 1; fi
+  else
+    echo 'baseline red'; cat "$scratch/baseline.out"; exit 1
+  fi
+  [ "$baseline" != only ] || exit 0
 fi
 failed=0
 for patch_file in "${patches[@]}"; do

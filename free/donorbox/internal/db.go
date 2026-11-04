@@ -304,4 +304,3 @@ func (db *DB) InitSchema() error {
 	log.Println("[nself-donorbox] schema initialized")
 	return nil
 }
-

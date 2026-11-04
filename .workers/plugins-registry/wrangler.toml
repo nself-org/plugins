@@ -17,6 +17,19 @@ id = "fddaf7f451f54f82a7d3712ae92882ea"
 binding = "PLUGIN_TARBALLS"
 bucket_name = "nself-plugin-tarballs"
 
+# D-1543: marketplace rate limits (same values as before: 60 GETs, 5 rating POSTs per IP per minute).
+# Workers rate limit binding; without it the worker falls back to a per-colo Cache API counter.
+# namespace_id is any account-unique integer; these are new, not existing ids.
+[[ratelimits]]
+name         = "MARKETPLACE_GET_LIMITER"
+namespace_id = "15431"
+simple       = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name         = "MARKETPLACE_POST_LIMITER"
+namespace_id = "15432"
+simple       = { limit = 5, period = 60 }
+
 # Static environment variables
 [vars]
 CACHE_TTL        = "300"
@@ -25,7 +38,7 @@ REGISTRY_VERSION = "2.0.0"
 # R2_PUBLIC_DOMAIN = "pub-xxx.r2.dev"  # placeholder — set real value in production
 
 # T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
-# Counters use the per-data-center Cache API; variables configure their threshold.
+# MARKETPLACE_GET_LIMITER above decides when bound; these configure the Cache API fallback.
 MARKETPLACE_GET_RATE_LIMIT = "60"
 MARKETPLACE_GET_RATE_WINDOW_MS = "60000"
 
@@ -82,6 +95,19 @@ REGISTRY_VERSION = "2.0.0"
 # T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
 MARKETPLACE_GET_RATE_LIMIT = "60"
 MARKETPLACE_GET_RATE_WINDOW_MS = "60000"
+
+# D-1543: marketplace rate limits (same values as before: 60 GETs, 5 rating POSTs per IP per minute).
+# Workers rate limit binding; without it the worker falls back to a per-colo Cache API counter.
+# namespace_id is any account-unique integer; these are new, not existing ids.
+[[env.production.ratelimits]]
+name         = "MARKETPLACE_GET_LIMITER"
+namespace_id = "15431"
+simple       = { limit = 60, period = 60 }
+
+[[env.production.ratelimits]]
+name         = "MARKETPLACE_POST_LIMITER"
+namespace_id = "15432"
+simple       = { limit = 5, period = 60 }
 
 # Development settings
 [dev]

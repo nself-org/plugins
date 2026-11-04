@@ -331,13 +331,12 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
   });
 
   test('a throwing execution context inside a route is a JSON 500', async () => {
+    // D-1543: /api/sync no longer calls waitUntil outside allSettled (no stats write),
+    // so a cold /catalog.json, which does, carries this router-level check.
     const kv = registryKv();
+    globalThis.fetch = async () => new Response(JSON.stringify(sampleCatalog()));
     const ctx = { waitUntil: () => { throw new Error('context unavailable'); } };
-    const res = await worker.fetch(
-      req('/api/sync', { method: 'POST', headers: { Authorization: 'Bearer fake-sync-token' } }),
-      { PLUGINS_KV: kv, GITHUB_SYNC_TOKEN: 'fake-sync-token' },
-      ctx,
-    );
+    const res = await worker.fetch(req('/catalog.json'), { PLUGINS_KV: kv }, ctx);
     assert.equal(res.status, 500);
     assert.equal((await res.json()).error, 'internal server error');
   });

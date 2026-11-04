@@ -3,8 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
-	"time"
 	pgx "github.com/jackc/pgx/v5"
+	"time"
 )
 
 // ============================================================================
@@ -104,4 +104,3 @@ func coalesce(val, fallback string) string {
 	}
 	return val
 }
-

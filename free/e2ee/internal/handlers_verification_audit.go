@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/go-chi/chi/v5"
+	pgx "github.com/jackc/pgx/v5"
 	"log"
 	"net/http"
-	pgx "github.com/jackc/pgx/v5"
 )
 
 func (h *Handlers) GetVerificationState(w http.ResponseWriter, r *http.Request) {

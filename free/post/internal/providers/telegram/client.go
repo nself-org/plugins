@@ -1,13 +1,18 @@
 // Package telegram implements a Telegram Bot API publishing client.
 //
 // Purpose: Send messages to a Telegram channel or chat via the Bot API
-//          sendMessage endpoint.
+//
+//	sendMessage endpoint.
+//
 // Inputs: bot_token (Telegram Bot API token from BotFather),
-//         chat_id (channel @username or numeric chat ID), text content.
+//
+//	chat_id (channel @username or numeric chat ID), text content.
+//
 // Outputs: message ID and channel URL on success.
 // Constraints: Bot must be added as admin to the target channel. Markdown
-//              or HTML parse_mode is applied when content starts with HTML
-//              tags, otherwise plain text is sent.
+//
+//	or HTML parse_mode is applied when content starts with HTML
+//	tags, otherwise plain text is sent.
 package telegram
 
 import (

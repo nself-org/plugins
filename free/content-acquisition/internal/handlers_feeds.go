@@ -107,4 +107,3 @@ func handleDeleteFeed(db *DB) http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, map[string]interface{}{"deleted": true})
 	}
 }
-

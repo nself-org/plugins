@@ -180,4 +180,3 @@ func (d *DB) DeleteEntitlementByID(id string) (bool, error) {
 	}
 	return tag.RowsAffected() > 0, nil
 }
-

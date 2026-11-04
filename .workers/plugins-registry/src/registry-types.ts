@@ -82,6 +82,14 @@ export interface Env {
   // T-RATE-01: GET rate limit config for marketplace endpoints
   MARKETPLACE_GET_RATE_LIMIT?: string;    // default "60" req/min
   MARKETPLACE_GET_RATE_WINDOW_MS?: string; // default "60000" ms
+  // D-1543: Workers rate limit bindings ([[ratelimits]] in wrangler.toml); optional.
+  MARKETPLACE_GET_LIMITER?: RateLimitBinding;  // 60 per 60s per IP
+  MARKETPLACE_POST_LIMITER?: RateLimitBinding; // 5 per 60s per IP (rating POSTs)
+}
+
+/** The Workers rate limit binding API (only the call this worker uses). */
+export interface RateLimitBinding {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
 // ---------------------------------------------------------------------------

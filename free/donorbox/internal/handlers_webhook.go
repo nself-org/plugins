@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"io"
 	"log"
 	"net/http"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // --- Webhook -----------------------------------------------------------------
@@ -80,4 +80,3 @@ func handleWebhook(db *DB, secret string) http.HandlerFunc {
 		sdk.Respond(w, http.StatusOK, map[string]string{"status": "received", "event_id": eventID})
 	}
 }
-

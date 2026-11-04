@@ -153,4 +153,3 @@ func handleGetOrder(db *DB) http.HandlerFunc {
 		})
 	}
 }
-

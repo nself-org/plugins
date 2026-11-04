@@ -84,4 +84,3 @@ func (db *DB) DeleteCustomerByShopifyID(ctx context.Context, shopifyID int64) er
 	_, err := db.Pool.Exec(ctx, `DELETE FROM np_shopify_customers WHERE shopify_id = $1 AND source_account_id = $2`, shopifyID, db.SourceAccountID)
 	return err
 }
-

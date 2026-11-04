@@ -105,4 +105,3 @@ func (s *Server) scopedDB(r *http.Request) *DB {
 	}
 	return s.DB.ForSourceAccount(accountID)
 }
-

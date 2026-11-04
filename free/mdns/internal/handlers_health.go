@@ -3,10 +3,10 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"runtime"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // handleHealth answers GET /health: database reachability plus the boot-migrations counts.

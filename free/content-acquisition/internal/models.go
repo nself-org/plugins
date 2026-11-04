@@ -11,18 +11,18 @@ import (
 
 // Config holds all environment-based configuration for the plugin.
 type Config struct {
-	DatabaseURL          string
-	Port                 int
+	DatabaseURL           string
+	Port                  int
 	MetadataEnrichmentURL string
-	TorrentManagerURL    string
-	VPNManagerURL        string
-	SubtitleManagerURL   string
-	MediaProcessingURL   string
-	NTVBackendURL        string
-	RedisHost            string
-	RedisPort            int
-	LogLevel             string
-	RSSCheckInterval     int
+	TorrentManagerURL     string
+	VPNManagerURL         string
+	SubtitleManagerURL    string
+	MediaProcessingURL    string
+	NTVBackendURL         string
+	RedisHost             string
+	RedisPort             int
+	LogLevel              string
+	RSSCheckInterval      int
 }
 
 // ---------------------------------------------------------------------------
@@ -52,13 +52,13 @@ type QualityProfile struct {
 
 // QualityProfilePreset is a built-in quality preset.
 type QualityProfilePreset struct {
-	Name              string   `json:"name"`
-	Description       string   `json:"description"`
-	MaxResolution     string   `json:"max_resolution"`
-	MinResolution     string   `json:"min_resolution"`
-	PreferredSources  []string `json:"preferred_sources"`
-	MaxSizeMovieGB    float64  `json:"max_size_movie_gb"`
-	MaxSizeEpisodeGB  float64  `json:"max_size_episode_gb"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	MaxResolution    string   `json:"max_resolution"`
+	MinResolution    string   `json:"min_resolution"`
+	PreferredSources []string `json:"preferred_sources"`
+	MaxSizeMovieGB   float64  `json:"max_size_movie_gb"`
+	MaxSizeEpisodeGB float64  `json:"max_size_episode_gb"`
 }
 
 // QualityPresets contains the three built-in quality presets.
@@ -143,26 +143,26 @@ type RSSFeed struct {
 // ---------------------------------------------------------------------------
 
 type AcquisitionQueueItem struct {
-	ID                string          `json:"id"`
-	SourceAccountID   string          `json:"source_account_id"`
-	ContentType       string          `json:"content_type"`
-	ContentName       string          `json:"content_name"`
-	Year              *int            `json:"year,omitempty"`
-	Season            *int            `json:"season,omitempty"`
-	Episode           *int            `json:"episode,omitempty"`
-	QualityProfileID  *string         `json:"quality_profile_id,omitempty"`
-	RequestedBy       string          `json:"requested_by"`
-	RequestSourceID   *string         `json:"request_source_id,omitempty"`
-	Status            string          `json:"status"`
-	Priority          int             `json:"priority"`
-	Attempts          int             `json:"attempts"`
-	MaxAttempts       int             `json:"max_attempts"`
-	MatchedTorrent    json.RawMessage `json:"matched_torrent,omitempty"`
-	DownloadID        *string         `json:"download_id,omitempty"`
-	ErrorMessage      *string         `json:"error_message,omitempty"`
-	CreatedAt         time.Time       `json:"created_at"`
-	StartedAt         *time.Time      `json:"started_at,omitempty"`
-	CompletedAt       *time.Time      `json:"completed_at,omitempty"`
+	ID               string          `json:"id"`
+	SourceAccountID  string          `json:"source_account_id"`
+	ContentType      string          `json:"content_type"`
+	ContentName      string          `json:"content_name"`
+	Year             *int            `json:"year,omitempty"`
+	Season           *int            `json:"season,omitempty"`
+	Episode          *int            `json:"episode,omitempty"`
+	QualityProfileID *string         `json:"quality_profile_id,omitempty"`
+	RequestedBy      string          `json:"requested_by"`
+	RequestSourceID  *string         `json:"request_source_id,omitempty"`
+	Status           string          `json:"status"`
+	Priority         int             `json:"priority"`
+	Attempts         int             `json:"attempts"`
+	MaxAttempts      int             `json:"max_attempts"`
+	MatchedTorrent   json.RawMessage `json:"matched_torrent,omitempty"`
+	DownloadID       *string         `json:"download_id,omitempty"`
+	ErrorMessage     *string         `json:"error_message,omitempty"`
+	CreatedAt        time.Time       `json:"created_at"`
+	StartedAt        *time.Time      `json:"started_at,omitempty"`
+	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

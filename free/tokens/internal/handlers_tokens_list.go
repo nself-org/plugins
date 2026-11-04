@@ -1,8 +1,8 @@
 package internal
 
 import (
-	"net/http"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
 )
 
 func handleListTokens(db *DB) http.HandlerFunc {

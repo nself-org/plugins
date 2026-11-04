@@ -78,12 +78,12 @@ type sendRequest struct {
 }
 
 type messageRow struct {
-	ID          string  `json:"id"`
-	ToAddress   string  `json:"to"`
-	FromAddress string  `json:"from"`
-	Subject     string  `json:"subject"`
-	Status      string  `json:"status"`
-	CreatedAt   string  `json:"created_at"`
+	ID          string `json:"id"`
+	ToAddress   string `json:"to"`
+	FromAddress string `json:"from"`
+	Subject     string `json:"subject"`
+	Status      string `json:"status"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type templateRow struct {
