@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/agent/contention"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
@@ -107,16 +108,13 @@ func applyCapacity(c *model.Capability, cap ciexec.Capacity, now time.Time) {
 	} else {
 		c.Resources.MemMB = observed[int64](nil, now)
 	}
-	if cap.BatteryPercent >= 0 && cap.BatteryPercent <= 100 {
-		c.Availability.BatteryPct = value(cap.BatteryPercent, now)
-		c.Availability.PluggedIn = value(cap.PluggedIn, now)
-	} else {
-		c.Availability.BatteryPct = observed[int](nil, now)
-		c.Availability.PluggedIn = observed[bool](nil, now)
+	if cap.BatteryPercent > 100 {
+		cap.BatteryPercent = -1 // not a reading
 	}
-	interactive := "idle"
-	if cap.Interactive {
-		interactive = "active"
-	}
-	c.Availability.Interactive = value(interactive, now)
+	// The battery, plugged-in and interactive facts are the contention layer's (D-1226): the same facts
+	// its lease gate acts on, an unknown left unknown. This probe owns no slot facts, so they are kept.
+	a := &c.Availability
+	slotsFact, running := a.Slots, a.Running
+	contention.ApplyFacts(c, cap, contention.ReadSignals(cap, nil), 0, 0, now)
+	a.Slots, a.Running = slotsFact, running
 }

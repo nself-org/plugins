@@ -65,6 +65,9 @@ type Config struct {
 	PinnedAge func(ctx context.Context, nodeID string) (*string, error)
 	// CheckAge pins or compares a validated hello recipient before a session opens.
 	CheckAge func(ctx context.Context, nodeID, recipient string) error
+	// Policy returns the node's stored contention policy for the welcome of an agent that asked for it
+	// (protocol.CompatContention); nil, or a nil policy, sends none (D-1226).
+	Policy func(ctx context.Context, nodeID string) (*protocol.NodePolicy, error)
 
 	Versions        []int         // protocol versions spoken (default {1})
 	MinAgentVersion string        // default "0.0.0"

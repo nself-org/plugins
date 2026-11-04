@@ -184,6 +184,7 @@ func startAgentListener(ctx context.Context, addr string, _ *coordinator.Coordin
 			return registry.New(src.Store).CheckAgeRecipient(ctx, node, recipient, "agent")
 		},
 		Leases: lease.New(src.Store, registry.New(src.Store), lease.Config{}), Sink: agentSink(src.Store), Logf: agentLogf,
+		Policy: nodePolicy(src.Store),
 		OnAck: func(nodeID, leaseID string) {
 			if fn := agentOnAck; fn != nil {
 				fn(nodeID, leaseID)

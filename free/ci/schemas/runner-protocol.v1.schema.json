@@ -360,6 +360,9 @@
                     "lease_id": {
                       "type": "string"
                     },
+                    "reason": {
+                      "type": "string"
+                    },
                     "state": {
                       "type": "string"
                     }
@@ -1130,6 +1133,61 @@
             "properties": {
               "agent_ttl_ms": {
                 "type": "integer"
+              },
+              "contention": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "policy": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "interactive": {
+                                "type": "string"
+                              },
+                              "node": {
+                                "type": "string"
+                              },
+                              "on_battery": {
+                                "type": "string"
+                              },
+                              "persistence": {
+                                "type": "string"
+                              },
+                              "reserved_cpu": {},
+                              "reserved_mem_mb": {
+                                "type": "integer"
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "node",
+                              "reserved_cpu",
+                              "reserved_mem_mb",
+                              "interactive",
+                              "on_battery",
+                              "persistence",
+                              "version"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "heartbeat_ms": {
                 "type": "integer"

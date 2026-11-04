@@ -14,7 +14,8 @@ package main
 //          restart; a lost coordinator never ends the process (the fence kills the jobs after agent_ttl and the
 //          session restarts with backoff); secret references are resolved on this node under its own age
 //          identity and no value is ever received from the coordinator; the job token never enters the job
-//          (the session masks it and the executor never sees it).
+//          (the session masks it and the executor never sees it); every lease passes the node's contention gate
+//          and the policy the coordinator sends in welcome is saved for it (contention_wire.go).
 
 import (
 	"context"
@@ -168,6 +169,7 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 	}
 	sweepOrphanJobs(ctx, f.coordinator, logf)
 	resolver := pullResolver(state, f, cred.Enrollment.NodeID, age.Path)
+	nc := newNodeContention(state, cred.Enrollment.NodeID, false, table, logf)
 	for ctx.Err() == nil {
 		car := agent.NewCarrier(agent.CarrierConfig{
 			Client: agent.Options{BaseURL: baseURL, TLS: tlsc, OnSkew: func(d time.Duration) { noteSkew(state, d) }},
@@ -180,11 +182,12 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 		s, err := session.New(session.Config{
 			Carrier: up, Key: key, Slots: table, StateDir: state,
 			Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
-			Runner:      leaseRunner{coordinator: f.coordinator},
+			Runner:      leaseRunner{coordinator: f.coordinator, contention: nc},
 			Coordinator: session.Coordinator{ID: f.coordinator, RootFingerprint: cred.Enrollment.RootFingerprint},
 			Status:      hostStatus,
 			Fenced:      fence.fenced,
 			Upgrade:     up.Hook,
+			Contention:  nc.session(),
 		})
 		if err != nil {
 			stop()

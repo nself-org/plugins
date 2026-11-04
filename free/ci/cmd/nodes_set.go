@@ -5,10 +5,12 @@ package main
 // operator's contention policy for one node. Settings are stored in the registry (store.NodePutSettings)
 // and mirrored into the node's capability snapshot, where the scheduler reads them.
 // Inputs:  the node id and the flags above; env NSELF_CI_HOME, NSELF_CI_REPO.
-// Outputs: the stored settings as a table line or one v1 JSON envelope; exit 0, 1 (usage, unknown node),
+// Outputs: the stored settings and their delivery as table lines or one v1 JSON envelope; exit 0, 1 (usage, unknown node),
 //          2 (infrastructure).
 // Constraints: V15 only; flags not given keep the stored value (or the D10 default for a node never set);
-//          at least one flag is required; side-effect class: write (registry only, no remote call).
+//          at least one flag is required; side-effect class: remote. The registry row is the record; the
+//          policy is then pushed to a LAN node over ssh (<state>/contention.json, lifecycle.PushPolicy), and a
+//          pull node receives it in its next welcome (D-1226). A failed push is reported, not an error.
 
 import (
 	"context"
@@ -117,15 +119,28 @@ func runNodesSet(args []string, env lifecycle.Env, out, errOut io.Writer) int {
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, err)
 	}
+	delivery := d.PushPolicy(ctx, n.Capability, saved)
 	if f.json {
-		if output.WriteData(out, "ci nodes set", map[string]any{"settings": saved}, nil) != nil {
+		if output.WriteData(out, "ci nodes set", map[string]any{"settings": saved, "delivery": delivery}, nil) != nil {
 			return output.ExitInfra
 		}
 		return 0
 	}
 	_, _ = fmt.Fprintf(out, "node %s: reserve cpu %g, mem %d MB; interactive %s; on battery %s; %s\n",
 		saved.NodeID, saved.ReservedCPU, saved.ReservedMemMB, saved.Interactive, saved.OnBattery, saved.Persistence)
+	_, _ = fmt.Fprintln(out, nodesSetDelivery(delivery))
 	return 0
+}
+
+// nodesSetDelivery says where the policy went: the stored row is the record either way.
+func nodesSetDelivery(d lifecycle.PolicyDelivery) string {
+	switch {
+	case d.Route == lifecycle.PolicyViaWelcome:
+		return "policy: stored; the node receives it when its agent next connects (pull)"
+	case d.Delivered:
+		return "policy: delivered to the node over ssh"
+	}
+	return "policy: stored, not delivered over ssh (" + d.Error + "); run nodes set again when the node is reachable"
 }
 
 // nodesSetSplit separates a leading node id from the flags after it.
