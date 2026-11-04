@@ -1,7 +1,6 @@
 // Package handlers — mfa.go
 //
 // HTTP handlers for MFA enrollment, challenge, policy, and recovery endpoints.
-//
 // Endpoint map:
 //
 //	GET  /auth/mfa/status               — enrollment status for the current user

@@ -3,7 +3,6 @@
 // HTTP handlers for SSO (SAML + OIDC) provider management and login flows.
 //
 // All SSO endpoints return 403 when NSELF_SSO != "true" (ɳSelf+ gate).
-//
 // Endpoint map:
 //
 //	GET    /auth/sso/providers            — list configured IdPs for tenant

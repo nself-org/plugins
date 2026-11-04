@@ -145,10 +145,9 @@ func (h *Handlers) ProrationPreview(w http.ResponseWriter, r *http.Request) {
 // subscription-update endpoint separately.
 //
 // TODO: wire to stripe plugin subscription update so this is a single atomic
-//
-//	operation (local + Stripe). Track at: plugins-pro/paid/entitlements
-//	stripe-sync-upgrade residue. Until wired, response includes
-//	stripe_sync_pending: true so callers can handle the two-step flow.
+// operation (local + Stripe). Track at: plugins-pro/paid/entitlements
+// stripe-sync-upgrade residue. Until wired, response includes
+// stripe_sync_pending: true so callers can handle the two-step flow.
 func (h *Handlers) UpgradePlan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sa := h.sa(r)
