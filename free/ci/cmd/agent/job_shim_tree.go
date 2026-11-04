@@ -11,7 +11,9 @@ package main
 //          read only when the opened inode is the regular file that was listed (a swapped-in link is refused); writing goes through the
 //          os.Root (a planted link cannot point a write outside it) with O_EXCL, so an existing name, a
 //          link included, is never written through. Modes are owner-only (0700 directories, 0600 files,
-//          the owner's execute bit kept): no setuid, setgid, sticky, group or world bits ever cross.
+//          the owner's execute bit kept): no setuid, setgid, sticky, group or world bits ever cross. A
+//          link whose target is absolute or escapes the tree, alone or through a chain, is refused
+//          (job_shim_links.go), so no later reader of the unpacked tree can be led out of it.
 
 import (
 	"archive/tar"
@@ -95,13 +97,14 @@ func entryName(raw string) (string, error) {
 	return name, nil
 }
 
-// unpackTree recreates the stream's directories, regular files and symlinks inside root.
+// unpackTree recreates the stream's directories, regular files and symlinks inside root, refusing any
+// link that is absolute or leads out of root (job_shim_links.go); on an error the caller must empty root.
 func unpackTree(root *os.Root, r io.Reader) error {
 	tr := tar.NewReader(r)
 	for {
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			return confineLinks(root)
 		}
 		if err != nil {
 			return err
@@ -120,6 +123,9 @@ func unpackTree(root *os.Root, r io.Reader) error {
 				return err
 			}
 		case tar.TypeSymlink:
+			if err := checkLinkTarget(name, hdr.Linkname); err != nil {
+				return err
+			}
 			if err := root.Symlink(hdr.Linkname, name); err != nil {
 				return err
 			}

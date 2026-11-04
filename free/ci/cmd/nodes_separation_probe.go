@@ -6,13 +6,16 @@ package main
 // job user must get EACCES reading the node key (<state>/node.key: /var/lib/nself-ci-agent on Linux,
 // /var/db/nself-ci-agent on macOS). Only with both
 // proofs does the add record uid_separation true.
-// Inputs:  a runner bound to the node (fixed `sh -c` scripts built from constants, no backslash).
+// Inputs:  a runner bound to the node (fixed `sh -c` scripts built from constants, the request
+//          single-quoted with shQuote, no backslash).
 // Outputs: a probeResult (ok, a stable reason key); shimSeparation, the SeparationProber the add uses.
-// Constraints: fail closed. Each probe prints its exit code and folded output, so the verdict never rests
-//          on how the transport reports a failure; any ssh error, unexpected user, a readable or missing
-//          key path (ENOENT means the state directory is traversable) is false with a named reason. The
-//          fact is never inferred from the installed configuration. What follows from it (signing,
-//          secrets) is derived by lifecycle exactly as for any other separated node.
+// Constraints: fail closed. The probe forces LC_ALL=C LANG=C, and the key proof needs both cat's exit
+//          code 1 and its C-locale "Permission denied" line for the key path. Each probe prints its
+//          exit code and folded output, so the verdict never rests on how the transport reports a
+//          failure; any ssh error, unexpected user, a readable or missing key path (ENOENT means the
+//          state directory is traversable) is false with a named reason. The fact is never inferred
+//          from the installed configuration. What follows from it (signing, secrets) is derived by
+//          lifecycle exactly as for any other separated node.
 
 import (
 	"context"
@@ -48,11 +51,21 @@ type probeResult struct {
 }
 
 // shimProbeScript runs one shim request through the job chain and prints "rc=<code>" then the output.
+// The locale is C on both sides of sudo (the script's own and the request's env), so the key probe's
+// message is the C one on any node; the request is single-quoted with every quote in it closed and
+// reopened, so no request text can end the quoting.
 func shimProbeScript(argv []string) string {
-	req, _ := json.Marshal(map[string]any{"argv": argv, "dir": "/", "env": []string{"LC_ALL=C", "PATH=/usr/bin:/bin"}})
-	return "set -u\nout=$(echo '" + string(req) + "' | sudo -n -u " + bootstrap.AgentUser + " sudo -n -u " +
-		bootstrap.JobUser(1) + " " + bootstrap.AgentPath + " job-shim 2>&1) && rc=0 || rc=$?\necho \"rc=$rc\"\necho \"$out\"\n"
+	var req strings.Builder
+	enc := json.NewEncoder(&req)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(map[string]any{"argv": argv, "dir": "/", "env": []string{"LC_ALL=C", "LANG=C", "PATH=/usr/bin:/bin"}})
+	return "set -u\nLC_ALL=C\nLANG=C\nexport LC_ALL LANG\nout=$(echo " + shQuote(strings.TrimSpace(req.String())) +
+		" | sudo -n -u " + bootstrap.AgentUser + " sudo -n -u " + bootstrap.JobUser(1) + " " + bootstrap.AgentPath +
+		" job-shim 2>&1) && rc=0 || rc=$?\necho \"rc=$rc\"\necho \"$out\"\n"
 }
+
+// shQuote single-quotes s for sh without a backslash: each ' becomes '"'"'.
+func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'" }
 
 // runShimProbe returns the exit code and output lines of one probe (ok false: unreadable or transport error).
 func runShimProbe(ctx context.Context, run bootstrap.RunFunc, argv []string) (int, []string, bool) {
@@ -98,6 +111,9 @@ func probeSeparation(ctx context.Context, run bootstrap.RunFunc, os string) prob
 	}
 	if rc == 0 {
 		return probeResult{Reason: shimProbeKeyReadable}
+	}
+	if rc != 1 { // cat exits 1 on EACCES (GNU, BSD, BusyBox); anything else is the shim or sudo failing
+		return probeResult{Reason: shimProbeKeyNoEACCES}
 	}
 	// GNU/BSD cat: "cat: <path>: Permission denied"; BusyBox: "cat: can't open '<path>': Permission denied"
 	if len(out) != 1 || !strings.HasPrefix(out[0], "cat: ") || !strings.Contains(out[0], key) ||

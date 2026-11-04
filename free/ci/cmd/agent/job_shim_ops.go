@@ -13,7 +13,8 @@ package main
 //          attempt id: no path comes from the request, the agent or the job. The slot root must be a
 //          plain 0700 directory this user owns (never a link); every step below it goes through an
 //          os.Root, so a link the job planted cannot redirect a write, a read or the removal (hygiene's
-//          confined removal). An existing attempt directory is refused, never reused. Kill never runs
+//          confined removal). The slot root's parent is root-owned 0711, so the slot root itself cannot
+//          be swapped by a job user. An existing attempt directory is refused, never reused. Kill never runs
 //          as root (shimUserOK already refused root; shimKillAll checks again).
 
 import (
@@ -119,6 +120,9 @@ func runShimOp(req shimRequest, user string, in io.Reader, out io.Writer) error 
 		if err != nil {
 			return err
 		}
+		// a.Root's parent (the jobs directory) is root's, 0711 (bootstrap dirsScript, checked by its
+		// integration test): no job user nor the agent can swap a.Root between this check and the
+		// removal, and RemoveConfined re-checks that a.Root is a plain directory and the inode it opened.
 		_ = r.Close()
 		return hygiene.RemoveConfined(a.Root, req.Attempt, nil)
 	}

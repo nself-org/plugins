@@ -3,12 +3,15 @@ package main
 // Purpose: the system-node separation proof (D-1230): uid_separation is true only when the job chain
 // ran as nself-ci-job-1 AND the job user got EACCES on the node key; every single failure is false
 // with a named reason, and systemInstall records exactly what the probe proved.
-// Inputs:  a fake node runner that answers the two probe scripts. Constraints: no ssh, no sudo.
+// The probe forces the C locale, needs cat's exit code 1 as well as its text, and quotes its request.
+// Inputs:  a fake node runner that answers the two probe scripts; sh for the quoting check.
+// Constraints: no ssh, no sudo.
 
 import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -83,6 +86,8 @@ func TestSeparationProbeEachFailureIsFalseWithAReason(t *testing.T) {
 		{"key readable", chainOK, probeAnswer{out: "rc=0\n-----BEGIN KEY-----\n"}, shimProbeKeyReadable},
 		{"key ENOENT", chainOK, probeAnswer{out: "rc=1\ncat: /var/lib/nself-ci-agent/node.key: No such file or directory\n"}, shimProbeKeyNoEACCES},
 		{"key failed otherwise", chainOK, probeAnswer{out: "rc=1\nsudo: a password is required\n"}, shimProbeKeyNoEACCES},
+		{"key EACCES text with the shim's exit code", chainOK, probeAnswer{out: "rc=2\n" + eacces + "\n"}, shimProbeKeyNoEACCES},
+		{"key EACCES text, rc 126", chainOK, probeAnswer{out: "rc=126\n" + eacces + "\n"}, shimProbeKeyNoEACCES},
 		{"key EACCES on another path", chainOK, probeAnswer{out: "rc=1\ncat: /tmp/x: Permission denied\n"}, shimProbeKeyNoEACCES},
 		{"key transport error", chainOK, probeAnswer{err: errors.New("ssh: broken pipe")}, shimProbeUnreadable},
 		{"empty node", probeAnswer{}, probeAnswer{}, shimProbeUnreadable},
@@ -106,6 +111,33 @@ func TestBusyBoxEACCESCounts(t *testing.T) {
 	}
 	if got := probeSeparation(context.Background(), probeRunner(chainOK, keyOK, nil), "darwin"); got.OK {
 		t.Fatal("a Linux key path proved a macOS node")
+	}
+}
+
+func TestSeparationProbeForcesTheCLocale(t *testing.T) {
+	script := shimProbeScript([]string{"/bin/cat", "/x"})
+	if !strings.HasPrefix(script, "set -u\nLC_ALL=C\nLANG=C\nexport LC_ALL LANG\n") {
+		t.Fatalf("the probe does not force the C locale before sudo:\n%s", script)
+	}
+	if !strings.Contains(script, `"env":["LC_ALL=C","LANG=C","PATH=/usr/bin:/bin"]`) {
+		t.Fatalf("the job's env does not carry the C locale:\n%s", script)
+	}
+}
+
+func TestSeparationProbeQuotesTheRequest(t *testing.T) {
+	for _, s := range []string{`{"argv":["it's"]}`, "''", "a'; exit 7; echo '", `$(id) ` + "`id`"} {
+		q := shQuote(s)
+		if strings.ContainsRune(q, '\\') {
+			t.Fatalf("quoting %q used a backslash: %s", s, q)
+		}
+		out, err := exec.Command("sh", "-c", "printf %s "+q).Output()
+		if err != nil || string(out) != s {
+			t.Fatalf("sh read %q back as %q (%v)", s, out, err)
+		}
+	}
+	script := shimProbeScript([]string{"/bin/echo", "it's"})
+	if !strings.Contains(script, `"argv":["/bin/echo","it'"'"'s"]`) {
+		t.Fatalf("a quote in the request is not closed and reopened:\n%s", script)
 	}
 }
 

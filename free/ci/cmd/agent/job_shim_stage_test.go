@@ -137,12 +137,13 @@ func TestProcessJobReachesTheShimInAWorkspaceTheJobUserOwns(t *testing.T) {
 	t.Cleanup(func() { shimSudo = old })
 	asNode(t, "/var/lib/nself-ci-agent", "nself-ci", "/opt/nself-ci-agent/bin/nself-ci-agent")
 	ex := &ciexec.Executor{Isolation: systemShim(0)(ciexec.BaselineIsolator{})}
-	// links planted in the agent's workspace before the step: an absolute one to the key, one to a directory
+	// links in the agent's workspace before the step: in-tree ones to a file and to a directory cross
+	// (an absolute or escaping one is refused: TestStageInRefusesLinksThatLeaveTheWorkspace)
 	plant := func(_ context.Context, ws *os.Root) error {
-		if err := ws.Symlink(secret, "key-link"); err != nil {
+		if err := ws.Symlink("pkg/main.go", "key-link"); err != nil {
 			return err
 		}
-		return ws.Symlink(outside, "dir-link")
+		return ws.Symlink("pkg", "dir-link")
 	}
 	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: "stage1", CoordinatorID: "coord", Home: t.TempDir(), SourceDir: src,
 		Job: model.Job{Workdir: "pkg"}, Command: []string{"/bin/sh", "-c", "true"}, BeforeJob: plant})
@@ -170,12 +171,15 @@ func TestProcessJobReachesTheShimInAWorkspaceTheJobUserOwns(t *testing.T) {
 		t.Fatalf("the source did not reach the job user's copy: %q", got)
 	}
 	ownerOnly(t, attempt)
-	// the links crossed as links: nothing outside changed mode, and the key was not copied in
+	// the links crossed as links and still work: nothing outside changed mode, and the key was not copied in
 	for _, l := range []string{"key-link", "dir-link"} {
 		info, err := os.Lstat(filepath.Join(attempt, "ws", l))
 		if err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatalf("%s is not a link in the job copy: %v %v", l, info, err)
 		}
+	}
+	if got, err := os.ReadFile(filepath.Join(attempt, "ws", "dir-link", "main.go")); err != nil || string(got) != "package main\n" {
+		t.Fatalf("an in-tree link does not resolve in the job copy: %q %v", got, err)
 	}
 	if info, _ := os.Stat(secret); info.Mode().Perm() != 0o600 {
 		t.Fatalf("the hand-off changed the key's mode: %v", info.Mode())
@@ -262,25 +266,39 @@ func TestPlantedLinksRedirectNothing(t *testing.T) {
 		_ = pw.CloseWithError(packTree(src, pw))
 	}()
 	dst, _ := os.OpenRoot(t.TempDir())
-	if err := unpackTree(dst, pr); err != nil {
-		t.Fatal(err)
+	if err := unpackTree(dst, pr); err == nil {
+		t.Fatal("a tree with an absolute link unpacked")
 	}
+	_, _ = io.Copy(io.Discard, pr)
 	if f, err := dst.OpenFile("out/x", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
 		_ = f.Close()
 		t.Fatal("a write went through an escaping link")
 	}
-	// the job's links come back as links on stage-out; cleanup removes them without following
+	// the job's in-tree links come back as links on stage-out; an escaping one is refused
+	// (job_shim_links_test.go); cleanup removes the job's links without following them
 	ws := t.TempDir()
 	if _, _, err := (shimStager{user: "nself-ci-job-1"}).StageIn(context.Background(), "a4", ws); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, filepath.Join(rig.jobs, "1", "a4", "ws", "evil")); err != nil {
+	if err := os.Symlink(target, filepath.Join(rig.jobs, "1", "a4", "evil")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../evil", filepath.Join(rig.jobs, "1", "a4", "ws", "inner")); err != nil {
+		t.Fatal(err)
+	}
+	if err := (shimStager{user: "nself-ci-job-1"}).StageOut(context.Background(), "a4", ws); err == nil {
+		t.Fatal("stage-out accepted a link that climbs out of the job workspace")
+	}
+	if err := os.Remove(filepath.Join(rig.jobs, "1", "a4", "ws", "inner")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("src", filepath.Join(rig.jobs, "1", "a4", "ws", "inner")); err != nil {
 		t.Fatal(err)
 	}
 	if err := (shimStager{user: "nself-ci-job-1"}).StageOut(context.Background(), "a4", ws); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Lstat(filepath.Join(ws, "evil")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+	if info, err := os.Lstat(filepath.Join(ws, "inner")); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("the job's link did not come back as a link: %v", err)
 	}
 	if err := cleanupShimAttempt(context.Background(), "nself-ci-job-1", t.TempDir(), "a4"); err != nil {

@@ -10,7 +10,8 @@ package main
 // Constraints: no new privilege: the job user creates and owns its copy, so no chown, chgrp or mode change
 //          ever runs on a path, and no other job user, nor the world, can enter it (0700 under the slot
 //          root of that user alone). The agent never opens the job user's files; the trees cross as
-//          streams, and both ends refuse to follow links (job_shim_tree.go). The op's paths are built
+//          streams, and both ends refuse to follow links or to create one that leads out (job_shim_tree.go,
+//          job_shim_links.go); a refused stage-out empties the workspace. The op's paths are built
 //          by the shim from its own user name; the request carries only the op and the attempt id.
 
 import (
@@ -100,7 +101,8 @@ func (s shimStager) StageIn(ctx context.Context, attempt, workspace string) (str
 	return dirs.WS, []string{"HOME=" + dirs.Home, "TMPDIR=" + dirs.Tmp}, nil
 }
 
-// StageOut empties the workspace and unpacks the job user's copy into it.
+// StageOut empties the workspace and unpacks the job user's copy into it; a refused tree (a link that
+// leaves the workspace) fails the step and leaves the workspace empty.
 func (s shimStager) StageOut(ctx context.Context, attempt, workspace string) error {
 	root, err := os.OpenRoot(workspace)
 	if err != nil {
@@ -119,8 +121,11 @@ func (s shimStager) StageOut(ctx context.Context, attempt, workspace string) err
 	}()
 	err = unpackTree(root, pr)
 	_, _ = io.Copy(io.Discard, pr) // read to the end, so a refused tree never leaves the shim blocked on its pipe
-	if cerr := <-called; cerr != nil {
-		return cerr
+	if cerr := <-called; err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = emptyTree(root) // fail closed: a refused or partial tree leaves nothing behind for AfterJob
 	}
 	return err
 }
