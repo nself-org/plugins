@@ -1,2 +1,9 @@
 # D-0832: the np_e2ee copies 001 made under the pinned search_path; the converted boot must leave them (and their rows).
-np_e2ee.np_e2ee_identity_keys signed_prekeys one_time_prekeys kyber_prekeys prekey_bundles_served verification_states safety_numbers audit_log
+np_e2ee.np_e2ee_identity_keys
+np_e2ee.np_e2ee_signed_prekeys
+np_e2ee.np_e2ee_one_time_prekeys
+np_e2ee.np_e2ee_kyber_prekeys
+np_e2ee.np_e2ee_prekey_bundles_served
+np_e2ee.np_e2ee_verification_states
+np_e2ee.np_e2ee_safety_numbers
+np_e2ee.np_e2ee_audit_log
