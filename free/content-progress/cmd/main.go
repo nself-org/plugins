@@ -28,10 +28,8 @@ func main() {
 
 	internal.MustBootMigrations(context.Background(), pool)
 
+	// Boot migrations own the whole schema (public tables, D-0832); there is no Go DDL.
 	db := internal.NewDB(pool, cfg)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("content-progress: schema init failed: %v", err)
-	}
 
 	srv := sdk.NewServer(cfg.Port)
 	r := srv.Router()
