@@ -1,9 +1,9 @@
 package main
 
-// Purpose: the "nself claw pair" and "nself claw unlock" RunE
-// implementations plus the pairing helpers they use (code generation, cloud/
-// local registration, status polling, QR rendering). Inputs are the cobra
-// command/args; outputs are a paired/unlocked device or an error.
+// Purpose: the "nself claw pair" RunE implementation plus the pairing helpers
+// it uses (code generation, cloud/local registration, status polling, QR
+// rendering). Inputs are the cobra command/args; outputs are a paired device
+// or an error. The unlock and setup commands live in claw_unlock.go.
 // Constraints: moved from cli/cmd/commands/claw_pair.go under CLI-R11;
 // config.Load -> projectenv.Load, internal/httptimeout -> local copy (see
 // those packages' doc comments for why). No other behavior change.
@@ -217,73 +217,6 @@ func runClawPair(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-}
-
-func runClawUnlock(cmd *cobra.Command, args []string) error {
-	if clawUnlockMinutes < 1 || clawUnlockMinutes > 60 {
-		return fmt.Errorf("--minutes must be between 1 and 60")
-	}
-
-	clawURL := os.Getenv("PLUGIN_CLAW_INTERNAL_URL")
-	if clawURL == "" {
-		clawURL = "http://claw:3710"
-	}
-
-	payload, err := json.Marshal(map[string]int{"duration_minutes": clawUnlockMinutes})
-	if err != nil {
-		return fmt.Errorf("marshal unlock request: %w", err)
-	}
-
-	ctx := cmd.Context()
-	req, err := http.NewRequestWithContext(ctx, "POST", clawURL+"/claw/auth/unlock", strings.NewReader(string(payload)))
-	if err != nil {
-		return fmt.Errorf("create unlock request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := httptimeout.Default.Do(req)
-	if err != nil {
-		return fmt.Errorf("unlock request failed: %w\nMake sure the claw plugin is running (nself plugin install claw && nself start)", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("unlock rejected: this command must be run on the server (localhost only)")
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var body map[string]string
-		json.NewDecoder(resp.Body).Decode(&body)
-		msg := body["error"]
-		if msg == "" {
-			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
-		}
-		return fmt.Errorf("unlock failed: %s", msg)
-	}
-
-	var result struct {
-		ExpiresAt string `json:"expires_at"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	expiresDisplay := result.ExpiresAt
-	if t, err := time.Parse(time.RFC3339, result.ExpiresAt); err == nil {
-		expiresDisplay = t.Local().Format("15:04:05")
-	}
-
-	serverURL := getServerURL()
-	fmt.Println()
-	fmt.Printf("  nClaw Web UI unlocked for %d minutes.\n", clawUnlockMinutes)
-	fmt.Println()
-	fmt.Printf("  Visit: %s/claw/ui\n", serverURL)
-	fmt.Println()
-	fmt.Println("  You will be able to:")
-	fmt.Println("    - Create an account (set display name + password)")
-	fmt.Println("    - Register a passkey (WebAuthn)")
-	fmt.Println()
-	fmt.Printf("  The unlock expires at %s or after first use.\n", expiresDisplay)
-	fmt.Println()
-
-	return nil
 }
 
 // printQRCode renders a QR code to the terminal using Unicode block characters.
