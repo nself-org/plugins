@@ -2353,7 +2353,7 @@
         "command": "gauth",
         "subcommands": []
       },
-      "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
+      "description": "gauth is the CLI for the plugin-gauth server: status, refresh, and revoke.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
