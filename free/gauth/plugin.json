@@ -6,16 +6,16 @@
     "binary": "nself-gauth",
     "command": "gauth"
   },
-  "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
+  "description": "gauth is the CLI for the plugin-gauth server: status, refresh, and revoke.",
   "entryPoint": "cmd/",
   "envVars": [
     {
-      "description": "",
+      "description": "URL of the plugin-gauth server.",
       "name": "GAUTH_URL",
       "required": false
     },
     {
-      "description": "",
+      "description": "Port of the plugin-gauth server.",
       "name": "GAUTH_PORT",
       "required": false
     }
