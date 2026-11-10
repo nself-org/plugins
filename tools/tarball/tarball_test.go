@@ -47,10 +47,15 @@ func fixture(t *testing.T) string {
 		}
 	}
 	// setuid, setgid and sticky bits survive --mode='go-w,a+rX' in GNU tar.
+	// macOS drops setgid when the file's group (inherited from the parent
+	// directory) is not ours, so take our own group first.
 	for name, mode := range map[string]os.FileMode{
 		"install.sh": 0o775, "suid.sh": 0o775 | os.ModeSetuid,
 		"shared": 0o775 | os.ModeSetgid, "sticky": 0o777 | os.ModeSticky,
 	} {
+		if err := os.Chown(filepath.Join(p, name), -1, os.Getegid()); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.Chmod(filepath.Join(p, name), mode); err != nil {
 			t.Fatal(err)
 		}
