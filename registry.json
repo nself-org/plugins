@@ -3286,7 +3286,7 @@
         "sha256": "cd1d301cfb6a09aea90c0787f8ce2ae5008cb3786aca3a3f60293a7c7ecca697"
       },
       "dependencies": [],
-      "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
+      "description": "gauth is the CLI for the plugin-gauth server: status, refresh, and revoke.",
       "download_url": "https://plugins.nself.org/plugins/gauth/tarball",
       "implementation": {
         "binaryName": "nself-gauth",
