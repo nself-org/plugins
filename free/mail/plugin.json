@@ -6,7 +6,7 @@
     "binary": "nself-mail",
     "command": "mail"
   },
-  "description": "Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification. Also covers Elastic Email delivery, merged from the retired email plugin.",
+  "description": "Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification.",
   "entryPoint": "cmd/",
   "envVars": [
     {
@@ -25,12 +25,12 @@
       "required": false
     },
     {
-      "description": "Elastic Email API key. Enables the Elastic Email provider (merged from the retired email plugin).",
+      "description": "Elastic Email API key. Not read yet: the Elastic Email adapter lands in P8-CONV-06.",
       "name": "ELASTIC_EMAIL_API_KEY",
       "required": false
     },
     {
-      "description": "Default From address for Elastic Email delivery (merged from the retired email plugin).",
+      "description": "Default From address for Elastic Email. Not read yet: the Elastic Email adapter lands in P8-CONV-06.",
       "name": "ELASTIC_EMAIL_FROM",
       "required": false
     }
@@ -60,8 +60,7 @@
     "transactional",
     "broadcast",
     "elastic-email",
-    "templates",
-    "delivery-tracking"
+    "templates"
   ],
   "tier": "free",
   "version": "1.2.13"
