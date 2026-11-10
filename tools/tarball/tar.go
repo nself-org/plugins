@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -19,14 +17,26 @@ const (
 	recordSize = 20 * blockSize
 )
 
-// normMode applies GNU tar --mode='go-w,a+rX' to a permission set.
-func normMode(perm os.FileMode, dir bool) int64 {
-	m := int64(perm.Perm()) &^ 0o022
-	m |= 0o444
+// normMode applies GNU tar --mode='go-w,a+rX' to a file mode. Like GNU tar it
+// keeps the setuid, setgid and sticky bits (a checkout under a g+s directory
+// has setgid directories).
+func normMode(mode os.FileMode, dir bool) int64 {
+	m := int64(mode.Perm())&^0o022 | 0o444
 	if dir || m&0o111 != 0 {
 		m |= 0o111
 	}
+	for bit, v := range map[os.FileMode]int64{os.ModeSetuid: 0o4000, os.ModeSetgid: 0o2000, os.ModeSticky: 0o1000} {
+		if mode&bit != 0 {
+			m |= v
+		}
+	}
 	return m
+}
+
+// paxPath reports whether GNU tar (POSIX format) stores a member name in a
+// PAX "path" record: it is longer than the 100-byte field or not pure ASCII.
+func paxPath(name string) bool {
+	return len(name) > 100 || strings.IndexFunc(name, func(r rune) bool { return r > 0x7f }) >= 0
 }
 
 // octal writes v as zero-padded octal of width len(dst)-1 plus a NUL. It
@@ -170,7 +180,7 @@ func (t *tarWriter) entry(name, src string, fi os.FileInfo) error {
 	if len(link) > 100 {
 		recs += paxRecord("linkpath", link)
 	}
-	if len(name) > 100 {
+	if paxPath(name) {
 		recs += paxRecord("path", name)
 	}
 	if recs != "" {
@@ -263,38 +273,4 @@ func WriteTar(w io.Writer, base string, members []string) error {
 		return err
 	}
 	return t.padTo(recordSize)
-}
-
-// DetTar writes out as a gzip (no name, zero mtime, best compression) of the
-// deterministic tar of members. The tar stream matches deterministic-tar.sh
-// byte for byte; the gzip layer does not (Go's deflate is not `gzip -n -9`),
-// so the .tar.gz and its sha256 differ from the script's. A failed build
-// leaves no partial file behind.
-func DetTar(out, base string, members []string) (err error) {
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		return err
-	}
-	f, err := os.Create(out)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			os.Remove(out) // no partial archive
-		}
-	}()
-	bw := bufio.NewWriter(f)
-	zw, err := gzip.NewWriterLevel(bw, gzip.BestCompression)
-	if err != nil {
-		f.Close()
-		return err
-	}
-	zw.OS = 3
-	err = WriteTar(zw, base, members)
-	for _, closeFn := range []func() error{zw.Close, bw.Flush, f.Close} {
-		if cerr := closeFn(); err == nil {
-			err = cerr
-		}
-	}
-	return err
 }

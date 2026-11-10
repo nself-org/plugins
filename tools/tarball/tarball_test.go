@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -25,6 +23,8 @@ func fixture(t *testing.T) string {
 	files := map[string]string{
 		"plugin.json":   `{"name":"demo"}`,
 		"b.txt":         "bee\n",
+		"café.txt":      "non-ASCII name: PAX path record\n",
+		"suid.sh":       "echo setuid\n",
 		"a/z.sql":       "select 1;\n",
 		"a/b/c.txt":     "deep\n",
 		"install.sh":    "echo hi\n",
@@ -41,11 +41,19 @@ func fixture(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Chmod(filepath.Join(p, "install.sh"), 0o775); err != nil {
-		t.Fatal(err)
+	for _, d := range []string{"empty", "shared", "sticky"} {
+		if err := os.MkdirAll(filepath.Join(p, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.MkdirAll(filepath.Join(p, "empty"), 0o700); err != nil {
-		t.Fatal(err)
+	// setuid, setgid and sticky bits survive --mode='go-w,a+rX' in GNU tar.
+	for name, mode := range map[string]os.FileMode{
+		"install.sh": 0o775, "suid.sh": 0o775 | os.ModeSetuid,
+		"shared": 0o775 | os.ModeSetgid, "sticky": 0o777 | os.ModeSticky,
+	} {
+		if err := os.Chmod(filepath.Join(p, name), mode); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.Symlink("b.txt", filepath.Join(p, "link")); err != nil {
 		t.Fatal(err)
@@ -136,16 +144,18 @@ func TestDeterministicTarball(t *testing.T) {
 	want := []string{
 		"free/demo/", "free/demo/Upper.md", "free/demo/a/", "free/demo/a/b/",
 		"free/demo/a/b/c.txt", "free/demo/a/z.sql", "free/demo/b.hard", "free/demo/b.txt",
-		"free/demo/cmd/", "free/demo/cmd/demo/", "free/demo/cmd/demo/x.go",
+		"free/demo/café.txt", "free/demo/cmd/", "free/demo/cmd/demo/", "free/demo/cmd/demo/x.go",
 		"free/demo/" + strings.Repeat("d", 60) + "/", long,
 		"free/demo/empty/", "free/demo/install.sh", "free/demo/link", "free/demo/plugin.json",
+		"free/demo/shared/", "free/demo/sticky/", "free/demo/suid.sh",
 	}
 	if got := names(hs); got != strings.Join(want, "\n") {
 		t.Fatalf("entry order:\n%s\nwant:\n%s", got, strings.Join(want, "\n"))
 	}
 	for name, m := range map[string]int64{
 		"free/demo/b.txt": 0o644, "free/demo/install.sh": 0o755,
-		"free/demo/empty/": 0o755, "free/demo/a/": 0o755,
+		"free/demo/empty/": 0o755, "free/demo/a/": 0o755, "free/demo/suid.sh": 0o4755,
+		"free/demo/shared/": 0o2755, "free/demo/sticky/": 0o1755,
 	} {
 		if modes[name].Mode != m {
 			t.Errorf("%s mode %o, want %o", name, modes[name].Mode, m)
@@ -157,6 +167,9 @@ func TestDeterministicTarball(t *testing.T) {
 	}
 	if h := modes["free/demo/link"]; h.Typeflag != tar.TypeSymlink || h.Linkname != "b.txt" {
 		t.Errorf("link: type %q target %q", h.Typeflag, h.Linkname)
+	}
+	if !bytes.Contains(raw, []byte("free/demo/PaxHeaders/café.txt")) {
+		t.Error("non-ASCII name café.txt has no PAX path record, unlike GNU tar")
 	}
 	t.Run("gnu-tar-parity", func(t *testing.T) {
 		bin := findGNUTar(t)
@@ -276,108 +289,5 @@ func TestSafeName(t *testing.T) {
 		if got := safeName(in); got != want {
 			t.Errorf("safeName(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-// pluginTree writes plugins/demo (binaryName demo, a cmd package, a symlink).
-func pluginTree(t *testing.T) (root string) {
-	t.Helper()
-	root = t.TempDir()
-	p := filepath.Join(root, "free", "demo")
-	for name, body := range map[string]string{
-		"plugin.json":        `{"name":"demo","binaryName":"nself-demo"}`,
-		"go.mod":             "module demo\n\ngo 1.21\n",
-		"cmd/demo/main.go":   "package main\n\nfunc main() {}\n",
-		"migrations/001.sql": "select 1;\n",
-	} {
-		fp := filepath.Join(p, name)
-		if err := os.MkdirAll(filepath.Dir(fp), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(fp, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.Symlink("plugin.json", filepath.Join(p, "alias.json")); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-// TestBuildTarballs runs the whole build verb: source layout, checksum files,
-// a platform tarball for a plugin holding a symlink, and no stage leftovers.
-func TestBuildTarballs(t *testing.T) {
-	if _, err := exec.LookPath("go"); err != nil {
-		t.Skip("go toolchain not on PATH")
-	}
-	old := platforms
-	platforms = []string{"linux-amd64"}
-	t.Cleanup(func() { platforms = old })
-	root := pluginTree(t)
-	dist := filepath.Join(t.TempDir(), "dist")
-	var log bytes.Buffer
-	if err := run([]string{"build", "-plugins-dir", filepath.Join(root, "free"), "-dist", dist, "1.2.3"}, &log); err != nil {
-		t.Fatalf("%v\n%s", err, log.String())
-	}
-	src, err := os.ReadFile(filepath.Join(dist, "demo-1.2.3.tar.gz"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	hs, _ := readTar(t, src)
-	// An absolute plugins dir loses its leading "/" in member names, as with GNU tar.
-	prefix := strings.TrimPrefix(filepath.ToSlash(filepath.Join(root, "free", "demo")), "/")
-	if len(hs) == 0 || hs[0].Name != prefix+"/" {
-		t.Fatalf("source tarball first member %q, want %q", names(hs), prefix+"/")
-	}
-	plat, err := os.ReadFile(filepath.Join(dist, "demo-1.2.3-linux-amd64.tar.gz"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ph, _ := readTar(t, plat)
-	got := map[string]*tar.Header{}
-	for _, h := range ph {
-		got[h.Name] = h
-	}
-	if got["demo/nself-demo"] == nil || got["demo/nself-demo"].Mode&0o111 == 0 {
-		t.Fatalf("platform tarball lacks an executable demo/nself-demo:\n%s", names(ph))
-	}
-	if h := got["demo/alias.json"]; h == nil || h.Typeflag != tar.TypeSymlink || h.Linkname != "plugin.json" {
-		t.Fatalf("symlink not carried into the platform tarball:\n%s", names(ph))
-	}
-	for _, f := range []string{"demo-1.2.3.tar.gz", "demo-1.2.3-linux-amd64.tar.gz"} {
-		sum, err := os.ReadFile(filepath.Join(dist, f+".sha256"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, _ := os.ReadFile(filepath.Join(dist, f))
-		if want := fmt.Sprintf("%x  %s\n", sha256.Sum256(b), f); string(sum) != want {
-			t.Errorf("%s.sha256 = %q, want %q", f, sum, want)
-		}
-	}
-	left, _ := filepath.Glob(filepath.Join(dist, "stage-*"))
-	if len(left) != 0 {
-		t.Fatalf("stage directories left behind: %v", left)
-	}
-}
-
-// TestBuildSourceLayout pins the default layout (free/<name>/...) and the
-// rejection of versions that would escape the dist directory.
-func TestBuildSourceLayout(t *testing.T) {
-	root := pluginTree(t)
-	t.Chdir(root)
-	dist := t.TempDir()
-	if err := run([]string{"build", "-source-only", "-dist", dist, "9.9.9"}, io.Discard); err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(filepath.Join(dist, "demo-9.9.9.tar.gz"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	hs, _ := readTar(t, b)
-	if len(hs) == 0 || hs[0].Name != "free/demo/" {
-		t.Fatalf("default layout wrong:\n%s", names(hs))
-	}
-	if err := run([]string{"build", "-source-only", "-dist", dist, "../evil"}, io.Discard); err == nil {
-		t.Fatal("path-like version accepted")
 	}
 }

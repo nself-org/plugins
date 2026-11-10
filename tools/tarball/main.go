@@ -12,6 +12,8 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -66,6 +68,40 @@ func detTarCmd(args []string) error {
 		}
 	}
 	return DetTar(out, base, rest)
+}
+
+// DetTar writes out as a gzip (no name, zero mtime, best compression) of the
+// deterministic tar of members. The tar stream matches deterministic-tar.sh
+// byte for byte; the gzip layer does not (Go's deflate is not `gzip -n -9`),
+// so the .tar.gz and its sha256 differ from the script's. A failed build
+// leaves no partial file behind.
+func DetTar(out, base string, members []string) (err error) {
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(out) // no partial archive
+		}
+	}()
+	bw := bufio.NewWriter(f)
+	zw, err := gzip.NewWriterLevel(bw, gzip.BestCompression)
+	if err != nil {
+		f.Close()
+		return err
+	}
+	zw.OS = 3
+	err = WriteTar(zw, base, members)
+	for _, closeFn := range []func() error{zw.Close, bw.Flush, f.Close} {
+		if cerr := closeFn(); err == nil {
+			err = cerr
+		}
+	}
+	return err
 }
 
 // writeSum writes "<sha256>  <basename>\n" next to path and returns the hash.
