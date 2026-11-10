@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nself.org/schema/infra-v1.schema.json",
+  "title": "contract:infra.v1",
+  "description": "Server onboarding wire types. Adding a Phase or Reason value is a contract minor; removing one is a major. No object carries a token, key or other secret.",
+  "$defs": {
+    "Version": { "type": "string", "enum": ["infra.v1"] },
+    "Name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "Money": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$" },
+    "Currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "Time": { "type": "string", "format": "date-time" },
+    "PlanHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "Phase": {
+      "type": "string",
+      "enum": ["preflight", "quoted", "approved", "provisioning", "provisioned", "hardened", "installed", "tls", "healthy", "done", "failed", "rolled_back", "torn_down"]
+    },
+    "Reason": {
+      "type": "string",
+      "enum": ["stale", "invalid", "unbound", "expired", "scope", "region", "quota", "budget", "offline", "unsupported", "conflict", "leftover"]
+    },
+    "Plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "provider", "server_type", "location", "image", "name", "labels", "hardening_digest", "quote_total", "currency", "price_list_fetched_at"],
+      "properties": {
+        "version": { "$ref": "#/$defs/Version" },
+        "provider": { "$ref": "#/$defs/Name" },
+        "server_type": { "type": "string", "minLength": 1 },
+        "location": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "name": { "$ref": "#/$defs/Name" },
+        "labels": { "type": ["object", "null"], "additionalProperties": { "type": "string" } },
+        "hardening_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "quote_total": { "$ref": "#/$defs/Money" },
+        "currency": { "$ref": "#/$defs/Currency" },
+        "price_list_fetched_at": { "$ref": "#/$defs/Time" }
+      }
+    },
+    "PriceLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item", "kind", "hourly", "monthly"],
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "hourly": { "$ref": "#/$defs/Money" },
+        "monthly": { "$ref": "#/$defs/Money" }
+      }
+    },
+    "Quote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "provider", "location", "currency", "lines", "total", "fetched_at"],
+      "properties": {
+        "version": { "$ref": "#/$defs/Version" },
+        "provider": { "$ref": "#/$defs/Name" },
+        "location": { "type": "string", "minLength": 1 },
+        "currency": { "$ref": "#/$defs/Currency" },
+        "lines": { "type": ["array", "null"], "items": { "$ref": "#/$defs/PriceLine" } },
+        "total": { "$ref": "#/$defs/Money" },
+        "fetched_at": { "$ref": "#/$defs/Time" }
+      }
+    },
+    "TokenReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "provider", "present", "source", "valid", "scope"],
+      "properties": {
+        "version": { "$ref": "#/$defs/Version" },
+        "provider": { "$ref": "#/$defs/Name" },
+        "present": { "type": "boolean" },
+        "source": { "type": "string" },
+        "valid": { "type": "boolean" },
+        "scope": { "type": "string" },
+        "reason": { "$ref": "#/$defs/Reason" }
+      }
+    },
+    "PhaseEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "at"],
+      "properties": {
+        "phase": { "$ref": "#/$defs/Phase" },
+        "at": { "$ref": "#/$defs/Time" },
+        "reason": { "$ref": "#/$defs/Reason" }
+      }
+    },
+    "RunState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "run_id", "plan_hash", "phase", "history", "started_at", "updated_at"],
+      "properties": {
+        "version": { "$ref": "#/$defs/Version" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "plan_hash": { "$ref": "#/$defs/PlanHash" },
+        "phase": { "$ref": "#/$defs/Phase" },
+        "reason": { "$ref": "#/$defs/Reason" },
+        "server_id": { "type": "string" },
+        "ipv4": { "type": "string" },
+        "ipv6": { "type": "string" },
+        "history": { "type": ["array", "null"], "items": { "$ref": "#/$defs/PhaseEvent" } },
+        "started_at": { "$ref": "#/$defs/Time" },
+        "updated_at": { "$ref": "#/$defs/Time" }
+      }
+    }
+  }
+}
