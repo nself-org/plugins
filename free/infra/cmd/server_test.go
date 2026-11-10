@@ -32,6 +32,35 @@ func newFakeServerClient() *fakeServerClient {
 	}
 }
 
+// Stubs for the onboarding-era Client methods (pricing, locations, SSH keys,
+// scope probe). The server command does not call them; they only keep the fake
+// a valid server.Client.
+func (f *fakeServerClient) GetPricing(_ context.Context) (*server.Pricing, error) {
+	return &server.Pricing{}, nil
+}
+
+func (f *fakeServerClient) ListLocations(_ context.Context) ([]server.Location, error) {
+	return nil, nil
+}
+
+func (f *fakeServerClient) ListDatacenters(_ context.Context) ([]server.Datacenter, error) {
+	return nil, nil
+}
+
+func (f *fakeServerClient) CreateSSHKey(_ context.Context, name, publicKey string, labels map[string]string) (*server.SSHKey, error) {
+	return &server.SSHKey{ID: 1, Name: name, PublicKey: publicKey, Labels: labels}, nil
+}
+
+func (f *fakeServerClient) DeleteSSHKey(_ context.Context, _ int64) error { return nil }
+
+func (f *fakeServerClient) ListSSHKeysByLabel(_ context.Context, _ string) ([]server.SSHKey, error) {
+	return nil, nil
+}
+
+func (f *fakeServerClient) ProbeWriteScope(_ context.Context) (string, error) {
+	return "read-write", nil
+}
+
 func (f *fakeServerClient) CreateServer(_ context.Context, req server.ProvisionRequest) (*server.Server, error) {
 	id := f.nextID
 	f.nextID++
