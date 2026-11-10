@@ -29,8 +29,8 @@ func TestGauthConvergedManifest(t *testing.T) {
 	if n, _ := m["name"].(string); n != "gauth" {
 		t.Errorf("name is %q, want gauth", n)
 	}
-	if d, _ := m["description"].(string); !strings.Contains(d, "plugin-gauth") {
-		t.Errorf("description %q must name plugin-gauth", d)
+	if d, _ := m["description"].(string); !strings.Contains(d, "CLI for the plugin-gauth server") {
+		t.Errorf("description %q must state that gauth is the CLI for the plugin-gauth server", d)
 	}
 
 	vars := manifestEnvVars(t, m)
