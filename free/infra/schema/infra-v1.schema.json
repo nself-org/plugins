@@ -72,6 +72,7 @@
         "source": { "type": "string" },
         "valid": { "type": "boolean" },
         "scope": { "type": "string" },
+        "expires_at": { "$ref": "#/$defs/Time" },
         "reason": { "$ref": "#/$defs/Reason" }
       }
     },
@@ -88,13 +89,14 @@
     "RunState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "run_id", "plan_hash", "phase", "history", "started_at", "updated_at"],
+      "required": ["version", "run_id", "plan_hash", "phase", "adopted", "history", "started_at", "updated_at"],
       "properties": {
         "version": { "$ref": "#/$defs/Version" },
         "run_id": { "type": "string", "minLength": 1 },
         "plan_hash": { "$ref": "#/$defs/PlanHash" },
         "phase": { "$ref": "#/$defs/Phase" },
         "reason": { "$ref": "#/$defs/Reason" },
+        "adopted": { "type": "boolean" },
         "server_id": { "type": "string" },
         "ipv4": { "type": "string" },
         "ipv6": { "type": "string" },

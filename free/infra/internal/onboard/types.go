@@ -110,25 +110,29 @@ type PriceLine struct {
 }
 
 // TokenReport describes a provider credential without carrying it: where it
-// came from, whether it works and what it may do.
+// came from, whether it works and what it may do. ExpiresAt is the expiry the
+// provider reports, nil when the provider reports none.
 type TokenReport struct {
-	Version  string `json:"version"`
-	Provider string `json:"provider"`
-	Present  bool   `json:"present"`
-	Source   string `json:"source"`
-	Valid    bool   `json:"valid"`
-	Scope    string `json:"scope"`
-	Reason   Reason `json:"reason,omitempty"`
+	Version   string     `json:"version"`
+	Provider  string     `json:"provider"`
+	Present   bool       `json:"present"`
+	Source    string     `json:"source"`
+	Valid     bool       `json:"valid"`
+	Scope     string     `json:"scope"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Reason    Reason     `json:"reason,omitempty"`
 }
 
 // RunState is the persisted progress of one onboarding run, bound to the
-// approved PlanHash.
+// approved PlanHash. Adopted is true when the run took over an existing
+// server: rollback and teardown detach that server and never delete it.
 type RunState struct {
 	Version   string       `json:"version"`
 	RunID     string       `json:"run_id"`
 	PlanHash  PlanHash     `json:"plan_hash"`
 	Phase     Phase        `json:"phase"`
 	Reason    Reason       `json:"reason,omitempty"`
+	Adopted   bool         `json:"adopted"`
 	ServerID  string       `json:"server_id,omitempty"`
 	IPv4      string       `json:"ipv4,omitempty"`
 	IPv6      string       `json:"ipv6,omitempty"`
