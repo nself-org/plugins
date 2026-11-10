@@ -169,7 +169,8 @@ func (c *hetznerClient) doStatus(ctx context.Context, method, path string, body,
 			ae.Status = resp.StatusCode
 			return resp.StatusCode, &hetznerResponseError{envelope: ae, path: method + " " + redactPath(path)}
 		}
-		return resp.StatusCode, fmt.Errorf("hetzner API %s %s: HTTP %d", method, redactPath(path), resp.StatusCode)
+		// Keep the "METHOD /path: NNN" head cmd classifies on; the body is never echoed.
+		return resp.StatusCode, fmt.Errorf("hetzner API %s %s: %d", method, redactPath(path), resp.StatusCode)
 	}
 
 	if out == nil || len(raw) == 0 {

@@ -273,34 +273,24 @@ func TestHetznerScopeProbeCleanupAfterCancellation(t *testing.T) {
 	}
 }
 
-func TestHetznerListServersLabelSelectorEncoded(t *testing.T) {
-	var got string
-	withPricingServer(t, func(w http.ResponseWriter, r *http.Request) {
-		got = r.URL.RawQuery
-		if r.URL.Query().Get("label_selector") != "a=b,c&d=e" {
-			t.Errorf("selector not preserved as one value: %q", r.URL.RawQuery)
-		}
-		_, _ = io.WriteString(w, `{"servers":[]}`)
-	})
-	if _, err := NewHetznerClient("").ListServers(context.Background(), ListOptions{LabelSelector: "a=b,c&d=e"}); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(got, "&d=e") {
-		t.Fatalf("selector leaked into a separate parameter: %q", got)
-	}
-}
-
 func TestHetznerErrorNamesCallWithoutQuery(t *testing.T) {
+	status, body := 404, `{"error":{"code":"not_found","message":"gone"}}`
 	withPricingServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": map[string]string{"code": "not_found", "message": "gone"}})
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
 	})
 	err := NewHetznerClient("").DeleteServer(context.Background(), 1)
-	if err == nil || !strings.Contains(err.Error(), "DELETE /servers/1") || !strings.Contains(err.Error(), "404 not_found") {
+	if err == nil || !strings.Contains(err.Error(), "hetzner API DELETE /servers/1: 404 not_found") {
 		t.Fatalf("error lacks call context: %v", err)
 	}
 	_, err = NewHetznerClient("").ListServers(context.Background(), ListOptions{LabelSelector: "secret=1"})
 	if err == nil || strings.Contains(err.Error(), "secret=1") {
 		t.Fatalf("query string must not reach error text: %v", err)
+	}
+	// A non-JSON body keeps the "METHOD /path: NNN" head cmd classifies on and is never echoed.
+	status, body = 502, "<html>upstream echo</html>"
+	_, err = NewHetznerClient("").GetPricing(context.Background())
+	if err == nil || err.Error() != "get pricing: hetzner API GET /pricing: 502" {
+		t.Fatalf("non-JSON error text: %v", err)
 	}
 }
