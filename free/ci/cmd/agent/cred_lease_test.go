@@ -25,7 +25,7 @@ func TestServeDeliversARunnerCredentialThroughTheWrapper(t *testing.T) {
 	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
 	script := `[ "$ACTIONS_RUNNER_INPUT_JITCONFIG" = ` + secret + ` ] && echo credential-delivered; ps -o args= -p $$; echo "echoed $ACTIONS_RUNNER_INPUT_JITCONFIG"`
 	lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "T", CompatMode: protocol.Compat15,
-		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", script}, Env: map[string]string{"NSELF_AGENT_TEST_CHILD": "1"}},
+		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", script}, Env: map[string]string{"NSELF_AGENT_TEST_CHILD": "1"}, NeedsSource: noSource()},
 		Checkout: protocol.Checkout{Revision: rev40}, Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z",
 		RunnerCredential: &protocol.RunnerCredential{Kind: "github-jitconfig", Value: secret, ExpiresAt: "2030-01-01T00:00:00Z"}}
 	p.send("lease", lease, 1, "l1")

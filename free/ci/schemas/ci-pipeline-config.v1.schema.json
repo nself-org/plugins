@@ -169,6 +169,12 @@
               "type": "string"
             }
           },
+          "needs_source": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "matrix": {
             "type": [
               "null",

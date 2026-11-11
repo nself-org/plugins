@@ -159,10 +159,8 @@ type leaseRunner struct {
 
 func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResult, error) {
 	l := j.Lease
-	if l.Checkout.Size > 0 && j.Setup.SourceDir == "" {
-		// Staging the checkout is a Before hook's job (internal/agent/checkout); a job
-		// run on an empty tree would report a pass for code it never saw.
-		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
+	if err := sourceStaged(l, j.Setup.SourceDir); err != nil {
+		return session.JobResult{}, err
 	}
 	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, NetworkScope: l.NetworkScope, Trust: l.Trust, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir, Evidence: l.Evidence}
 	if l.Evidence != nil && l.Evidence.Job != "" { // the evidence names the job the coordinator recorded for the attempt
@@ -178,6 +176,26 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		}
 	}
 	return runSpec(ctx, spec, in)
+}
+
+// errNoSource refuses a lease whose job reads a revision the agent never staged.
+var errNoSource = errors.New("the lease names a revision but no source tree was staged; only a job that declares needs_source false runs without one")
+
+// sourceStaged refuses a lease that names a revision (or carries a checkout) when no hook staged a tree,
+// unless the job declares needs_source false. Staging is a Before hook's job (internal/agent/checkout); a
+// carrier without a checkout route (Size 0) stages nothing, and a job run on an empty tree would report a
+// pass for code it never saw.
+func sourceStaged(l protocol.Lease, sourceDir string) error {
+	if sourceDir != "" {
+		return nil
+	}
+	if l.Checkout.Size > 0 {
+		return errors.New("the lease has a checkout but no hook staged it")
+	}
+	if l.Checkout.Revision != "" && l.Job.SourceNeeded() {
+		return errNoSource
+	}
+	return nil
 }
 
 // entrypointKinds are the credential kinds whose runner image has an entrypoint that is not a pass-through

@@ -70,7 +70,7 @@ func TestAgentReceivesImageAndLeaseNetwork(t *testing.T) {
 			cirun.RegisterIsolation(deliveredSpecObserver{&got, stop})
 			cirun.RegisterImage(pinnedImageHook{})
 			runner := leaseRunner{coordinator: "test"}
-			_, err := runner.Run(context.Background(), session.JobRun{Lease: protocol.Lease{AttemptID: "network", NetworkScope: scope, Checkout: protocol.Checkout{Revision: rev40}, Job: model.Job{Isolation: "container", Run: []string{"true"}}}})
+			_, err := runner.Run(context.Background(), session.JobRun{Lease: protocol.Lease{AttemptID: "network", NetworkScope: scope, Checkout: protocol.Checkout{Revision: rev40}, Job: model.Job{Isolation: "container", Run: []string{"true"}, NeedsSource: noSource()}}})
 			if err != nil {
 				t.Fatal(err)
 			}

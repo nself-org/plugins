@@ -63,6 +63,7 @@ func cloneJob(j model.Job) model.Job {
 		c.Matrix = &model.JobMatrix{Platform: cloneAny(j.Matrix.Platform)}
 	}
 	c.Required, c.Idempotent, c.Retry = clonePtr(j.Required), clonePtr(j.Idempotent), clonePtr(j.Retry)
+	c.NeedsSource = clonePtr(j.NeedsSource)
 	if j.When != nil {
 		w := *j.When
 		w.Branches, w.Paths, w.EnvPresent = cloneStrings(j.When.Branches), cloneStrings(j.When.Paths), cloneStrings(j.When.EnvPresent)
