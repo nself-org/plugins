@@ -9,6 +9,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -36,6 +37,25 @@ func (ra *remoteAttempt) checkEvidence(raw json.RawMessage) model.Evidence {
 		}
 	}
 	return ev
+}
+
+// unboundPassReason names why a remote pass may not settle passed: the document is not bound to the
+// revision the node was given (no source tree was staged, the tree was dirty, or it was another commit).
+const unboundPassReason = "unbound_pass"
+
+// unboundPass is the failure a pass on unbound evidence settles as, or nil. checkEvidence holds the
+// document to the attempt; this holds it to the job: only a job that declares needs_source false may pass
+// on evidence that is not bound to the revision, since it never read the tree. Until a carrier without a
+// checkout route (carrier B) can stage one, that declaration is the only way such a carrier passes a job.
+func unboundPass(ev model.Evidence, job model.Job) error {
+	if ev.Result != "pass" || ev.Binding.State != "unbound" || !job.SourceNeeded() {
+		return nil
+	}
+	why := "the node's evidence is not bound to the revision"
+	if ev.Binding.Reason != nil {
+		why += " (" + string(*ev.Binding.Reason) + ")"
+	}
+	return errors.New(unboundPassReason + ": " + why + "; a pass needs the staged source tree unless the job declares needs_source false")
 }
 
 // ArtifactRef and CacheRef are not collected by a foreground run (see the file comment).

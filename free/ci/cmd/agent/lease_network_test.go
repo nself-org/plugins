@@ -33,7 +33,7 @@ func runLeaseScope(t *testing.T, class model.TrustClass, scope model.NetworkScop
 	cirun.RegisterIsolation(deliveredSpecObserver{&got, errors.New("stop before runtime")})
 	cirun.RegisterImage(pinnedImageHook{})
 	lease := protocol.Lease{AttemptID: "scope", Trust: class, NetworkScope: scope, Checkout: protocol.Checkout{Revision: rev40},
-		Job: model.Job{Isolation: "container", Run: []string{"true"}}}
+		Job: model.Job{Isolation: "container", Run: []string{"true"}, NeedsSource: noSource()}}
 	res, err := leaseRunner{coordinator: "test"}.Run(context.Background(), session.JobRun{Lease: lease})
 	if err != nil {
 		t.Fatal(err)

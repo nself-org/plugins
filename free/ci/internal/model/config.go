@@ -45,6 +45,7 @@ type Job struct {
 	Workdir          string            `json:"workdir,omitempty"`
 	Deps             []string          `json:"deps,omitempty"`
 	NeedsServices    []string          `json:"needs_services,omitempty"`
+	NeedsSource      *bool             `json:"needs_source,omitempty"`
 	Matrix           *JobMatrix        `json:"matrix,omitempty"`
 	Required         *bool             `json:"required,omitempty"`
 	AllowFailure     bool              `json:"allow_failure,omitempty"`
@@ -64,6 +65,10 @@ type Job struct {
 	RunnerCredential string            `json:"-"`
 	RemoteOnly       bool              `json:"-"`
 }
+
+// SourceNeeded says the job reads the repository: undeclared (nil) is true. Only a job that declares
+// needs_source false may run without a staged tree, or pass on unbound evidence.
+func (j Job) SourceNeeded() bool { return j.NeedsSource == nil || *j.NeedsSource }
 
 // JobMatrix limits the target platforms.
 type JobMatrix struct {

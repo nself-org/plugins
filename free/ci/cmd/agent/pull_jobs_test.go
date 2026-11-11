@@ -31,7 +31,7 @@ func shellLease(leaseID, att string, ep uint64, script string, secrets ...protoc
 		declared = append(declared, r.Ref[strings.LastIndex(r.Ref, "/")+1:]) // a job lists the variable names
 	}
 	return protocol.Lease{LeaseID: leaseID, AttemptID: att, Epoch: ep, CompatMode: protocol.Compat15,
-		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", script}, Secrets: declared},
+		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", script}, Secrets: declared, NeedsSource: noSource()},
 		Checkout: protocol.Checkout{Revision: strings.Repeat("a", 40)}, Secrets: secrets, ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 }
 

@@ -276,7 +276,7 @@ func TestPullRunsAShellJobEndToEndAndKeepsTheTokenOutOfIt(t *testing.T) {
 
 	leaseID, att, ep := r.seed("1", "n-1")
 	l := protocol.Lease{LeaseID: leaseID, AttemptID: att, Epoch: ep, CompatMode: protocol.Compat15,
-		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", "echo hello-from-the-job; env; echo done-marker"}},
+		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", "echo hello-from-the-job; env; echo done-marker"}, NeedsSource: noSource()},
 		Checkout: protocol.Checkout{Revision: strings.Repeat("a", 40)}, Secrets: []protocol.SecretRef{}, ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 	var node model.Capability
 	node.Identity.ID = "n-1"

@@ -44,7 +44,7 @@ func useProbe(t *testing.T, f *fakePower) {
 
 func contentionLease(id string) protocol.Lease {
 	return protocol.Lease{LeaseID: id, AttemptID: "attempt-" + id, Epoch: 1, Token: "opaque-token-" + id, CompatMode: protocol.Compat15,
-		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "echo job-done"}}, Checkout: protocol.Checkout{Revision: rev40},
+		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "echo job-done"}, NeedsSource: noSource()}, Checkout: protocol.Checkout{Revision: rev40},
 		Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
 }
 

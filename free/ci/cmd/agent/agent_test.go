@@ -279,7 +279,7 @@ func TestServeStdioRunsALeaseAndKeepsSecretsOut(t *testing.T) {
 		p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
 		if round == 0 {
 			lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "JOBTOKEN-7f3a9c", CompatMode: protocol.Compat15,
-				Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; echo job-done"}}, Checkout: protocol.Checkout{Revision: rev40},
+				Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; echo job-done"}, NeedsSource: noSource()}, Checkout: protocol.Checkout{Revision: rev40},
 				Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
 			p.send("lease", lease, 1, "l1")
 			var logs []string
@@ -358,7 +358,7 @@ func TestServeSendsAgeRecipientAndKeepsIdentityOutOfJobs(t *testing.T) {
 	}
 	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
 	lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "T", CompatMode: protocol.Compat15,
-		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; ls -a; echo done"}}, Checkout: protocol.Checkout{Revision: rev40},
+		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; ls -a; echo done"}, NeedsSource: noSource()}, Checkout: protocol.Checkout{Revision: rev40},
 		Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
 	p.send("lease", lease, 1, "l1")
 	var logs []string
@@ -390,7 +390,7 @@ func TestServeMasksSecretsInTheEvidenceExcerpt(t *testing.T) {
 	p.next("hello")
 	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
 	lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "T", CompatMode: protocol.Compat15,
-		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", `echo "got $TOKEN"; exit 3`}, Secrets: []string{"TOKEN"}},
+		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", `echo "got $TOKEN"; exit 3`}, Secrets: []string{"TOKEN"}, NeedsSource: noSource()},
 		Checkout: protocol.Checkout{Revision: rev40}, Secrets: []protocol.SecretRef{{Ref: "project/TOKEN", Class: "project"}}, ExpiresAt: "2030-01-01T00:00:00Z"}
 	p.send("lease", lease, 1, "l1")
 	p.send("secrets", protocol.Secrets{LeaseID: "l1", Values: []protocol.SecretValue{{Ref: "project/TOKEN", Value: "opaqueValue123"}}}, 1, "l1")
