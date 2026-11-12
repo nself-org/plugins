@@ -20,6 +20,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/serve"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
 // Dispatch seams keep security wiring testable without cloning or executing submitted code.
@@ -45,9 +46,29 @@ func (h forgeDispatchTrust) Classify(ctx context.Context, r cirun.TrustRequest) 
 	}
 	got, err := h.hook.ClassifyForge(ctx, r.Root, h.facts)
 	if h.facts.Kind == "pull_request" {
-		return "untrusted", err // approval is not recorded by this dispatch path
+		if err != nil {
+			return "untrusted", err
+		}
+		return pullRequestClass(got), nil // approval is not recorded by this dispatch path
 	}
 	return got.Class, err
+}
+
+// pullRequestClass admits a pull request at one of two classes (ADR 0025 §1, §6). A same-repo PR
+// from an admin whose only ceiling is provenance gets "collaborator": its own class, never owner,
+// so repo secrets stay withheld. Every other PR (fork, write-access author, first-timer, bot,
+// lockfile-only, unverified facts, machine cap) is "untrusted". The coordinator then admits either
+// class only on a disposable hosted runner (Option A); a PR never gets owner from this path.
+func pullRequestClass(r source.Result) model.TrustClass {
+	if r.Class != "owner" && r.Class != "collaborator" {
+		return "untrusted"
+	}
+	for _, reason := range r.Reasons {
+		if reason != source.ReasonVerified && reason != source.ReasonProvenance {
+			return "untrusted"
+		}
+	}
+	return "collaborator"
 }
 
 // classifyAPI combines current TEAM access with forge-proven default-branch reachability.

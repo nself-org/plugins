@@ -26,8 +26,8 @@ func TestDispatchForgeTrust(t *testing.T) {
 	}{
 		{"verified push", "push", "owner", false, true, false, false},
 		{"fork pull request", "pull_request", "untrusted", true, false, false, false},
-		{"unreviewed pull request", "pull_request", "untrusted", false, false, false, false},
-		{"admin reachable pull request", "pull_request", "untrusted", false, true, false, false},
+		{"unreviewed pull request", "pull_request", "collaborator", false, false, false, false},
+		{"admin reachable pull request", "pull_request", "collaborator", false, true, false, false},
 		{"forge unavailable", "push", "untrusted", false, true, true, false},
 		{"cached authority only", "push", "untrusted", false, true, false, true},
 	} {
@@ -146,5 +146,40 @@ func TestDispatchReleaseAuthorization(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// wire03Class classifies a pull request through the dispatch trust hook with the forge answering perm.
+func wire03Class(t *testing.T, perm string, fork bool) model.TrustClass {
+	t.Helper()
+	sha := strings.Repeat("c", 40)
+	h := forgeDispatchTrust{facts: model.TriggerFacts{Schema: "ci.trigger-facts/v1", Source: "github", Repo: "o/r", Revision: sha, Kind: "pull_request", Auth: "per-repo"},
+		hook: cirun.SourceTrust{Getenv: func(string) string { return "" },
+			Refetch: func(_ context.Context, f model.TriggerFacts) (model.TriggerFacts, error) {
+				f.ActorPermission, f.SHAReachable, f.Fork = apiDispatchFact(perm), apiDispatchFact(false), apiDispatchFact(fork)
+				f.FirstTime = apiDispatchFact(false)
+				return f, nil
+			}}}
+	got, err := h.Classify(context.Background(), cirun.TrustRequest{Root: t.TempDir(), Revision: sha})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestWire03SamePRAdminClass(t *testing.T) {
+	if got := wire03Class(t, "admin", false); got != "collaborator" {
+		t.Fatalf("same-repo admin PR class = %s, want collaborator (never owner, never the fork class)", got)
+	}
+}
+
+func TestWire03PRNeverOwnerOrAdminClassForOthers(t *testing.T) {
+	for name, tc := range map[string]struct {
+		perm string
+		fork bool
+	}{"admin fork": {"admin", true}, "write same-repo": {"write", false}, "read same-repo": {"read", false}, "none": {"", false}} {
+		if got := wire03Class(t, tc.perm, tc.fork); got != "untrusted" {
+			t.Errorf("%s: class = %s, want untrusted", name, got)
+		}
 	}
 }

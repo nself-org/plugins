@@ -96,8 +96,18 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (admi
 	if err != nil {
 		return "", "", err
 	}
-	if got != "owner" && got != "internal" { // ADR 0025 §2-3: collaborator and untrusted work needs an isolated runner; this coordinator runs jobs as the operator
-		return "", "", fail(CodeTrust, "the source is classed %s: it needs an isolated runner, and this coordinator runs jobs as the operator", got)
+	if got != "owner" && got != "internal" {
+		// ADR 0025 §2-3, §6: collaborator and untrusted work needs an isolated runner, and this
+		// coordinator runs jobs as the operator. The one admitted exception is a pull request on a
+		// disposable hosted runner (Option A): it runs with no secrets, no status write and a
+		// restricted network. A persistent or unknown runner refuses it.
+		if !pullRequestRun(c.Plan) || !disposableHostedRunner(os.Getenv) {
+			return "", "", fail(CodeTrust, "the source is classed %s: it needs an isolated runner, and this coordinator runs jobs as the operator", got)
+		}
+		c.Opts.NoStatus = true
+		if c.Opts.Network != "none" {
+			c.Opts.Network = "restricted"
+		}
 	}
 	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
 		return "", "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
@@ -110,6 +120,15 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (admi
 		return string(got), string(recorded), nil
 	}
 	return string(got), string(got), nil
+}
+
+// pullRequestRun reports whether the plan was selected for a pull_request trigger.
+func pullRequestRun(p *plan.Plan) bool { return p != nil && p.Trigger == "pull_request" }
+
+// disposableHostedRunner is true only on a GitHub-hosted runner (one job, destroyed after). A
+// self-hosted runner reports RUNNER_ENVIRONMENT=self-hosted and is treated as persistent.
+func disposableHostedRunner(getenv func(string) string) bool {
+	return getenv("GITHUB_ACTIONS") == "true" && getenv("RUNNER_ENVIRONMENT") == "github-hosted"
 }
 
 func (c *Coordinator) policy(ctx context.Context, h Hooks, class model.TrustClass) (PolicyResult, error) {
