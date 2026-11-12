@@ -74,12 +74,35 @@ export async function fetchProRegistry(
   return data === null ? null : normaliseToArray(data, "pro");
 }
 
+/**
+ * D-1483: a git ref is a tag, branch or SHA. Anything else (empty, a query or
+ * fragment delimiter, a path escape) is refused rather than sent upstream.
+ */
+const LICENSED_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,127}$/;
+
+/**
+ * The bundles ref licensed rows are read at. It must be the ref ping builds the
+ * licensed bytes from (PLUGINS_PRO_REF), or the CLI verifies ping's bytes
+ * against another ref's checksum and refuses the install (E124). Unset or
+ * malformed returns null: no licensed rows beats rows from a moving branch.
+ */
+export function licensedRef(env: Env): string | null {
+  const ref = (env.LICENSED_REF ?? "").trim();
+  if (!LICENSED_REF_PATTERN.test(ref) || ref.includes("..")) return null;
+  return ref;
+}
+
 async function proFromGitHub(env: Env): Promise<RegistryWireFormat | null> {
   if (!env.GH_ACCESS_TOKEN) {
     return null;
   }
+  const ref = licensedRef(env);
+  if (ref === null) {
+    console.error("Pro registry fetch refused: LICENSED_REF is unset or not a git ref");
+    return null;
+  }
 
-  const resp = await fetch(PRO_REGISTRY_API_URL, {
+  const resp = await fetch(`${PRO_REGISTRY_API_URL}?ref=${encodeURIComponent(ref)}`, {
     headers: {
       Authorization: `token ${env.GH_ACCESS_TOKEN}`,
       Accept: "application/vnd.github.v3+json",

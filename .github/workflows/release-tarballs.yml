@@ -162,6 +162,11 @@ jobs:
               cp -R "${plugin_dir}/." "$stage/${plugin_name}/"
 
               local failed=0
+              # The ci plugin carries its agent pin (P7-WIRE-12): without it `nself ci nodes add`
+              # has no release to install by default. Same rule as plugin_ldflags in
+              # scripts/build-tarballs.sh (scripts/ci/tests/test-agent-pin-ldflag.sh keeps them equal).
+              local ldflags="-s -w"
+              [ "$plugin_name" = "ci" ] && ldflags="${ldflags} -X main.agentPinnedVersion=${VERSION}"
               # One line per target, read with a here-string: a command can hold a
               # space (retro-gaming declares "roms list"), so it must not be word-split,
               # and a heredoc terminator would sit at column 0 and end this YAML block.
@@ -173,7 +178,7 @@ jobs:
                 [ -d "${plugin_dir}/cmd/${command}" ] || pkg="./cmd/"
 
                 if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-                      go build -trimpath -ldflags="-s -w" \
+                      go build -trimpath -ldflags="$ldflags" \
                       -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/${binary}${exe}" "$pkg"); then
                   echo "ERROR $plugin_name failed to build ${binary} for $platform"
                   failed=1
@@ -259,6 +264,31 @@ jobs:
             exit 1
           fi
           echo "All plugin tarballs present ($(find dist -name '*.tar.gz' | wc -l) archives)"
+
+      # P7-WIRE-12: the shipped nself-ci must carry the agent pin, or `nself ci nodes add` without
+      # --agent-binary has no release to install. Runs the linux-amd64 build on this runner.
+      - name: Verify the ci plugin build carries the agent pin
+        env:
+          STEP_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          TAG="${STEP_TAG}"
+          VERSION="${TAG#v}"
+          work="$(mktemp -d)"
+          tar -xzf "dist/ci-${VERSION}-linux-amd64.tar.gz" -C "$work"
+          bin="${work}/ci/nself-ci"
+          if ! grep -qaF "$VERSION" "$bin"; then
+            echo "ERROR: nself-ci does not contain the agent pin ${VERSION}"
+            exit 1
+          fi
+          # doctor exits 12 on warnings; the envelope is what counts. CI-DN013 reads the pin.
+          msg="$(NSELF_V15=1 NSELF_CI_HOME="${work}/home" "$bin" doctor --nodes --json \
+            | jq -r '.data.checks[] | select(.id == "CI-DN013") | .message' || true)"
+          case "$msg" in
+            "" | *"no agent release is pinned"*)
+              echo "ERROR: nself-ci reports no agent pin (CI-DN013: ${msg:-missing})"
+              exit 1 ;;
+          esac
+          echo "nself-ci carries the agent pin ${VERSION} (CI-DN013: ${msg})"
 
       # S49-T05: verify each tarball's embedded binary arch matches tarball filename.
       # Catches cross-compile errors where wrong GOOS/GOARCH slips into a release asset.

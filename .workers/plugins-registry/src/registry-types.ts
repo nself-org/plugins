@@ -75,6 +75,8 @@ export interface Env {
   CACHE_TTL?: string;
   REGISTRY_VERSION?: string;
   GH_ACCESS_TOKEN?: string;
+  // D-1483: bundles ref for licensed rows; must equal ping's PLUGINS_PRO_REF.
+  LICENSED_REF?: string;
   GITHUB_SYNC_TOKEN?: string;
   // S67-T03: R2 plugin tarball CDN (primary; GitHub Releases = fallback on 5xx)
   PLUGIN_TARBALLS?: R2Bucket;
