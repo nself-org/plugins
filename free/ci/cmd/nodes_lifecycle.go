@@ -14,11 +14,18 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // nodesLifecycleSubs are the keys after "nodes", with their side-effect class.
@@ -50,7 +57,66 @@ func init() {
 			V15Only:    true,
 			SideEffect: s.class,
 			Flags:      func() *flag.FlagSet { return lifecycle.FlagSet(name) },
-			Handler:    func(args []string) int { return lifecycle.Run(name, args, lifecycle.ProductionEnv(currentProject)) },
+			Handler: func(args []string) int {
+				rc := lifecycle.Run(name, args, lifecycle.ProductionEnv(currentProject))
+				if name == "revoke" || name == "remove" {
+					rc = revokeEvidence(name, args, rc)
+				}
+				return rc
+			},
 		})
 	}
+}
+
+// revokeEvidence revokes the node's signed evidence after `nodes revoke|remove` (P7-WIRE-11): its keys,
+// the runs they signed and the releases promoted on them. It runs when the node is revoked (exit 0, or 3
+// for a revoke that committed with incomplete cleanup) and is idempotent, so a repeated revoke retries it.
+// A failure is reported and turns exit 0 into 2: the node is revoked but its evidence is not yet.
+func revokeEvidence(sub string, args []string, rc int) int {
+	if rc != 0 && rc != 3 {
+		return rc
+	}
+	id := nodeArg(sub, args)
+	if id == "" {
+		return rc
+	}
+	home := lifecycle.CIHome()
+	err := func() error {
+		st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
+		if err != nil {
+			return err
+		}
+		defer func() { _ = st.Close() }()
+		_, err = cirun.RevokeNode(context.Background(), st, &audit.Log{St: st, Scrub: cirun.Redactions}, id, "cli:nodes-"+sub)
+		return err
+	}()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "nself ci nodes %s: node %s is revoked but its evidence revocation failed: %v\n", sub, id, err)
+		if rc == 0 {
+			return 2
+		}
+	}
+	return rc
+}
+
+// nodeArg is the node id of a revoke or remove argv: its one positional argument, lower-cased as the
+// command does.
+func nodeArg(sub string, args []string) string {
+	fs := lifecycle.FlagSet(sub)
+	fs.SetOutput(io.Discard)
+	var pos []string
+	for rest := args; ; {
+		if fs.Parse(rest) != nil {
+			return ""
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		pos = append(pos, fs.Arg(0))
+		rest = fs.Args()[1:]
+	}
+	if len(pos) != 1 {
+		return ""
+	}
+	return strings.ToLower(pos[0])
 }
