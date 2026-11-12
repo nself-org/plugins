@@ -124,9 +124,11 @@ func buildWatcher(ctx context.Context, f serveWatchFlags) (w *watch.Watcher, clo
 		c.Interval = f.interval
 	}
 	gh := report.GH{Capture: report.Capture}
-	if login, lerr := gh.Login(ctx); lerr == nil {
-		c.Trusted = []string{login}
+	login, lerr := gh.Login(ctx)
+	if lerr != nil {
+		return nil, nil, fmt.Errorf("ci serve watch: no trusted login, the station cannot read its gh login (run gh auth login): %w", lerr)
 	}
+	c.Trusted = []string{login}
 	host, _ := os.Hostname()
 	c.Host = strings.NewReplacer(" ", "-", "\t", "-", "\n", "-").Replace(firstOf(host, "localhost"))
 	c.Incarnation = strconv.FormatInt(time.Now().UnixNano(), 36)
