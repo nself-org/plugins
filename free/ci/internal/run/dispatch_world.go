@@ -16,10 +16,14 @@ package run
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
@@ -166,17 +170,73 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	}
 	// what no job of this run can use is not produced (P7-CI-46): every job carries jobTrust, and a run
 	// without a provider repo drops every hosted runner below (dropProviderRunners)
-	ctx = world.WithRunUse(ctx, world.RunUse{NoHosted: rd.sess.ProviderRepo == "", NoNetworkProof: !trust.NetworkProofMatters(rd.jobTrust())})
+	hostedRepo := rd.hostedRepo(ctx)
+	ctx = world.WithRunUse(ctx, world.RunUse{NoHosted: hostedRepo == "", NoNetworkProof: !trust.NetworkProofMatters(rd.jobTrust())})
 	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now}, in, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}
-	w, changed := dropProviderRunners(w, rd.sess.ProviderRepo)
+	w, changed := dropProviderRunners(w, hostedRepo)
 	if !changed {
 		return w, digest, nil
 	}
 	digest, err = world.Digest(w)
 	return w, digest, err
+}
+
+// hostedRepo is the repository whose hosted runners this run may use: the coordinator's
+// Session.ProviderRepo, else for a bare run the github.com origin of the checkout (P7-WIRE-04), so
+// prefer-included can place on GitHub-hosted without serve. It fails closed (D-1382, a private
+// repository's baseline keeps hosted off): only a repository positively known public is bound; private,
+// unknown, a non-github origin or no origin yields "" and NoHosted stays on.
+func (rd *runDispatch) hostedRepo(ctx context.Context) string {
+	if rd.sess.ProviderRepo != "" {
+		return rd.sess.ProviderRepo
+	}
+	if pol, err := rd.policy(ctx, ""); err != nil || pol.Preset == "" || pol.Preset == "prefer-local" {
+		return "" // a local-first policy never reaches for hosted: no origin read, no visibility call
+	}
+	if v, ok := bareRepos.Load(rd.row.Project); ok {
+		return v.(string)
+	}
+	repo := bareHostedRepo(ctx, rd.row.Project)
+	if ctx.Err() == nil {
+		bareRepos.Store(rd.row.Project, repo)
+	}
+	return repo
+}
+
+// bareRepos keeps the answer per checkout root: a one-shot run builds its world on every dispatcher tick.
+var bareRepos sync.Map
+
+func bareHostedRepo(ctx context.Context, root string) string {
+	if root == "" {
+		return ""
+	}
+	capture := policy.Runner(report.Capture)
+	url, ok := originURLFromConfig(root)
+	if !ok { // a linked worktree or a bare layout: ask git
+		out, exit, err := capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "config", "--get", "remote.origin.url")
+		if err != nil || exit != 0 {
+			return ""
+		}
+		url = out
+	}
+	owner, name, ok := report.ParseRemote(url)
+	if !ok {
+		return ""
+	}
+	if RepoVisibility != nil {
+		if RepoVisibility(owner, name) != attest.Public {
+			return ""
+		}
+		return owner + "/" + name
+	}
+	out, exit, err := capture(ctx, "gh", "api", "repos/"+owner+"/"+name, "--jq", ".visibility")
+	if err != nil || exit != 0 || strings.TrimSpace(out) != "public" {
+		return ""
+	}
+	return owner + "/" + name
 }
 
 // repoLabel is the label a hosted runner carries for the repository it dispatches to
@@ -217,4 +277,26 @@ func hostedFor(r sched.Runner, repo string) bool {
 		}
 	}
 	return false
+}
+
+// originURLFromConfig reads remote "origin"'s url from root/.git/config without spawning git (a run's
+// spawn budget is tight). ok is false when root/.git/config cannot be read (a linked worktree); the caller then asks git, which also honours includes.
+func originURLFromConfig(root string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(root, ".git", "config"))
+	if err != nil {
+		return "", true // the file was read and names no origin
+	}
+	in := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "["):
+			in = strings.EqualFold(strings.Join(strings.Fields(line), " "), `[remote "origin"]`)
+		case in:
+			if k, v, found := strings.Cut(line, "="); found && strings.EqualFold(strings.TrimSpace(k), "url") {
+				return strings.TrimSpace(v), true
+			}
+		}
+	}
+	return "", true // read, and it names no origin
 }
