@@ -54,6 +54,20 @@ sha256_file() {
   fi
 }
 
+# plugin_ldflags prints the -ldflags for one plugin's release binaries. The ci
+# plugin also gets its agent pin (P7-WIRE-12): without it `nself ci nodes add`
+# has no release to install by default. The pin is the release version, so the
+# agent and the plugin ship from the same tag. Keep in step with the inline copy
+# in .github/workflows/release-tarballs.yml (scripts/ci/tests/test-agent-pin-ldflag.sh).
+# Args: plugin_name version
+plugin_ldflags() {
+  local flags="-s -w"
+  if [ "$1" = "ci" ]; then
+    flags="${flags} -X main.agentPinnedVersion=$2"
+  fi
+  printf '%s\n' "$flags"
+}
+
 # build_platform_tarballs builds the five per-platform tarballs for one
 # plugin, when it declares a binaryName, into dist_dir. No-op (returns 0) for
 # a plugin with no binaryName — its package is source and works everywhere.
@@ -85,6 +99,8 @@ build_platform_tarballs() {
 
   local dist_dir_abs
   dist_dir_abs="$(cd "$dist_dir" && pwd)"
+  local ldflags
+  ldflags="$(plugin_ldflags "$plugin_name" "$version")"
 
   local platform
   for platform in $PLATFORMS; do
@@ -107,7 +123,7 @@ build_platform_tarballs() {
       [ -d "${plugin_dir}/cmd/${command}" ] || pkg="./cmd/"
 
       if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-            go build -trimpath -ldflags="-s -w" \
+            go build -trimpath -ldflags="$ldflags" \
             -o "${dist_dir_abs}/$(basename "$stage")/${plugin_name}/nself-${command}${exe}" "$pkg"); then
         err "$plugin_name failed to build nself-${command} for $platform"
         failed=1
