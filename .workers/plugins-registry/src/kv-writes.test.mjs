@@ -65,7 +65,7 @@ function stubGitHub(d) {
 }
 
 const envFor = (kv, extra = {}) => ({
-  PLUGINS_KV: kv, GH_ACCESS_TOKEN: 'fake-gh-token', GITHUB_SYNC_TOKEN: 'fake-sync-token', ...extra,
+  PLUGINS_KV: kv, GH_ACCESS_TOKEN: 'fake-gh-token', GITHUB_SYNC_TOKEN: 'fake-sync-token', LICENSED_REF: 'v0.0.0-fixture', ...extra,
 });
 
 async function call(path, env, init) {

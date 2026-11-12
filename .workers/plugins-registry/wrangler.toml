@@ -34,6 +34,12 @@ simple       = { limit = 5, period = 60 }
 [vars]
 CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
+# D-1483: bundles ref the licensed (pro/max) rows are read at. It MUST equal ping's
+# PLUGINS_PRO_REF: the CLI checks ping's bytes against this worker's checksum, so a
+# different ref fails `nself plugin install` with E124. Unset or malformed serves no
+# licensed rows (fail closed). Bump it with ping's ref, then prove the pair with
+# scripts/ci/licensed-registry-contract.sh before the (owner-named) redeploy.
+LICENSED_REF = "v1.2.9"
 # R2_PUBLIC_DOMAIN set per environment (override in production env below)
 # R2_PUBLIC_DOMAIN = "pub-xxx.r2.dev"  # placeholder — set real value in production
 
@@ -63,6 +69,12 @@ bucket_name = "nself-plugin-tarballs"
 [env.production.vars]
 CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
+# D-1483: bundles ref the licensed (pro/max) rows are read at. It MUST equal ping's
+# PLUGINS_PRO_REF: the CLI checks ping's bytes against this worker's checksum, so a
+# different ref fails `nself plugin install` with E124. Unset or malformed serves no
+# licensed rows (fail closed). Bump it with ping's ref, then prove the pair with
+# scripts/ci/licensed-registry-contract.sh before the (owner-named) redeploy.
+LICENSED_REF = "v1.2.9"
 # R2_PUBLIC_DOMAIN: set via `wrangler secret put R2_PUBLIC_DOMAIN --env production`
 # Use the Cloudflare R2 public bucket URL or a custom domain pointed at the bucket.
 #
