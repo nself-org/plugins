@@ -146,6 +146,14 @@ func exitRank(exit int) int {
 // is invalid. The returned error is set, with exit 11, when the document
 // cannot be decoded at all.
 func VerifyDocument(doc []byte, want string, current *model.InputDigests, recorded func(model.Evidence) *model.Evidence) (Verdict, error) {
+	signedLocally := false
+	if env, ok := asEnvelope(doc); ok {
+		inner, err := openLocal(env)
+		if err != nil {
+			return Verdict{Exit: ExitInvalid}, fail(CodeRejected, ExitInvalid, "%s", firstLine(err.Error()))
+		}
+		doc, signedLocally = inner, true
+	}
 	ev, err := attest.Verify(doc)
 	if err != nil {
 		return Verdict{Exit: ExitInvalid}, fail(CodeRejected, ExitInvalid, "%s", firstLine(err.Error()))
@@ -160,7 +168,9 @@ func VerifyDocument(doc []byte, want string, current *model.InputDigests, record
 		v.Reasons = append(v.Reasons, attest.ReasonInvalid)
 		v.Warnings = append(v.Warnings, "the document differs from the evidence this machine recorded for run "+ev.RunID)
 	}
-	if stored == nil {
+	if signedLocally && ev.Producer.Kind != "coordinator-recorded" {
+		v.reject(attest.ReasonInvalid, "a locally signed document must be the coordinator-recorded one of the release job")
+	} else if stored == nil && !signedLocally {
 		authenticate(&v, doc, ev, want, current)
 	}
 	return v, nil
