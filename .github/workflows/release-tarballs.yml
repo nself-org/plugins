@@ -316,9 +316,37 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  bundles-pin:
+    # P7-WIRE-17: bundle membership at tag time. scripts/bundles.ref, catalog.json and counts.json must match nself-org/bundles
+    # main (scripts/ci/check-bundles-pin.sh). Fails closed: without PLUGINS_PRO_CHECKOUT_TOKEN the release cannot verify it.
+    name: Bundles pin matches bundles main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Require the bundles token
+        env:
+          HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        run: |
+          [ "$HAS_TOKEN" = "true" ] || { echo "::error::PLUGINS_PRO_CHECKOUT_TOKEN is not set; the release cannot verify bundle membership"; exit 1; }
+      - name: Checkout bundles main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/bundles
+          ref: main
+          fetch-depth: 0
+          path: bundles-checkout
+          persist-credentials: false
+          token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
+      - name: Gate, bundles.ref and the projections match bundles main
+        run: bash scripts/ci/check-bundles-pin.sh --bundles-dir "${GITHUB_WORKSPACE}/bundles-checkout" --main-ref HEAD --no-fetch
+
   publish:
     name: Publish to GitHub Release and R2
-    needs: build
+    needs: [build, bundles-pin]
     runs-on: ubuntu-latest
     permissions:
       contents: write

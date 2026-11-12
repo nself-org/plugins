@@ -5,7 +5,7 @@
 
 | Field | Value |
 |---|---|
-| **Licence** | Licensed, in the Family Bundle |
+| **Licence** | Licensed, in the Chat Bundle, Family Bundle |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.1.2 |
 | **Install** | `nself plugin install moderation` |
