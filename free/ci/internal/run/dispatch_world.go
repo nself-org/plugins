@@ -60,6 +60,17 @@ func wantPlatform(explicit string) string {
 	return platform()
 }
 
+// projectID is the one project id the run places with, the id a node is authorized for: the forge
+// repo name under serve (Session.ProviderRepo; Root is a temp clone there), else the repository's
+// policy.ProjectIDGit (symlinks resolved, a linked worktree mapped to the main checkout). The pipeline
+// row's Project stays the checkout root, which the cache, record and transport hooks read as a path.
+func (rd *runDispatch) projectID(ctx context.Context) string {
+	if rd.sess.ProviderRepo != "" {
+		return rd.sess.ProviderRepo
+	}
+	return policy.ProjectIDGitCached(ctx, policy.Runner(report.Capture), rd.row.Project)
+}
+
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob), then sets what
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
 // demand. The job's own labels, tools, isolation floor and accelerators are dropped: the local
@@ -68,7 +79,7 @@ func wantPlatform(explicit string) string {
 // (nodeJob, D-1534): it never runs on this machine.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
 	want := wantPlatform(s.Platform)
-	c := planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()}, DefaultPlatform: platform(), Foreground: s.Foreground}
+	c := planview.Context{PipelineID: rd.sess.RunID, Project: rd.projectID(context.Background()), Support: []string{platform()}, DefaultPlatform: platform(), Foreground: s.Foreground}
 	if p := rd.sess.Plan; p != nil && len(p.Support) > 0 {
 		c.Support = p.Support
 	}
@@ -149,7 +160,7 @@ func (rd *runDispatch) jobTrust() model.TrustClass {
 // measured them, else docker unknown) and every registered node.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
 	capacity := rd.sess.Capacity()
-	in := world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}
+	in := world.LocalInput{Project: rd.projectID(ctx), Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}
 	if pl := rd.sess.Plan; pl != nil && pl.World.Measured { // the plan's measured facts, so `ci plan` and the run agree on this machine (D-1104)
 		in.Docker, in.Tools, in.DockerUnknown = pl.World.Docker, pl.World.Tools, false
 	}
