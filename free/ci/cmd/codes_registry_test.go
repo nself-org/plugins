@@ -55,7 +55,6 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/readiness":               true,
 	"github.com/nself-org/plugins/free/ci/internal/readiness/sample":        true,
 	"github.com/nself-org/plugins/free/ci/internal/offload":                 true,
-	"github.com/nself-org/plugins/free/ci/internal/race":                    true,
 	"github.com/nself-org/plugins/free/ci/internal/notify":                  true,
 	"github.com/nself-org/plugins/free/ci/internal/svc":                     true,
 	"github.com/nself-org/plugins/free/ci/internal/selftest":                true,

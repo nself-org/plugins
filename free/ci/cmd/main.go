@@ -29,6 +29,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/compatcheck"
+	_ "github.com/nself-org/plugins/free/ci/internal/race" // registers the run.RaceHook that `--where all` needs (P7-WIRE-07)
 )
 
 func main() {

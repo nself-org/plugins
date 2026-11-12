@@ -66,7 +66,7 @@ func TestWhereUnknownValueIsE797(t *testing.T) {
 		t.Error("E797 must exit 2")
 	}
 	withKnown(t, where.Known{}, "all")
-	if err = whereOptions(&o); err == nil || !strings.Contains(err.Error(), "race not available") {
+	if err = whereOptions(&o); err != nil || whereChosen.Kind != where.KindAll { // internal/race is linked (P7-WIRE-07)
 		t.Fatalf("all: %v", err)
 	}
 }
