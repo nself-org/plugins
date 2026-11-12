@@ -84,14 +84,21 @@ func (rs *runState) swept(id string) bool {
 // in prepare), secrets (no value is sent to a node), services, requirements the world
 // cannot verify (labels, tools, an isolation floor, a container: the local runner reports no
 // measured facts for them) unless the job is remote-only, and the invocation's own controls
-// (--container, --network, --service, --timeout), which the agent never receives. The one exception is
-// a TEAM job with secrets (rs.nodeSecretJob): it must run on a leased node, never here.
+// (--container, --network, --service, --timeout), which the agent never receives. The exceptions are a TEAM job
+// with secrets and an ordinary TEAM job (rs.nodeJobFor): each runs on a leased node, never here, with --container
+// and --timeout folded into the job.
 func (rs *runState) localOnly(job model.Job) bool {
-	if _, node := rs.nodeSecretJob(job); node { // a TEAM job with secrets runs on a leased node only (secrets_node.go)
+	if _, node := rs.nodeJobFor(job); node { // a TEAM job with secrets, or an ordinary TEAM job, runs on a leased node only (secrets_node.go)
 		return false
 	}
+	return rs.pinnedLocal(job)
+}
+
+// pinnedLocal is the list of reasons a job cannot leave this machine. In a TEAM run --container and
+// --timeout are not among them: they are folded into the job a node receives (nodeJobControls).
+func (rs *runState) pinnedLocal(job model.Job) bool {
 	o := rs.c.Opts
-	if o.Container || o.Network != "" || o.Timeout > 0 || len(o.Services) > 0 {
+	if o.Network != "" || len(o.Services) > 0 || !o.TeamRun && (o.Container || o.Timeout > 0) {
 		return true
 	}
 	if rs.wantsOutput(job) || declares(job) && !job.RemoteOnly || job.Kind == "release" || idempotencyKey(&job, "x") != "" || job.Cache != nil || len(job.Secrets) > 0 || len(job.NeedsServices) > 0 {

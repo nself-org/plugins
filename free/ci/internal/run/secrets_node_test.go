@@ -36,7 +36,8 @@ func TestTeamSecretJobRunsOnALeasedNodeOnly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rs := teamRunState(tc.team)
 			got, node := rs.nodeSecretJob(tc.job)
-			if node != tc.node || rs.localOnly(tc.job) == tc.node {
+			onNode := tc.node || tc.team && len(tc.job.Secrets) == 0 // an ordinary TEAM job runs on a node too (P7-WIRE-01)
+			if node != tc.node || rs.localOnly(tc.job) == onNode {
 				t.Fatalf("node=%v localOnly=%v; want node=%v", node, rs.localOnly(tc.job), tc.node)
 			}
 			if node && (got.Isolation != model.Isolation(tc.isolation) || got.Timeout != tc.timeout) {
