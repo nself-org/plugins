@@ -88,3 +88,55 @@ func TestWithPlacementAddsDataPlacement(t *testing.T) {
 		t.Fatalf("placement missing: %s", raw)
 	}
 }
+
+// wire08Placement drives the real entry (runV15, argv) on the planview fixture
+// repo and returns data.placement of the --json envelope.
+func wire08Placement(t *testing.T, args ...string) map[string]any {
+	t.Helper()
+	repo, _ := placementRepo(t)
+	t.Setenv("NSELF_CI_REPO", repo)
+	resetPlanFlags()
+	oldV := whereValue
+	whereValue = ""
+	t.Cleanup(func() { whereValue = oldV })
+	code, out, errs := capture(t, func() int { return runV15(append(args, "--json", "--no-status")) })
+	var env struct {
+		Data struct {
+			Placement map[string]any `json:"placement"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &env); err != nil || env.Data.Placement == nil {
+		t.Fatalf("exit %d, no data.placement: %v\n%s\n%s", code, err, out, errs)
+	}
+	return env.Data.Placement
+}
+
+func TestWire08ExplicitAutoSetsPreset(t *testing.T) {
+	pl := wire08Placement(t, "--where", "auto")
+	pipe, _ := pl["pipeline"].(map[string]any)
+	if pipe["preset"] != "auto" {
+		t.Fatalf("--where auto must set sched.preset=auto, got %v", pipe["preset"])
+	}
+	jobs, _ := pl["jobs"].([]any)
+	found := false
+	for _, j := range jobs {
+		m, _ := j.(map[string]any)
+		if p, _ := m["placement"].(map[string]any); p["tier"] != nil && p["tier"] != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no tier in data.placement jobs: %v", pl["jobs"])
+	}
+}
+
+func TestWire08BareDefaultUnchanged(t *testing.T) {
+	withKnown(t, where.Known{Nodes: []string{"ms5"}}, "")
+	var o RunOptions
+	if err := whereOptions(&o); err != nil || whereChosen.Kind != where.KindAuto || len(o.PolicyRun) != 0 {
+		t.Fatalf("bare default with a node must choose auto and write no value: %+v %v %v", whereChosen, o.PolicyRun, err)
+	}
+	if _, set := o.PolicyRun["sched.preset"]; set {
+		t.Fatal("the bare default must not set sched.preset")
+	}
+}

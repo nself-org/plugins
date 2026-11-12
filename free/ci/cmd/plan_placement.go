@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -84,6 +85,15 @@ func (e *storeDown) Unwrap() error { return e.err }
 
 // placementDoc places the plan's jobs and returns the v1 document.
 func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) {
+	values, err := schedRevisionValues()
+	if err != nil {
+		return model.PlacementPlan{}, err
+	}
+	return placementDocWith(ctx, pd, values)
+}
+
+// placementDocWith is placementDoc for the given run-scope values.
+func placementDocWith(ctx context.Context, pd planned, values map[string]json.RawMessage) (model.PlacementPlan, error) {
 	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
 		return model.PlacementPlan{}, &storeDown{err}
@@ -91,10 +101,6 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	defer func() { _ = st.Close() }()
 	res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}
 	project := policy.ProjectIDGitCached(ctx, res.Run, pd.root)
-	values, err := schedRevisionValues()
-	if err != nil {
-		return model.PlacementPlan{}, err
-	}
 	class, err := placementTrust(ctx, pd)
 	if err != nil {
 		return model.PlacementPlan{}, err

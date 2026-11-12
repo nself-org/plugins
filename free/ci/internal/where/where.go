@@ -9,8 +9,8 @@
 // Outputs: a Target (kind, values, notes) or an *Error carrying E797.
 // Constraints: pure, no I/O, no clock. A flag value can only narrow: a pool or
 // node outside the effective set is refused with the pool.excluded reason,
-// never widened. `auto` leaves sched.preset to the operator (the sched.preset
-// key admits only its closed preset names, so no constant is written here).
+// never widened. An explicit `auto` writes sched.preset=auto (sched.AutoPreset,
+// a closed preset name); the bare default is not mapped here and writes nothing.
 package where
 
 import (
@@ -21,6 +21,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/pools"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
 
@@ -106,7 +107,7 @@ func Values(flag string, k Known, o Opts) (Target, error) {
 		slices.Sort(ids)
 		return Target{Kind: KindHosted, Values: put(schedpolicy.KeyProvidersAllow, ids)}, nil
 	case "auto":
-		return Target{Kind: KindAuto}, nil
+		return Target{Kind: KindAuto, Values: put(schedpolicy.KeyPreset, sched.AutoPreset)}, nil
 	case "all":
 		if !o.RaceReady {
 			return Target{}, refuse(nil, "race not available")

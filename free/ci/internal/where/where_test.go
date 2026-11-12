@@ -24,7 +24,7 @@ func TestWhereMappingTable(t *testing.T) {
 		{"lan", world, Opts{}, KindPool, map[string]string{"pools.allow": `["lan"]`}},
 		{"lan", world, Opts{Dev: true}, KindPool, map[string]string{"pools.dev": `["lan"]`}},
 		{"hosted", world, Opts{}, KindHosted, map[string]string{"sched.overrides.providers.allow": `["github","gitlab"]`}},
-		{"auto", world, Opts{}, KindAuto, nil},
+		{"auto", world, Opts{}, KindAuto, map[string]string{"sched.preset": `"auto"`}},
 		{"all", world, Opts{RaceReady: true}, KindAll, nil},
 	} {
 		got, err := Values(tc.flag, tc.k, tc.o)
@@ -89,5 +89,15 @@ func TestWhereProjectFixedWins(t *testing.T) {
 	}
 	if len(eff.Ignored()) == 0 {
 		t.Error("the ignored revision value must be reported")
+	}
+}
+
+func TestWire08AutoMapsPresetOnlyWhenExplicit(t *testing.T) {
+	got, err := Values("auto", Known{}, Opts{})
+	if err != nil || got.Kind != KindAuto || string(got.Values["sched.preset"]) != `"auto"` {
+		t.Fatalf("explicit auto must carry sched.preset=auto: %+v %v", got, err)
+	}
+	if _, err = Values("", world, Opts{}); err == nil {
+		t.Fatal("an empty flag is refused, so the bare default never reaches the mapper")
 	}
 }
