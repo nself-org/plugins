@@ -11,8 +11,8 @@ package main
 // Constraints: V15 only; outbound only (no listener, no port); the token is read by the provider runtime
 //          from providers.github.token_env, never printed or put in argv; a commit runs in a detached
 //          worktree with Options.Record and trigger api, NoStatus because the watcher reports; no isolated
-//          runner is wired, so a collaborator head is always skipped (E821); the hosted tier and the
-//          background tick stay off until their ports exist.
+//          runner is wired, so a collaborator head is always skipped (E821); the hosted tier reads the
+//          commit's Actions check run through gh (serve_watch_ports.go) and the idle tick runs the tidy.
 
 import (
 	"context"
@@ -29,12 +29,15 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 	"github.com/nself-org/plugins/free/ci/internal/demand"
+	"github.com/nself-org/plugins/free/ci/internal/hostedtier"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/reconcile"
+	"github.com/nself-org/plugins/free/ci/internal/providers/health"
 	"github.com/nself-org/plugins/free/ci/internal/readiness"
 	"github.com/nself-org/plugins/free/ci/internal/readiness/sample"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/selftest"
 	"github.com/nself-org/plugins/free/ci/internal/watch"
 )
 
@@ -141,9 +144,16 @@ func buildWatcher(ctx context.Context, f serveWatchFlags) (w *watch.Watcher, clo
 	team := providers.ReportOwner(*eff) == report.OwnerTeam
 	logw := &watch.RotatingLog{Dir: watch.LogDir(home)}
 	opts := reconcile.ScanOptions{Branches: c.Branches, MaxBranches: c.MaxBranches}
+	tc, err := selftest.TidyConfigFrom(eff)
+	if err != nil {
+		return nil, nil, err
+	}
+	hosted := hostedPort{breaker: hostedtier.NewHealthBreaker(health.Default(), hostedProviderID), capture: report.Capture, now: time.Now}
+	idle := &idleTick{every: idleTidyEvery, now: time.Now, tidy: watchTidy(st, home, tc), log: logw.Event}
 	w, err = watch.New(c, watch.Ports{
 		Scanner: watchScanner{e: reconcile.Default(), opts: opts, days: c.BranchDays}, Ledger: gh, Reporter: gh,
 		Runner: watchRunner{roots: roots, home: home}, ResultContext: rc.ResolveResultContext,
+		Hosted: hosted, Idle: idle.Run,
 		Ready: func(ctx context.Context) (bool, []string) {
 			r, rerr := ev.Evaluate(ctx)
 			if rerr != nil {
