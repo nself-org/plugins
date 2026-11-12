@@ -620,6 +620,52 @@ func TestRemoteAwaitLocalOnlyJobs(t *testing.T) {
 	}
 }
 
+func TestWire01TeamFoldsContainerAndTimeoutInsteadOfPinningLocal(t *testing.T) {
+	for name, c := range map[string]struct {
+		job  model.Job
+		opts Options
+		want bool
+	}{
+		"team ordinary":      {model.Job{Kind: "test", Run: []string{"true"}}, Options{TeamRun: true, Container: true, Timeout: time.Minute}, false},
+		"team remote only":   {model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, Options{TeamRun: true, Container: true, Timeout: time.Minute}, false},
+		"team network":       {model.Job{Kind: "test", Run: []string{"true"}}, Options{TeamRun: true, Container: true, Network: "none"}, true},
+		"team service":       {model.Job{Kind: "test", Run: []string{"true"}}, Options{TeamRun: true, Services: []string{"db"}}, true},
+		"team artifacts":     {model.Job{Kind: "build", Run: []string{"true"}, Artifacts: []model.ArtifactDecl{{Path: "out"}}}, Options{TeamRun: true, Container: true}, true},
+		"personal container": {model.Job{Kind: "test", Run: []string{"true"}}, Options{Container: true}, true},
+		"personal timeout":   {model.Job{Kind: "test", Run: []string{"true"}}, Options{Timeout: time.Minute}, true},
+	} {
+		rs := &runState{c: &Coordinator{Opts: c.opts}}
+		if got := rs.localOnly(c.job); got != c.want {
+			t.Errorf("%s: localOnly = %v, want %v", name, got, c.want)
+		}
+	}
+	rs := &runState{c: &Coordinator{Opts: Options{TeamRun: true, Container: true, Timeout: time.Minute}}}
+	j, node := rs.nodeJobFor(model.Job{Kind: "test", Run: []string{"true"}, Isolation: "process", Timeout: "1h"})
+	if !node || j.Isolation != "container" || j.Timeout != time.Minute.String() {
+		t.Fatalf("node form = %v %q %q; want container and 1m0s on a node", node, j.Isolation, j.Timeout)
+	}
+}
+
+// A job that can only run on a leased node keeps the implicit foreground queue cap even when the run is not
+// interactive (serve), so a job no node can take fails with E693 rather than waiting for ever.
+func TestWire01QueueCapForNodeJob(t *testing.T) {
+	for name, c := range map[string]struct {
+		team, interactive, wantCap bool
+	}{
+		"serve":              {true, false, true},
+		"scripted local run": {false, false, false},
+		"interactive":        {false, true, true},
+	} {
+		rs := &runState{c: &Coordinator{Opts: Options{TeamRun: c.team}}}
+		sess := &Session{Interactive: c.interactive, NodeJob: rs.nodeJobFor}
+		job := model.Job{Kind: "test", Run: []string{"true"}}
+		got := queueJob(sess, AttemptSpec{Job: &job, Foreground: true}, sched.Job{}, "a1", 1, 256)
+		if got.NoDefaultQueueCap == c.wantCap {
+			t.Errorf("%s: NoDefaultQueueCap = %v, want %v", name, got.NoDefaultQueueCap, !c.wantCap)
+		}
+	}
+}
+
 func TestHookWorldKeepsALocalOnlyJobOffNodes(t *testing.T) {
 	rd, _ := registryRun(t, nil)
 	rd.sess.LocalOnly = func(model.Job) bool { return true }

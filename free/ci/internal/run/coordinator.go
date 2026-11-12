@@ -269,7 +269,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	sess.Dirty, sess.ConfigOutside, sess.Subset = rev.Dirty, c.ConfigOutside, keep != nil
 	sess.AdmitTrust = model.TrustClass(admitted)
-	sess.LocalOnly, sess.NodeJob = rs.localOnly, rs.nodeSecretJob
+	sess.LocalOnly, sess.NodeJob = rs.localOnly, rs.nodeJobFor
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
 	c.race(ctx, h, runID)

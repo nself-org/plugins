@@ -33,6 +33,20 @@ func (rs *runState) nodeSecretJob(job model.Job) (model.Job, bool) {
 	return nodeJobControls(job, o.Container, o.Timeout), true
 }
 
+// nodeJobFor is the session's NodeJob: a TEAM job with secrets (nodeSecretJob), else an ordinary TEAM job
+// that nothing pins to this machine. The coordinator's own runner is refused a TEAM job, so such a job has
+// only nodes to run on; --container and --timeout travel inside the job (nodeJobControls) because the agent
+// never receives the invocation's flags.
+func (rs *runState) nodeJobFor(job model.Job) (model.Job, bool) {
+	if j, ok := rs.nodeSecretJob(job); ok {
+		return j, true
+	}
+	if o := rs.c.Opts; !o.TeamRun || rs.pinnedLocal(job) {
+		return job, false
+	}
+	return nodeJobControls(job, rs.c.Opts.Container, rs.c.Opts.Timeout), true
+}
+
 // nodeJobControls folds --container and --timeout into a job a node runs. It never lowers an isolation
 // level and never lengthens a timeout.
 func nodeJobControls(job model.Job, container bool, timeout time.Duration) model.Job {
