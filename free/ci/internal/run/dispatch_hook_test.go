@@ -22,7 +22,7 @@ func TestDispatchWorldLocalDeclarationIsMeasuredNotPermissive(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	pol := sched.Policy{Preset: "balanced"}
-	sess := &Session{Store: st, RunID: "r1", Capacity: func() ciexec.Capacity {
+	sess := &Session{Store: st, RunID: "r1", ProviderRepo: "project", Capacity: func() ciexec.Capacity {
 		return ciexec.Capacity{CPUs: 4, MemoryMB: 8192, FreeMemoryMB: 8192, BatteryPercent: -1}
 	}}
 	rd := &runDispatch{sess: sess, row: store.PipelineRow{ID: "r1", Project: "project", SourceTrust: "owner"}, pol: &pol}
