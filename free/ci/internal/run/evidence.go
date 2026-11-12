@@ -90,7 +90,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	}
 	e := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: in.Revision, RepoID: shortDigest(in.Project), RunID: in.RunID,
-		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "owner")), PolicyDigest: in.PolicyDigest,
+		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "untrusted")), PolicyDigest: in.PolicyDigest,
 		InputDigests: model.InputDigests{Config: in.ConfigDigest, Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
 		Runner:       runner,
 		Producer:     model.Producer{Kind: "coordinator-recorded", Version: "1"},

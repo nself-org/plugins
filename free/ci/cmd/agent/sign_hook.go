@@ -15,11 +15,13 @@ package main
 import (
 	"context"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/nodekey"
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/attest"
+	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 )
 
 // signingMarker is the file that makes a node sign its results.
@@ -59,12 +61,84 @@ func newEvidenceSigner(state string) (s evidenceSigner, ok bool, err error) {
 	return evidenceSigner{key: key}, true, nil
 }
 
+// lookupJobUser resolves the job user of slot 0 (tests replace it).
+var lookupJobUser = func(name string) (uid int, err error) {
+	u, err := user.Lookup(name)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	for _, c := range u.Uid {
+		if c < '0' || c > '9' {
+			return 0, os.ErrInvalid
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, nil
+}
+
+// uidSeparationProven reports whether this agent is the system agent user, its jobs run as another
+// existing user through the job shim, and the state dir and node key are private to the agent's own uid
+// (owner is the agent, no group or other access), so a job cannot read the key. Any doubt is false.
+func uidSeparationProven(state string) bool {
+	if systemShim(0) == nil || shimUserName() == "" {
+		return false
+	}
+	self := os.Geteuid()
+	if self <= 0 { // root is no separation proof
+		return false
+	}
+	job, err := lookupJobUser(hygiene.JobUserName(0))
+	if err != nil || job <= 0 || job == self {
+		return false
+	}
+	for _, p := range []string{state, filepath.Join(state, "node.key")} {
+		info, err := os.Lstat(p)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+			return false
+		}
+		if !ownedBySelf(info) {
+			return false
+		}
+	}
+	return true
+}
+
+// provisionMarker writes the signing-eligible marker (0600, create-exclusive, O_EXCL refuses an existing symlink)
+// when uid separation is proven and the marker is absent. The node key is created first, so the
+// separation check covers the key the signer will use.
+func provisionMarker(state string) error {
+	if _, err := os.Lstat(filepath.Join(state, signingMarker)); err == nil {
+		return nil
+	}
+	if systemShim(0) == nil { // not the system agent user: no separation to prove, and no key is made for it
+		return nil
+	}
+	if _, err := nodekey.LoadOrCreate(state); err != nil {
+		return err
+	}
+	if !uidSeparationProven(state) {
+		return nil
+	}
+	f, err := os.OpenFile(filepath.Join(state, signingMarker), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+	return f.Close()
+}
+
 func signPreStart(_ context.Context, command string) error {
 	if command != "serve" {
 		return nil
 	}
 	state, err := stateDir()
 	if err != nil {
+		return err
+	}
+	if err = provisionMarker(state); err != nil {
 		return err
 	}
 	s, ok, err := newEvidenceSigner(state)
