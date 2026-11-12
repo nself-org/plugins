@@ -12,7 +12,8 @@ package main
 // Constraints: V15 only; an explicit --prefer or --runner wins over the same
 // key from --where; with no flag the run is `auto` when a non-local node or a
 // provider is registered and today's local run otherwise, never a hidden
-// constant (auto writes no value: the operator's sched.preset stands).
+// constant (the bare default writes no value: the operator's sched.preset
+// stands; only an explicit --where auto sets sched.preset=auto, P7-WIRE-08).
 
 import (
 	"context"
@@ -54,7 +55,9 @@ func whereOptions(o *RunOptions) error {
 		if !k.HasRemote() {
 			return nil
 		}
-		v = "auto"
+		// the bare default: auto as the target, no sched.preset value written
+		whereChosen = where.Target{Kind: where.KindAuto}
+		return nil
 	}
 	return applyWhere(o, v, k)
 }
@@ -146,9 +149,8 @@ func attachPlacement(ctx context.Context, o RunOptions) {
 	if err != nil {
 		return
 	}
-	// placementDoc reads the run's policy values from the parsed flags
-	// (schedRevisionValues), the same values schedOptions put in o.PolicyRun.
-	doc, err := placementDoc(ctx, pd)
+	// the run's policy values (o.PolicyRun: the flags and the --where mapping) decide the preset shown.
+	doc, err := placementDocWith(ctx, pd, o.PolicyRun)
 	if err == nil {
 		jsonPlacement = doc
 	}
