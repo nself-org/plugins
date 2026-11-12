@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Licensed, in the Claw Bundle |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.1.2 |
+| **Version** | 1.1.12 |
 | **Install** | `nself plugin install claw` |
 | **Requirements** | nSelf >=1.0.0; postgres extensions vector |
 

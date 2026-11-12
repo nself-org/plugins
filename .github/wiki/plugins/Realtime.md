@@ -5,7 +5,7 @@
 
 | Field | Value |
 |---|---|
-| **Licence** | Licensed, in the ClawDE Bundle |
+| **Licence** | Licensed, in the Chat Bundle, ClawDE Bundle |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.1.2 |
 | **Install** | `nself plugin install realtime` |
