@@ -68,7 +68,7 @@ var consentCases = map[string]consentCase{
 	"serve admin token":     {[]string{"list", "--json"}, 0, "serve admin token", false, false},
 	"serve restore":         {[]string{"--in", "{state}/none", "--kek", "{state}/none"}, 1, "E668", false, false},
 	"serve uninstall":       {[]string{"--launchd", "--user", "--binary", "{state}/nself"}, 0, "", false, true},
-	"serve watch":           {[]string{"--once", "--repos", "o/r"}, 1, "has no local checkout", false, false},
+	"serve watch":           {[]string{"--once", "--repos", "o/r"}, 1, "no trusted login", false, false},
 }
 
 // runBounded starts name with args, a stdin nobody writes to and combined output; hung is true when it outlives the

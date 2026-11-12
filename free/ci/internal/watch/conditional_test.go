@@ -55,7 +55,7 @@ func TestConditionalRequests(t *testing.T) {
 	// Two hosts poll out of step: distinct phase offsets inside one interval, and a
 	// jittered wait within [0.9, 1.1) of the interval.
 	c := Defaults()
-	c.Interval = time.Minute
+	c.Interval, c.Trusted = time.Minute, []string{"station"}
 	mk := func(host string, jitter float64) *Watcher {
 		c.Host = host
 		w, err := New(c, Ports{Scanner: scan, Ledger: r.gh.on(host), Reporter: r.gh.on(host), Runner: r.runner, Jitter: func() float64 { return jitter }})

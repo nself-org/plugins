@@ -41,6 +41,7 @@ func wire09Fixture(t *testing.T, runsJSON string) (w interface{ hosted() hostedt
 	}
 	stub := "#!/bin/sh\n" +
 		"case \"$*\" in\n" +
+		"  *\"user\"*) echo station ;;\n" +
 		"  *annotations*) echo '[]' ;;\n" +
 		"  *check-runs*) cat '" + filepath.Join(bin, "runs.json") + "' ;;\n" +
 		"  *) exit 1 ;;\n" +

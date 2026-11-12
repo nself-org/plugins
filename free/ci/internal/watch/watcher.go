@@ -40,6 +40,9 @@ func New(c Config, p Ports) (*Watcher, error) {
 	if c.Host == "" || strings.ContainsAny(c.Host, " \t\n") || strings.ContainsAny(c.Incarnation, " \t\n") {
 		return nil, &Error{Code: CodeConfig, Message: "the watcher needs a host name without spaces"}
 	}
+	if len(c.Trusted) == 0 {
+		return nil, &Error{Code: CodeConfig, Message: "the watcher needs at least one trusted creator: with none every head is skipped as lost"}
+	}
 	d := Defaults()
 	if c.Interval <= 0 {
 		c.Interval = d.Interval
