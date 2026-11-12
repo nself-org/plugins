@@ -4,9 +4,13 @@
     "chat": {
       "display": "Chat Bundle",
       "plugins": [
+        "auth",
         "bots",
+        "chat",
         "livekit",
+        "moderation",
         "nself-sms",
+        "realtime",
         "support"
       ],
       "tier": "licensed"
@@ -82,7 +86,7 @@
         "audit-log",
         "feature-flags",
         "jobs",
-        "notifications",
+        "notify",
         "search",
         "storage",
         "tokens",
@@ -107,7 +111,7 @@
       ]
     },
     "generated_from": {
-      "bundles_ref": "df0c37671287ce66d1c377a36e134aa50261e915",
+      "bundles_ref": "2d61edc7fb68b77b452978dd6f98aaef0ed69334",
       "generated_at": "1970-01-01T00:00:00Z",
       "plugins_ref": ""
     },
@@ -137,7 +141,7 @@
     }
   },
   "generated_from": {
-    "bundles_ref": "df0c37671287ce66d1c377a36e134aa50261e915",
+    "bundles_ref": "2d61edc7fb68b77b452978dd6f98aaef0ed69334",
     "generated_at": "1970-01-01T00:00:00Z",
     "plugins_ref": ""
   },
@@ -172,13 +176,17 @@
         "family"
       ],
       "category": "content",
-      "checksum": "98903875695b61a643d2254ad6c896c1f65fa50c435f8bd3f2d252ee0433cb11",
+      "checksum": "1491c90e61683509cfde397723c9720e6be3b638e05b51701c547dd06ad9584c",
       "commands": null,
       "description": "Universal activity feed system with fan-out-on-read/write, aggregation, and subscriptions",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "zEQDSYOpJUSg5Nirrymub/KAtmGB/Jvk3JRsTg9daZNkV9lrT041q8hoouKRkMQ60WmsLtIsE54YUGWGBkJJBg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -220,13 +228,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "03071f9d6c13cca200ca43c2c22dc5ad6c9f722c94d388f89e2a55feb9264598",
+      "checksum": "d2c8c7345babbb367c42fbef9efa1a91e424b401f36452bdcccb005b686599e6",
       "commands": null,
       "description": "Universal AI provider layer. Multi-provider completions (OpenAI, Anthropic, Gemini, Ollama), embeddings, RAG pipeline, response caching, usage tracking, SSE streaming, task-class routing, caller tokens, GeminiPool, OAuth token manager, OpenAI-compatible external API.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "GGtcTgghIlXmdRzRhcPIdBOpvxDmRQ0VUcSUQfxPo1Kx15vn8gYGHRC7cDQltNI3Ky0Gt9hwi/4HG2R/jbIjAw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -595,16 +607,21 @@
     },
     {
       "bundles": [
+        "chat",
         "clawde"
       ],
       "category": "authentication",
-      "checksum": "3a224e4896b838b923f36d2475629694f58343d9302a22c95c52ce80fefee599",
+      "checksum": "3d6eb767ea872fcfca162650b96416b223f0d1c7d724081494529b4060ebc11c",
       "commands": null,
       "description": "Authentication plugin with sessions and login tracking. Planned: OAuth (5 providers), WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "D4whyQNPqvFkOfTbf3SgSya8nanrSX9nQQo4nMH00Z2wMIlUMdon9DOTBtfVKzVUdmRJWdf1eq4tadYmVzUyAg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -671,13 +688,17 @@
         "chat"
       ],
       "category": "automation",
-      "checksum": "2e8e17f7d6cd4537b352697035385d5ab66f9bb7a0db9d0fad6219dcc625dd1d",
+      "checksum": "374ddc87a45c2c57510dbd71b9edb163fb9e216b8d99a40af63451e174b82a0b",
       "commands": null,
       "description": "Bot framework for nself-chat - commands, subscriptions, marketplace, API keys, reviews",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "BaZ0vNgrMfm2/wS7dT0V2O8WzKsFD36Rmj+4DLA6f7ebMpDmVAxgyTau2CFY+o0hlV/jDiMIWqXsrEvUGeXqBw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -694,13 +715,17 @@
         "claw"
       ],
       "category": "infrastructure",
-      "checksum": "582b6e67a996d68b971116d237ff677bd61397ff4854bbd06f6eb133f1930d9f",
+      "checksum": "2c5991f562867141b574052cac6fc20068a645651cdba9e7ba4a73ca3964347a",
       "commands": null,
       "description": "Headless browser plugin — Playwright/Chromium pool for screenshot, scraping, PDF, and JS execution",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "qv5H6X0cKPEylDdbCt5sxjMqWD/oH558E2FOk2aPggDaul7n2JdPGeXWUDs98vm11auy+Fegwzr+NnhowJEcDQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -742,13 +767,17 @@
         "family"
       ],
       "category": "content",
-      "checksum": "42995f007ccd7a683bb72920f2a00d1058d206f5df24afb1d393a7fa870d9b82",
+      "checksum": "212ae5e9fa4ddda63d32626f92214a1c74762c9c495639c02608d4d43636cb1c",
       "commands": null,
       "description": "Calendar and event management with recurring events, iCal export, and RSVP tracking",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "sqbORlLJ6ZZtsM/FCIxofcSMO1R2OtxyAWfttWrN+9mP8Mo30ehiJ68A6rdL9YbAe7BI+E6fZ4g8mYDU//bmDg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -812,16 +841,21 @@
     },
     {
       "bundles": [
+        "chat",
         "family"
       ],
       "category": "communication",
-      "checksum": "4ddb985d7db8324703eeab91459264c79e93c2d4c90c28fb4b0baf17c3c45727",
+      "checksum": "1b3cad240e5c4a07298f9d9838b6b467089f992ebfbc8c56e794db3ad9b25c07",
       "commands": null,
       "description": "Chat and messaging data management with conversation, messages, participants, and moderation",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "Qj/TVzXz2XLpZ+6EBmVEjh6U208icmSFBiF+BSKGbOw0kpNqux3HX1EAxmZb2DrFwjAkACGsEVJi1VZF0yNkBQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -977,13 +1011,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "8c7624eabf161499de221b3c8cd448a40af50d880b1322e8455f66467ca33408",
+      "checksum": "10039b1c7407f9bce07447982a42f420ff75a87a1aa363b81969f2e8c460b21d",
       "commands": null,
       "description": "Smart AI assistant and agent runtime. Channels (WebSocket), sessions, memory, identity, tools, and Canvas A2UI protocol.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "/OAm1TiRsc7bKQUSZ/LsngWAp0SeGU+/7KcSdj6Wj+r3JXGbBSX4KiGeqXAsdWNBPLedNlQsbLRf3jiQqKYmCg=="
+      },
       "requires": {
         "nself": ">=1.0.0",
         "postgres_extensions": [
@@ -996,20 +1034,24 @@
       "tarball_url": "https://ping.nself.org/plugins/claw/download",
       "tier": "licensed",
       "tier_pair": false,
-      "version": "1.1.2"
+      "version": "1.1.12"
     },
     {
       "bundles": [
         "claw"
       ],
       "category": "automation",
-      "checksum": "553c6779334bce7876f50ca834c4421ec35b878c808fab30f3e1b42d05e6d59b",
+      "checksum": "e672eb16d22006d863f184309e67de0b145d5a4b0be56b12f5766da0e341a39e",
       "commands": null,
       "description": "Personal expense tracking and budget management for ɳClaw. Logs expenses, enforces period-based limits, tracks recurring charges, and surfaces AI-driven savings insights.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "y/9XhozMu/KR3fiGq4s1a2PaCRC9cvKOmmcoBZp/j+311LmS3Jgn6ctd7f5lwOslPfAWscyVNyisfxIY6lDTBw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -1081,13 +1123,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "1b96113a8cae28a7942868440aa61a956670d6b72c0ca07189d4445d8a3baa03",
+      "checksum": "812ae742a6f0b201d8a20595944b73cc1ac740a066ba3912e6cf2bdc7eabf85e",
       "commands": null,
       "description": "News aggregation, AI summarization, and alerting plugin for ɳClaw. RSS/Atom feed polling, topic-based classification, sentiment analysis, digest generation, and breaking news alerts via notify plugin.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "F0ktzkeMuBFbHjuXXnFP4cUFZSOszKjrdyznuH6h08RHPKDqrDH+JlnGk6ccnTDXFASXrpwnzFFr2doq+CYnDw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -1104,13 +1150,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "d971ddab9dd2076085ca620c5f2bc0d36eb496bb5af7e399c7af53f30a91042d",
+      "checksum": "ff5a6909f6d83977a1267f65abaa61334450cf14222edd40a13a34d99680b890",
       "commands": null,
       "description": "Full web interface for ɳClaw AI assistant. Chat, projects, data browser, and settings from any browser.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "EiR9Gt7pvp+rTIApZN4o2PA0vMri4YVNZfQDx1WPCTdZTgqOMV4nxZXKKqQJoMLog96gHX8W72xQvOvvD7GuDg=="
+      },
       "requires": {
         "nself": ">=1.0.0",
         "plugins": [
@@ -1155,13 +1205,17 @@
         "clawde"
       ],
       "category": "content",
-      "checksum": "5d259aa4e8eb4885c7a06b098e7ea3c39f5f87e9f5e1c496072e0f18e9076080",
+      "checksum": "63110a72231e90afd4d3a38dc3974acf653138b963897bd1d22db938799e5d54",
       "commands": null,
       "description": "Headless CMS plugin with content types, posts, categories, tags, and versioning",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "g59i0+q9+lty3O/oAMIT+piATDfyrfrSzllQ33ehfsWdCbA6FRp/Wii4k2/QvyII5FeRDcFogFlMXtxdgbWRDA=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -1383,13 +1437,17 @@
         "claw"
       ],
       "category": "automation",
-      "checksum": "5d354263ca3e0cab219deae0c923c73876453f013f29cef8a1ea201d7270c1a1",
+      "checksum": "f35a309367739f152fa10b492fd1d4a4761897426d32965e611e9100f9431909",
       "commands": null,
       "description": "First-class cron scheduler. Cron-syntax jobs with timezone, HMAC-signed webhook delivery, per-account quotas, DLQ + auto-disable, distributed-cron leader lock, and retry backoff. Replaces ad-hoc cron containers.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "qj/PuSy204JE5P2PZRzgk+ZTWgnvQf4zj6w6GlZTr293Jh5btIbTDRAfvBM7/eon0ex2wbt8vRCn03Tg+yAMBg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -1826,13 +1884,17 @@
         "family"
       ],
       "category": "social",
-      "checksum": "605b642ec33c6e1e5811d8c0b22ef6171c93c3e94f03ccfabbe11d847a10e196",
+      "checksum": "96a8d2cdfcee64829163570ba3c31b9c6403410c04f40e55ed7ff864bcfcd170",
       "commands": null,
       "description": "Private family social + genealogy: family tree, profiles, relationships, events, media, sources. GEDCOM-compatible internal schema. Pairs with helper importer plugins (family-geni, family-gedcom, family-ancestry).",
       "docs_url": null,
       "installable": true,
       "maturity": "planned",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "iutbWAcZgqfN9DyzOMGqHF2EIIhymWfH9lBCqFybYsw4MrGh9ttX0K19gNdkyq+nXo9qxrNy/NGswrkfatdmDQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -1924,13 +1986,17 @@
         "family"
       ],
       "category": "social",
-      "checksum": "edc2a6816b86e27f7454a6cbc2bc7cfd5441e7dc39f9bbb20db3491445d9123d",
+      "checksum": "9f16260783fb514352d1b8b92edfe5df7e15b848b0d02341a9e64271035ce275",
       "commands": null,
       "description": "Geni.com → nFamily migration helper. OAuth-based profile graph walker with photo/document download, GEDCOM fallback, resumable jobs, dedupe against existing tree.",
       "docs_url": null,
       "installable": true,
       "maturity": "planned",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "NSJCkc3U+QARm4qPu3TvV0H/4QrAeYbgqDuua7tBiV6RF77PGriRIqHQYdK8XzOeBr4uDLMKAo0/WfYmmE9ADw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -2485,13 +2551,17 @@
         "family"
       ],
       "category": "data",
-      "checksum": "f3e9f32e29a997149e27388d265b56c41c72c78801ac8c9d6b2f108b2d8f35d2",
+      "checksum": "ec59436fa356942ffc178e353a8c5ddd1f1ad6182987603cba9f142177686c16",
       "commands": null,
       "description": "Real-time location sharing, history tracking, geofencing, and proximity queries",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "pwCkPTAPXWJql8KfgSkl7wboQiODVbwMmBtnHWeQK3or89uSMKCNItY6TwIESa6A0GqpZDZoPKHD+FLadFJMCQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -2558,13 +2628,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "f39494f24e916288d40f2049806f4e6a2b3ea28379c8c5ca816cf8567742ef92",
+      "checksum": "1fb610307691b2bd449b062fcf176c9c0d331292defd954cb4a0aaf397ff2b62",
       "commands": null,
       "description": "Google APIs integration. OAuth2 token management with auto-refresh, Gmail read/send, Calendar, Drive, Sheets.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "16XzqC3DPdBYTLqmQguYDcd8LubF00T1uWZTHnqZaqnJGqEzDLHYMr91eoNSGB3iIyREtj/oo7K337RxLs60Cw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -2860,13 +2934,17 @@
         "claw"
       ],
       "category": "content",
-      "checksum": "c8274002607d0f18303cea334423e0659f1fb1ade7b3f24542936dfaed4127be",
+      "checksum": "9f396c73266d8f06b5286ef725a6c6f0cbf558c3472f723213a35cee3ffc6974",
       "commands": null,
       "description": "Knowledge base with documentation, FAQ, semantic search, versioning, translations, and analytics",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "zfFvnQnoLokyI9eRNLATJasILxc2fr7+FiINxWdEHLHbYTDbgKjKqE8kpBXoiD0zNBGv0sDl5Gq90K7ksc77Ag=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -2933,13 +3011,17 @@
         "chat"
       ],
       "category": "communication",
-      "checksum": "e7919f51e4dcee6b9895d4052ede1cf997ad1965880dd5907fb8ab93c8bf526f",
+      "checksum": "6c68d42e2391948679e8ad6a4a9ff17ca0c05b3177e7904a6ed050668f2aa80c",
       "commands": null,
       "description": "LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "CohjUxvZiOuButYuwsc1YoWVJ7XcTO0Oc0knhlWaVfieUkAdX90dLiEgz0z0gkYlFYorQmgFpZMrbHY8A7UPBQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3066,13 +3148,17 @@
         "claw"
       ],
       "category": "integrations",
-      "checksum": "dca4e554a363a745cd713fd41a49c201a415c4c65e332226fd95b62dd8a57015",
+      "checksum": "ca54996ffc42690b7bc374dc3b2310eaf757d1b052f19cd637948f6b915d3ff0",
       "commands": null,
       "description": "Model Context Protocol server for Claude Code and MCP-compliant IDEs. Exposes nSelf schema, migrations, permissions, logs, plugins, and env introspection via JSON-RPC 2.0 over stdio and HTTP/SSE. Enables zero-config IDE-to-nSelf context sharing.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "k4mOsGN4VBd6xH0h+h16UQIbkIRERYQ8zowBIHrs+3fi3TzTsYXhRv240oe090Ew6ynDfBdiALHcYoNIgx11CA=="
+      },
       "requires": {
         "nself": ">=1.0.9"
       },
@@ -3266,16 +3352,21 @@
     },
     {
       "bundles": [
+        "chat",
         "family"
       ],
       "category": "content",
-      "checksum": "400e091044c4e45cbe1ec05edc1d1e30b878dd93641906118b317b75f888bc19",
+      "checksum": "771c8f663aed4d4ebaf48aacd3fd2d07d8248cdaf9af8ff89fd01b928da63da0",
       "commands": null,
       "description": "Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "GsXBcXDFR7vAEPztyFCNkglcw1UwRl0/xBQrHzbCUnOnywhK/aeQBj3+GSIQMzdm7Zb8sab77+LUTT8I04sZDg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3372,13 +3463,17 @@
         "claw"
       ],
       "category": "automation",
-      "checksum": "5d9e0dc1185e9db11b6d032efd5a60763a38b886ccb6611d8757df09401cad53",
+      "checksum": "0960d5044a5838f5cdf30911f887b9b623b70106076faf91bd4b4a3af5d29f27",
       "commands": null,
       "description": "Email and webhook pipeline engine. YAML rule config with 9 handler groups: PatternNotify, InboxRouter, SilentTrash, ContentForward, ObserveNotify, CalendarSync, AutoReply, SheetLogger, DonorHandler.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "UfEGkhkLHMOWrIu+KoT+BisIkDLF+OudoUFn1JQkHYK9LNuN+InFMVK5Kk9dq7i9JR5k5nsOP3PxPLRjUY7LBw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3388,12 +3483,10 @@
       "tarball_url": "https://ping.nself.org/plugins/mux/download",
       "tier": "licensed",
       "tier_pair": false,
-      "version": "1.1.2"
+      "version": "1.1.3"
     },
     {
-      "bundles": [
-        "task"
-      ],
+      "bundles": [],
       "category": "communication",
       "checksum": "0c6f329befc2c326fedee11e42e89734111e9edaca7c27d20e8dd6d48f84b2ed",
       "commands": null,
@@ -3418,7 +3511,9 @@
       "version": "1.2.13"
     },
     {
-      "bundles": [],
+      "bundles": [
+        "task"
+      ],
       "category": "communication",
       "checksum": "5cc47e8d3c4406820786d0199904f9ec58aba33acb38a7d7cdd77f8fdb42cad1",
       "commands": null,
@@ -3447,13 +3542,17 @@
         "claw"
       ],
       "category": "communication",
-      "checksum": "074aa9a47848bd767b7991f7b42b4d01a0d323c5c658120df65e66c25924cefb",
+      "checksum": "64121877f59c9b2a740e8702f2c25a652623c41b6e2b9385dea6d5d735170041",
       "commands": null,
       "description": "Multi-channel notification service. Channels: Email (SMTP), SMS (Twilio), Push (FCM), Slack, Telegram. HTTP webhooks + DB records.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "tAF/PHcuIO9ALYeAfs06UGcP6+cvuNQcYXZq929if8Qwdzbp2nK4f2POYrVowB7s3DoHO7dZOFM7g0CLvY5hDg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3470,13 +3569,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "a1571614ec3fc095d28f37a186d2c68b0984af52daf985b8d4d69aff90b33306",
+      "checksum": "28e1ef7ea81e105272e4d916b46df008c553be0b44f593ae4132d7bfb7bb980c",
       "commands": null,
       "description": "Policy-based alert routing from Alertmanager. Routes incoming alerts through configurable rule sets to outbound destinations (Slack, Teams, PagerDuty, webhooks). Supports escalation chains, silences, and on-call schedule resolution.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "cUtZeoJaoIVLJGKMAZsuhJizMWyfs0rHwd1C/Gm6NeVnkdjU4qaSdbsxyJ6Pkt5XFv29XL5/nxVipZfHhW6sCw=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3493,13 +3596,17 @@
         "sentry"
       ],
       "category": "monitoring",
-      "checksum": "a051836e059341090bec4800baed2121766a7ce42f97bf74ffa2c94e617cb484",
+      "checksum": "7373d8be1445bbc484dd32803ba266cb54748c747c149b1a9c45dc413ffcead0",
       "commands": null,
       "description": "Statistical anomaly detection for nSelf-hosted services: EWMA baselines, Z-score alerting, fast-burn and slow-burn anomaly detection with Prometheus metric ingestion.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "O+7RgwwsSlK2fNnvnhjLfOdPOyxIv0fn2PKYrcvC068+5+IIofvnMEr5qvPYRS8fn2txqAyRt6MOodO++I0WCw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3516,13 +3623,17 @@
         "sentry"
       ],
       "category": "security",
-      "checksum": "0e1e045356118e2e7603729f85dbe9d3c837f88b8593d7ab1b59e040305c5148",
+      "checksum": "f7dc40ece7a2c0e88e8176c1dd71504fe6188a360a2b8b35a9cc370b55d4f7a0",
       "commands": null,
       "description": "Append-only audit trail for every actor action. Security-Always-Free — ships at no cost per the nSelf Security-Always-Free Doctrine. The ɳSentry bundle adds dashboards and query UI on top; the raw audit log is always free.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "UxqXI7g634NGfO8EkFngmDas+wYiWcceeS4xw+Ak/SGjl6gMls/Pko5+xFZLEnWZ9myLBgk2viLqQw/++QQ5CQ=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3564,13 +3675,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "8c3f7e566ef3a63c50806afd149532077f5b8feea29effd794e367e7a1b68f36",
+      "checksum": "3260bbca25dd80b892fc42b86010660dc523740b22b0446669e277cbb14b35f2",
       "commands": null,
       "description": "Mobile and native crash reporting with dSYM/ProGuard symbolication, ANR detection, and session tracking",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "+vNmOBt80ndgIFSJL7nLMnl/3QDnUDo/2lC79MduoRQTe1kU9m5bqan7ZD5jufxVDlJUCb8Rp0ihiM6u+4hKCQ=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3587,13 +3702,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "d02868f6a4a97816bb941b22661ebbf7fee0bdbb05d1faf7b02be86a9fc6ac27",
+      "checksum": "a0bbdde82fa4f1c561d1c1c719a26357fb6007062365cd0736895a2a9ce92c51",
       "commands": null,
       "description": "Scheduled job heartbeat monitoring. Tracks cron jobs and background tasks via ping-style check-ins. Detects missed beats, fires alerts via nself-alert-router when a job fails to report within its expected interval plus grace period.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "Gx4Oj/IVBzxMrPafC5UYvERCeLLtsZ8JgCTyYJpY5fdwsLVB//JOA5cuwmEhMB7+2o5lpzLMSP47LhA7dfX2Dw=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3610,13 +3729,17 @@
         "family"
       ],
       "category": "compliance",
-      "checksum": "6f44ae2f76c17c74ff5c99beb1e71c4d71ec6886ab15a38947c697082b249441",
+      "checksum": "7a306040cb3abd2d3fa8cea17554b58e0aa994dcdfbf880126c6c4729d62d505",
       "commands": null,
       "description": "CSAM detection for nFamily photo storage. Scans uploads against PhotoDNA and Project Lantern hash databases. Blocks matches and reports to NCMEC CyberTipline (mandatory under 18 USC 2258A for US operators).",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "joIJOm6aMqqPlHLm/x6862m5wynDAXN1+2T4ucltD/8BwGvI7dJRMEHSRuJUp9Afc+ytEwHqv9BJpIGRzzZsBg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3633,13 +3756,17 @@
         "sentry"
       ],
       "category": "monitoring",
-      "checksum": "f747897e064edd42844e4b2a2cbe543bcaae59109792047f3dd24a4651660703",
+      "checksum": "00ec194c8d43a4b443b38f6477063a5a47dd6be8eb5afe935a55c6025efd8d2c",
       "commands": null,
       "description": "Server-side error tracking with Sentry SDK v8 envelope ingest, source map symbolication, error grouping, and release correlation.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "lqFlhGL10NRppZPl1/Ldli6v5kgu6Bm81SEiJA2j2FNWQUvsoZxRO+knmOpHjRUr72u4hP5K5fz56iHzbxQlBw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3763,13 +3890,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "1ba83a2e6f012e3a1010b055a63700b23623ec4a7b790585aee53ed91824d20f",
+      "checksum": "36501042cb5d3b31cce0c8173f781c708910daab713db93b3a8f891e84e9e4f2",
       "commands": null,
       "description": "Incident lifecycle management: open → acknowledged → mitigating → resolved. Post-mortems, runbooks, on-call integration, and timeline tracking.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "9jyVIlJ9qucZi5rgqq0Vq4nn59p7Lt05+dmoerF8iyE5MXpuLNfj1cWseQVO8ii51VF5U3NmdWkRGxHKlv24DQ=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3786,17 +3917,21 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "23e74380bfa93acbc18b582f19ff5a205c748a1403e95b327bcc095d735523fa",
+      "checksum": "0495081c4904b46cd7b11c2632673d6be59781ddc6b0a5387ef5fb4d27e681d1",
       "commands": null,
       "description": "PagerDuty-style on-call schedule management with rotation layers, override windows, and escalation policy support. Integrates with nself-alert-router to resolve the current on-call member for any given policy and timestamp.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "rulxNbJcOQeMLlp+8A0ZsqDWnf3Qv4wfdVaEx9D1wyZMRyqLBfcY4lKVkuKD3LjpRtlKt/WmOY9IumtIYO6KDA=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
-      "schema": null,
+      "schema": "np_nself_oncall",
       "service_kind": "compose",
       "slug": "nself-oncall",
       "tarball_url": "https://ping.nself.org/plugins/nself-oncall/download",
@@ -3834,13 +3969,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "b32979ab3eec73799b4da8e872bb63150b5801477731e9ab3a716834dc07773a",
+      "checksum": "f2cdf69f68da172dbb6c7e75d5edff3f555fa29a017b2a9a1dace6f63117ecaf",
       "commands": null,
       "description": "Real User Monitoring: Core Web Vitals, session replay (opt-in), PII scrubbing, and Redis-buffered ingest for nSelf-hosted services.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "XRg/thX2/C1W0CygaZP+R1ytag7CuHj+asCQx1o7QLFmzPifTG2zvUqlanPhh2KMPX4mDWmOX5fYA/rnhH15DA=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3857,13 +3996,17 @@
         "sentry"
       ],
       "category": "infrastructure",
-      "checksum": "4c2eb79f37b4bdb748b148ce1c4ec0d3605d7a5a58e07a62b7638fb063ded425",
+      "checksum": "853356206afbc61cbf68cee75129fe70df9105fc246d0c54adf91e1896e50874",
       "commands": null,
       "description": "Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "j4K70aj9A/K968s8yv2z9ws62io+xTAarBoeCvo5QbTwYgsRlvZt6rM9fdFXSmBzbCtqI2SDgQHE4+/IDNe3Bw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3905,13 +4048,17 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "86b92ab3e64477f6243e646be8a337f9e5ab397152abc69f887bceefbed7ebd9",
+      "checksum": "0140a9a0cad051d046ef2f0fbc3ed794f84b64d7fc5220cdad98d336b132072d",
       "commands": null,
       "description": "SLO/SLI definitions, error budget tracking, and multi-window burn-rate alerts against Prometheus metrics",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "MJqQjptOmI8oXpk21EdlYLY3cwt0M8ZbCOXrZGzrNCW+MX/W2omviu+5DT07M5ToS9sRnEjLNnBJiqtXA/XxCA=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -3928,13 +4075,17 @@
         "chat"
       ],
       "category": "authentication",
-      "checksum": "df2eba5c783702c4a4c404d458b7c69a18649b56ea10ea269a17db0bb104aa56",
+      "checksum": "ae79b12fda96fbab2fa86ff24c53e4bc336252bf9e066c90d13b0ba1502f3977",
       "commands": null,
       "description": "Provider-agnostic SMS OTP delivery with E.164 validation, rate limiting, and bcrypt-hashed code storage. Supports Twilio, AWS SNS, and Vonage.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "ow9k3EduXvYPT2+S9K2zYchxyGwa5WrgdSgqzvBcPV/qWkcP1A5ufHUniYg0V2n7KVQ4Fo7MZXkkaj0QBSyQDg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -3951,17 +4102,21 @@
         "sentry"
       ],
       "category": "observability",
-      "checksum": "f3faa73156584669c7e0b8a66df3fbf2b1b05b37a0d7d12e832eae155e949402",
+      "checksum": "fcffb28059f847c5da61b947e62ca2047594ecd7cada018ccf755e3b785e92a6",
       "commands": null,
       "description": "Public status page plugin — component status, incident history, RSS/Atom feeds, subscriber notifications, and sanitized display labels (hostname/IP stripping)",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "5q5D/7eC2G3rDW6VpDR6EjGxwt/NABTBfQJ+5Kqth2por6Zyh7ZKzkk3oP5uLwtczVtff8Jub5Mct4TIYk4FBA=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
-      "schema": null,
+      "schema": "np_nself_status_page",
       "service_kind": "compose",
       "slug": "nself-status-page",
       "tarball_url": "https://ping.nself.org/plugins/nself-status-page/download",
@@ -3974,13 +4129,17 @@
         "sentry"
       ],
       "category": "commerce",
-      "checksum": "8ddb2ff6dcbfd6cd411820d7b5fb4768972cadbad0177eea7f0454e8ead3c2e7",
+      "checksum": "28ec2ce9727dfccfab10bbbc71af3967508666ca1741d41a23e8b6dc8bf2229c",
       "commands": null,
       "description": "Stripe Connect Express scaffolding for nSelf Cloud MAX — platform account onboarding, checkout, entitlement cache, and dual webhook handling",
       "docs_url": null,
       "installable": true,
       "maturity": "planned",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "3zwojWSE83s2TPYHq9fD+o6v2xnVtqexXgsDWLZc2hSs8r2qrqOEi4MThhvXgXI7d7uHwyZYxZIrPgbt+LjOAw=="
+      },
       "requires": {
         "nself": ">=1.2.0"
       },
@@ -4022,13 +4181,17 @@
         "sentry"
       ],
       "category": "monitoring",
-      "checksum": "abcb215db69f8c74ee063bec3cc988b16f0056e4ade2bfc9387f047d2c0daf62",
+      "checksum": "1cdf44deb9008b3dda07418128768817cec0fa036e171dc5f7bc8fc89cb52c51",
       "commands": null,
       "description": "Synthetic monitoring: Playwright browser flows and API contract tests with concurrency control and SSRF protection.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "FvwYZRH7Lj1RrJDkdf0bAAbHF1NuENj2TbYEZqQ9yNkxQLBGEVrIukU19zi+dKrttzxSUuM3oNIThNWmemGmAA=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
@@ -4045,13 +4208,17 @@
         "sentry"
       ],
       "category": "monitoring",
-      "checksum": "7160c3722e76fa6a3a76b9bb30a9959127d07327be60cd1968743c89165ca841",
+      "checksum": "1671fc0a3cf3530977b58d8c1ae804095ed9a25a21fdafdd59ecc683caaa58d2",
       "commands": null,
       "description": "Uptime monitoring service: HTTP/TCP probing, latency tracking, and alerting for nSelf-hosted services.",
       "docs_url": null,
       "installable": true,
       "maturity": "experimental",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "frIRfq/VBoSZOG7yPTvRnR075KXCfsgVuqDCAT8S+BJ2BNks6oD6Jii8/cGUefU1q+eOVAjYOSrw5oy2uykjCQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -4298,13 +4465,17 @@
         "family"
       ],
       "category": "media",
-      "checksum": "58157b246b5d30cc01bad5316d52146a027cb6d001c4f22a44e48e3ef1ee48c0",
+      "checksum": "02f245d530c8bddd44877041c8d6de307c69b4739fd6fea3c7e396d9a585eb45",
       "commands": null,
       "description": "Photo album management with EXIF extraction, tagging, and thumbnails. Planned: Face grouping and recognition",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "MsoovdOEekb+k6boSacaGMPH06Gm2Dop3g+alTs7k+8cTNXhVtvCtr8kdu5BeycwqOzU+Yy1gJFyDd0NOdcACA=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -4639,16 +4810,21 @@
     },
     {
       "bundles": [
+        "chat",
         "clawde"
       ],
       "category": "infrastructure",
-      "checksum": "6b23e51a672712151cb5fed5b68850acdff8b6bf6190b102074cb2fa0c7e0c58",
+      "checksum": "3f485dbe778723074ef410e548a2ad3aaff150ba20a18b9c1d5765a9f0feff93",
       "commands": null,
       "description": "Socket.io real-time server with presence tracking, typing indicators, and room management",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "my7FfbzusXblPlHkyy6UbHUj1EUWq/3KbWnzzm4D6tsZ8aYxBF709aG72BodrACD1exPFhtfm/SUT6B8IWi0BA=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -4850,13 +5026,17 @@
     {
       "bundles": [],
       "category": "infrastructure",
-      "checksum": "de14ec1481943ddfc77cc6c75b8266b508569fdbd8d3e293076b3dade4952ea7",
+      "checksum": "6c780a0e39663150149a26f739a57f7df7240cb22f5e678105e26cb315c50fd1",
       "commands": null,
       "description": "Pro full-text and vector search engine with multi-index, facets, synonyms, and semantic similarity via pgvector.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "vi9tJWB6r01YmWayV76SHTtHdEzC2cr0PoeNzyb+q2S4FqrmamOIKB/9w8TP9j8AsqU9xR6JTGrSNKlrck9iBQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -5098,13 +5278,17 @@
         "family"
       ],
       "category": "content",
-      "checksum": "06467a605def1ab7a0619cd46a1f9c523cc98dbed2e2c2b67edeb2c87c79a309",
+      "checksum": "92c6f966b69570d628743fbd8a4e2a168a26323e7f12ef8b6440899f7361ffdc",
       "commands": null,
       "description": "Universal social features plugin with posts, comments, reactions, follows, and bookmarks",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "81mNe5fD5Mae628M27NbgH69/DghbUIrVIi0EgYi7gsX66z2g/53VlE97Wdm9PMLksCH1C13bWtW72BRX+ocDQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -5223,13 +5407,17 @@
         "chat"
       ],
       "category": "content",
-      "checksum": "205eb1547a5df2b5f7e808b743185a4f7bd059a469736c895607894efb0c7496",
+      "checksum": "ffb1554eab10775ec278f5f49fef4960e0a8544158fd7c74871d7607c3333d01",
       "commands": null,
       "description": "Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "e4K6Aa9xjtq0wY4J6x/Lbms+J8hD0+f/quz+hMOdFyIfs4HhFv0cubZ1LFJJJJwh79EOEX7HJn6zd20yWoAkBg=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
@@ -5428,13 +5616,17 @@
         "claw"
       ],
       "category": "communication",
-      "checksum": "f9100dea9b248c919e66849c956d48403d7142a905e03b1ea762e7a2e7c305d0",
+      "checksum": "e12d7f8c01179151281ffda80b83768fec747d7ba6ea070f8d0113ba6d290d0d",
       "commands": null,
       "description": "Production-ready voice plugin for ɳSelf. TTS (ElevenLabs, Piper local, OpenAI), STT (whisper.cpp, OpenAI Whisper), telephony (Twilio outbound calls, TwiML webhooks, voicebot), wake word detection, and nself-ai voicebot integration.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-e2ac3ee72a143603",
+        "sig": "duRhyNONdTa6N28y2b+6KYRja3oy0fL46u5Qd6hqDnabDXAXYI2wJcQnlzTBx3pb1R7VfndAF6dR9D0w+BSVAw=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
