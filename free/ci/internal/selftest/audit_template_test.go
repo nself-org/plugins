@@ -82,7 +82,7 @@ func TestAuditTemplateValid(t *testing.T) {
 	for _, ready := range []bool{false, true} {
 		started := 0
 		s := stubs{t}
-		w, err := watch.New(watch.Config{Host: "mini1"}, watch.Ports{Scanner: s, Ledger: s, Reporter: s, Runner: s,
+		w, err := watch.New(watch.Config{Host: "mini1", Trusted: []string{"station"}}, watch.Ports{Scanner: s, Ledger: s, Reporter: s, Runner: s,
 			Ready: func(context.Context) (bool, []string) {
 				if ready {
 					return true, nil
