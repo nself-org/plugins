@@ -30,21 +30,6 @@ configuration:
   column_config: {}
 
 select_permissions:
-  - role: user
-    permission:
-      columns:
-        - id
-        - tenant_id
-        - event_type
-        - key_ref
-        - triggered_by
-        - occurred_at
-        - details
-      filter:
-        tenant_id:
-          _eq: X-Hasura-Tenant-Id
-      allow_aggregations: true
-
   - role: tenant_user
     permission:
       columns:

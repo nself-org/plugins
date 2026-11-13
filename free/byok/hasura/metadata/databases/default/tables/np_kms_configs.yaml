@@ -32,21 +32,6 @@ configuration:
   column_config: {}
 
 select_permissions:
-  - role: user
-    permission:
-      columns:
-        - id
-        - tenant_id
-        - provider
-        - region
-        - enabled
-        - created_at
-        - last_verified_at
-      filter:
-        tenant_id:
-          _eq: X-Hasura-Tenant-Id
-      allow_aggregations: false
-
   - role: tenant_user
     permission:
       columns:

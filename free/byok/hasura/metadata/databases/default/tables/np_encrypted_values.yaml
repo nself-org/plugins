@@ -35,20 +35,6 @@ configuration:
   column_config: {}
 
 select_permissions:
-  - role: user
-    permission:
-      columns:
-        - id
-        - tenant_id
-        - record_group
-        - field_name
-        - kms_key_ref
-        - algorithm
-        - created_at
-      filter:
-        tenant_id:
-          _eq: X-Hasura-Tenant-Id
-      allow_aggregations: false
       # EXCLUDED from user role (raw ciphertext / key material):
       #   encrypted_data  — AES-256-GCM ciphertext bytes
       #   encrypted_dek   — DEK wrapped by CMK
