@@ -19,14 +19,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
-	"sync"
 	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
-	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
