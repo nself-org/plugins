@@ -4285,7 +4285,9 @@
         "email",
         "postmark",
         "transactional",
-        "broadcast"
+        "broadcast",
+        "elastic-email",
+        "templates"
       ],
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.13/mail-1.2.13.tar.gz",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.13/mail-1.2.13.tar.gz",

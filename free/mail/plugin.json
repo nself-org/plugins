@@ -23,6 +23,16 @@
       "description": "",
       "name": "NSELF_LICENSE_KEY_1",
       "required": false
+    },
+    {
+      "description": "Elastic Email API key. Not read yet: the Elastic Email adapter lands in P8-CONV-06.",
+      "name": "ELASTIC_EMAIL_API_KEY",
+      "required": false
+    },
+    {
+      "description": "Default From address for Elastic Email. Not read yet: the Elastic Email adapter lands in P8-CONV-06.",
+      "name": "ELASTIC_EMAIL_FROM",
+      "required": false
     }
   ],
   "homepage": "https://nself.org/plugins",
@@ -48,7 +58,9 @@
     "email",
     "postmark",
     "transactional",
-    "broadcast"
+    "broadcast",
+    "elastic-email",
+    "templates"
   ],
   "tier": "free",
   "version": "1.2.13"
