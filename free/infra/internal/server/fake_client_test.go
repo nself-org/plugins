@@ -143,3 +143,29 @@ func (f *fakeClient) SetPrimaryIPAutoDelete(_ context.Context, ipID int64, autoD
 	ip.AutoDelete = autoDelete
 	return nil
 }
+
+func (f *fakeClient) GetPricing(context.Context) (*Pricing, error) {
+	return &Pricing{Currency: "EUR"}, nil
+}
+
+func (f *fakeClient) ListLocations(context.Context) ([]Location, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ListDatacenters(context.Context) ([]Datacenter, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) CreateSSHKey(_ context.Context, name, publicKey string, labels map[string]string) (*SSHKey, error) {
+	return &SSHKey{ID: f.newID(), Name: name, PublicKey: publicKey, Labels: labels}, nil
+}
+
+func (f *fakeClient) DeleteSSHKey(context.Context, int64) error { return nil }
+
+func (f *fakeClient) ListSSHKeysByLabel(context.Context, string) ([]SSHKey, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ProbeWriteScope(context.Context) (string, error) {
+	return "read-write", nil
+}

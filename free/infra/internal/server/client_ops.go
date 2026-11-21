@@ -14,6 +14,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 func (c *hetznerClient) CreateServer(ctx context.Context, req ProvisionRequest) (*Server, error) {
@@ -46,7 +47,7 @@ func (c *hetznerClient) CreateServer(ctx context.Context, req ProvisionRequest) 
 func (c *hetznerClient) ListServers(ctx context.Context, opts ListOptions) ([]Server, error) {
 	path := "/servers"
 	if opts.LabelSelector != "" {
-		path += "?label_selector=" + opts.LabelSelector
+		path += "?" + url.Values{"label_selector": {opts.LabelSelector}}.Encode()
 	}
 	var out struct {
 		Servers []wireServer `json:"servers"`
