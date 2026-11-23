@@ -65,7 +65,7 @@ jobs:
       # gVisor's runsc registered with docker; the steps are the ones ci-isolation-linux.yml runs.
       # The scenario drills build nself-org/cli main, whose go.mod needs a newer Go than free/ci's (GOTOOLCHAIN=local in the
       # engine's job environment), so take the newest 1.26.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version: "1.26"
           check-latest: true
