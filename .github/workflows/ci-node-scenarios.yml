@@ -29,7 +29,7 @@ jobs:
           path: cli
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: plugins/free/ci/go.mod
           cache-dependency-path: plugins/free/ci/go.sum
@@ -53,7 +53,7 @@ jobs:
             -args -perf-json "$RUNNER_TEMP/node-perf.json" | tee "$RUNNER_TEMP/node-legs.json" | python3 ../../scripts/ci/go-test-ran.py TestScenario2 TestScenario2Arm64 TestScenario3 TestPlatformSteering TestWriteLoad
 
       - name: Set up Go for the cli checkout
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: cli/go.mod
           cache: false
