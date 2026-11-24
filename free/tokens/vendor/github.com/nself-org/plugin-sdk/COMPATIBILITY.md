@@ -1,6 +1,6 @@
 # plugin-sdk-go Compatibility Matrix
 
-The shared Go SDK for nSelf plugins. Every pro plugin (ai, mux, claw, voice,
+The shared Go SDK for nSelf plugins. Every licensed plugin (ai, mux, claw, voice,
 browser, notify, cron, chat, livekit, etc.) depends on this module.
 
 ## Current versions
